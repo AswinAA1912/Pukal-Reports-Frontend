@@ -1,0 +1,218 @@
+// src/pages/Login.tsx
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Box,
+  Button,
+  Typography,
+  TextField,
+  Paper,
+  List,
+  ListItemButton,
+  ListItemText,
+} from "@mui/material";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/authContext";
+import { toast } from "react-toastify";
+import { fetchCompanies, globalLogin, getUserByAuth, CompanyResponse } from "../services/auth.services";
+
+type Step = "USERNAME" | "COMPANY" | "PASSWORD";
+
+
+const Login: React.FC = () => {
+  const { login, token, isInitializing } = useAuth();
+  const navigate = useNavigate();
+
+  const [step, setStep] = useState<Step>("USERNAME");
+  const [companies, setCompanies] = useState<CompanyResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [form, setForm] = useState<CompanyResponse>({
+    Company_Name: "",
+    Local_Id: "",
+    Global_Id: 0,
+    Back_End_API: "",
+    Global_User_ID: "",
+    username: "",
+    password: "",
+  });
+
+
+  console.log("FORM:", form)
+
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!isInitializing && token) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [token, isInitializing, navigate]);
+
+  // STEP 1: Verify username → fetch companies
+  const verifyUsername = async () => {
+    if (!form.username.trim()) return;
+
+    try {
+      const data = await fetchCompanies(form.username.trim());
+      if (!data.length) {
+        toast.error("No companies mapped to this user");
+        return;
+      }
+      setCompanies(data);
+      setStep("COMPANY");
+    } catch {
+      toast.error("Failed to fetch companies");
+    }
+  };
+
+  // STEP 2: Select company
+  const selectCompany = (c: CompanyResponse) => {
+    setForm((f) => ({ ...f, ...c }));
+    setStep("PASSWORD");
+    setTimeout(() => passwordRef.current?.focus(), 100);
+  };
+
+  // STEP 3: Login
+  const handleLogin = async () => {
+    try {
+      setLoading(true);
+
+      // 1️⃣ Global login
+      const loginResponse = await globalLogin({
+        Global_User_ID: form.Global_User_ID,
+        Password: form.password,
+      });
+
+      const { Back_End_API, Autheticate_Id } = loginResponse;
+
+      if (!Back_End_API || !Autheticate_Id) {
+        toast.error("Incomplete login data from server");
+        return;
+      }
+
+      // Save backend API & Auth ID
+      localStorage.setItem("COMPANY_API", Back_End_API);
+      localStorage.setItem("AUTH_ID", Autheticate_Id);
+
+      // 2️⃣ Get full user details from backend
+      const fullUser = await getUserByAuth(Autheticate_Id);
+
+      console.log("FULLUSER:", fullUser)
+
+      if (!fullUser.UserId) {
+        toast.error("User not found in selected company");
+        return;
+      }
+
+
+      login(Autheticate_Id, {
+        id: Number(fullUser.UserId),
+        uniqueName: fullUser.UserName,
+        Name: fullUser.Name,
+        companyId: Number(fullUser.Company_id),
+        Company_Name: fullUser.Company_Name,
+      });
+
+      localStorage.setItem("user", JSON.stringify(fullUser));
+
+
+      toast.success("Login successful");
+      navigate("/dashboard", { replace: true });
+    } catch (err: any) {
+      toast.error(err.message || "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        background: "linear-gradient(to bottom right, #0ea5e9, #0284c7)",
+      }}
+    >
+      <Paper elevation={12} sx={{ width: 420, p: 5, borderRadius: 4 }}>
+        <Typography
+          variant="h4"
+          sx={{ fontWeight: 700, mb: 4, color: "#0369a1" }}
+        >
+          Pukal Reports
+        </Typography>
+
+        {/* STEP 1: USERNAME */}
+        {step === "USERNAME" && (
+          <TextField
+            label="Username"
+            fullWidth
+            autoFocus
+            value={form.username}
+            onChange={(e) =>
+              setForm({ ...form, username: e.target.value })
+            }
+            onKeyDown={(e) => e.key === "Enter" && verifyUsername()}
+          />
+        )}
+
+        {/* STEP 2: COMPANY */}
+        {step === "COMPANY" && (
+          <>
+            <Typography sx={{ mb: 2, fontWeight: 600 }}>
+              Select Company
+            </Typography>
+            <List>
+              {companies.map((c) => (
+                <ListItemButton
+                  key={c.Local_Id}
+                  onClick={() => selectCompany(c)}
+                  sx={{
+                    borderRadius: 2,
+                    mb: 1,
+                    border: "1px solid #e5e7eb",
+                  }}
+                >
+                  <ListItemText primary={c.Company_Name} />
+                </ListItemButton>
+              ))}
+            </List>
+          </>
+        )}
+
+        {/* STEP 3: PASSWORD */}
+        {step === "PASSWORD" && (
+          <>
+            <TextField
+              label="Password"
+              type="password"
+              fullWidth
+              inputRef={passwordRef}
+              value={form.password}
+              onChange={(e) =>
+                setForm({ ...form, password: e.target.value })
+              }
+              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+              sx={{ mb: 3 }}
+            />
+            <Button
+              fullWidth
+              variant="contained"
+              disabled={loading || !form.password}
+              onClick={handleLogin}
+              sx={{
+                backgroundColor: "#0D47A1",
+                "&:hover": { backgroundColor: "#0B3C91" },
+              }}
+            >
+              {loading ? "Signing in..." : "Login"}
+            </Button>
+          </>
+        )}
+      </Paper>
+    </Box>
+  );
+};
+
+export default Login;
