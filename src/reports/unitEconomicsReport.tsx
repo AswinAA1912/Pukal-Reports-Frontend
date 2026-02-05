@@ -61,7 +61,7 @@ const UnitEconomicsReportPage: React.FC = () => {
   const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
   const [activeColumn, setActiveColumn] = useState<ReportColumn | null>(null);
 
-  /* -------- Menu Search (ONLY FOR DROPDOWN) -------- */
+  /* -------- Menu Search -------- */
   const [searchText, setSearchText] = useState("");
 
   /* -------- Summary -------- */
@@ -87,7 +87,7 @@ const UnitEconomicsReportPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [filters]); // ✅ NO searchText here
+  }, [filters]);
 
   /* ================= PAGINATION ================= */
   const paginatedData = data.slice(
@@ -96,20 +96,22 @@ const UnitEconomicsReportPage: React.FC = () => {
   );
 
   /* ================= DROPDOWN VALUES ================= */
-  const products = useMemo(() => {
-    return [...new Set(data.map((d) => d.Product_Name))].filter((p) =>
-      p.toLowerCase().includes(searchText.toLowerCase())
-    );
-  }, [data, searchText]);
+  const products = useMemo(
+    () =>
+      [...new Set(data.map((d) => d.Product_Name))].filter((p) =>
+        p.toLowerCase().includes(searchText.toLowerCase())
+      ),
+    [data, searchText]
+  );
 
-  /* ================= SUMMARY ================= */
-  const getSummary = () => {
-    if (!summaryType || !activeColumn) return 0;
+  /* ================= NUMERIC COLUMNS ================= */
+  const numericColumns = columns.filter(
+    (c) => c.filterType === "numeric"
+  );
 
-    const values = data.map(
-      (r) => Number((r as any)[activeColumn.key] || 0)
-    );
-
+  /* ================= SUMMARY CALCULATION ================= */
+  const getSummaryValue = (key: string) => {
+    const values = data.map((r) => Number((r as any)[key]) || 0);
     const total = values.reduce((a, b) => a + b, 0);
 
     return summaryType === "sum"
@@ -126,8 +128,7 @@ const UnitEconomicsReportPage: React.FC = () => {
   ) => {
     setActiveColumn(column);
     setFilterAnchor(e.currentTarget);
-    setSummaryType(null);
-    setSearchText(""); // reset menu search ONLY
+    setSearchText("");
   };
 
   /* ================= RENDER ================= */
@@ -144,43 +145,51 @@ const UnitEconomicsReportPage: React.FC = () => {
             <TableBody>
               {paginatedData.map((row, i) => (
                 <TableRow key={`${row.Product_Id}-${i}`}>
-                  <TableCell>
+                  <TableCell sx={{ fontSize: "0.75rem" }}>
                     {(page - 1) * ROWS_PER_PAGE + i + 1}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ fontSize: "0.75rem" }}>
                     {dayjs(row.Trans_Date).format("DD/MM/YYYY")}
                   </TableCell>
-                  <TableCell>{row.Product_Name}</TableCell>
-                  <TableCell align="right">{row.Bill_Qty}</TableCell>
-                  <TableCell align="right">
+                  <TableCell sx={{ fontSize: "0.75rem" }}>
+                    {row.Product_Name}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontSize: "0.75rem" }}>
+                    {row.Bill_Qty}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontSize: "0.75rem" }}>
                     {Number(row.Rate).toFixed(2)}
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ fontSize: "0.75rem" }}>
                     {Number(row.Amount).toFixed(2)}
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ fontSize: "0.75rem" }}>
                     {Number(row.COGS).toFixed(2)}
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ fontSize: "0.75rem" }}>
                     {Number(row.COGS_Amount).toFixed(2)}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
 
-            {summaryType && activeColumn?.filterType === "numeric" && (
+            {/* ✅ SUMMARY FOR ALL NUMERIC COLUMNS */}
+            {summaryType && (
               <TableFooter>
                 <TableRow sx={{ background: "#f3f4f6" }}>
                   <TableCell colSpan={3} sx={{ fontWeight: 600 }}>
                     {summaryType === "sum" ? "Total" : "Average"}
                   </TableCell>
-                  <TableCell
-                    colSpan={columns.length - 3}
-                    align="right"
-                    sx={{ fontWeight: 600 }}
-                  >
-                    {getSummary().toFixed(2)}
-                  </TableCell>
+
+                  {numericColumns.map((col) => (
+                    <TableCell
+                      key={col.key}
+                      align="right"
+                      sx={{ fontWeight: 600 }}
+                    >
+                      {getSummaryValue(col.key).toFixed(2)}
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableFooter>
             )}
@@ -199,7 +208,7 @@ const UnitEconomicsReportPage: React.FC = () => {
           open={Boolean(filterAnchor)}
           onClose={() => setFilterAnchor(null)}
         >
-          {/* DATE FILTER */}
+          {/* DATE */}
           {activeColumn?.filterType === "date" && (
             <Box p={2} display="flex" flexDirection="column" gap={1}>
               <TextField
@@ -225,13 +234,14 @@ const UnitEconomicsReportPage: React.FC = () => {
               <Button
                 variant="contained"
                 onClick={() => setFilterAnchor(null)}
+                sx={{ backgroundColor: "#1E3A8A", fontWeight: 600 }}
               >
                 Apply
               </Button>
             </Box>
           )}
 
-          {/* PRODUCT FILTER (LIKE OnlineSales) */}
+          {/* PRODUCT */}
           {activeColumn?.key === "Product_Name" && (
             <Box p={2} sx={{ minWidth: 220 }}>
               <TextField
@@ -248,7 +258,6 @@ const UnitEconomicsReportPage: React.FC = () => {
                   key={p}
                   onClick={() => {
                     setFilters((f) => ({ ...f, Product: p }));
-                    setPage(1);
                     setFilterAnchor(null);
                     setSearchText("");
                   }}
@@ -260,7 +269,6 @@ const UnitEconomicsReportPage: React.FC = () => {
               <MenuItem
                 onClick={() => {
                   setFilters((f) => ({ ...f, Product: "" }));
-                  setPage(1);
                   setFilterAnchor(null);
                   setSearchText("");
                 }}
@@ -270,7 +278,7 @@ const UnitEconomicsReportPage: React.FC = () => {
             </Box>
           )}
 
-          {/* NUMERIC SUMMARY */}
+          {/* SUMMARY */}
           {activeColumn?.filterType === "numeric" && (
             <>
               <MenuItem

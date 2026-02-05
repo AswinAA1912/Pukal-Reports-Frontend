@@ -226,32 +226,32 @@ const OnlineSalesReportPage: React.FC = () => {
         <TableBody>
           {paginated.map((row, i) => (
             <TableRow key={i}>
-              <TableCell>
+              <TableCell  sx={{fontSize: "0.75rem",}}>
                 {(pageNo - 1) * ROWS_PER_PAGE + i + 1}
               </TableCell>
               {columns.slice(1).map((c) => {
                 switch (c) {
                   case "Date":
                     return (
-                      <TableCell key={c}>
+                      <TableCell sx={{fontSize: "0.75rem",}} key={c}>
                         {dayjs(row.Ledger_Date).format("DD/MM/YYYY")}
                       </TableCell>
                     );
                   case "Invoice":
-                    return <TableCell key={c}>{row.invoice_no}</TableCell>;
+                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.invoice_no}</TableCell>;
                   case "Customer":
-                    return <TableCell key={c}>{row.Retailer_Name}</TableCell>;
+                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Retailer_Name}</TableCell>;
                   case "Product":
-                    return <TableCell key={c}>{row.Product_Name}</TableCell>;
+                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Product_Name}</TableCell>;
                   case "Count":
-                    return <TableCell key={c}>{row.Item_Count}</TableCell>;
+                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Item_Count}</TableCell>;
                   case "Quantity":
-                    return <TableCell key={c}>{row.Bill_Qty}</TableCell>;
+                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Bill_Qty}</TableCell>;
                   case "Rate":
-                    return <TableCell key={c}>{row.Rate}</TableCell>;
+                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Rate}</TableCell>;
                   case "Amount":
                     return (
-                      <TableCell key={c}>
+                      <TableCell sx={{fontSize: "0.75rem",}} key={c}>
                         {row.Total_Invoice_value ?? row.Amount}
                       </TableCell>
                     );

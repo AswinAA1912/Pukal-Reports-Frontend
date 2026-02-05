@@ -36,10 +36,11 @@ const headStyle = {
 const SalesInvoiceReportPage: React.FC = () => {
   const today = dayjs().format("YYYY-MM-DD");
 
-  const [data, setData] = useState<SalesInvoiceReport[]>([]);
+  /* -------- RAW DATA -------- */
+  const [rawData, setRawData] = useState<SalesInvoiceReport[]>([]);
   const [page, setPage] = useState(1);
 
-  /* -------- Filters -------- */
+  /* -------- FILTERS -------- */
   const [filters, setFilters] = useState({
     Date: { from: today, to: today },
     Invoice: "",
@@ -49,24 +50,33 @@ const SalesInvoiceReportPage: React.FC = () => {
 
   const [tempDate, setTempDate] = useState(filters.Date);
 
-  /* -------- Header Filter -------- */
+  /* -------- HEADER FILTER -------- */
   const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
   const [activeHeader, setActiveHeader] = useState<string | null>(null);
 
-  /* -------- Search (ONLY FOR DROPDOWN) -------- */
+  /* -------- DROPDOWN SEARCH (ONLY MENU) -------- */
   const [searchText, setSearchText] = useState("");
 
-  /* -------- Summary -------- */
+  /* -------- SUMMARY -------- */
   const [summaryType, setSummaryType] = useState<"sum" | "avg" | null>(null);
 
-  /* ================= LOAD DATA ================= */
-  const loadData = async () => {
-    const res = await SalesInvoiceReportService.getReports({
-      Fromdate: filters.Date.from,
-      Todate: filters.Date.to,
-    });
+  /* ================= LOAD DATA (DATE ONLY) ================= */
+  useEffect(() => {
+    const loadData = async () => {
+      const res = await SalesInvoiceReportService.getReports({
+        Fromdate: filters.Date.from,
+        Todate: filters.Date.to,
+      });
+      setRawData(res.data.data || []);
+      setPage(1);
+      setSummaryType(null);
+    };
+    loadData();
+  }, [filters.Date]);
 
-    let rows = res.data.data || [];
+  /* ================= APPLY FILTERS (CLICK ONLY) ================= */
+  const data = useMemo(() => {
+    let rows = rawData;
 
     if (filters.Invoice)
       rows = rows.filter((r) => r.Do_Inv_No === filters.Invoice);
@@ -77,38 +87,32 @@ const SalesInvoiceReportPage: React.FC = () => {
     if (filters.Voucher)
       rows = rows.filter((r) => r.VoucherTypeGet === filters.Voucher);
 
-    setData(rows);
-    setPage(1);
-    setSummaryType(null);
-  };
+    return rows;
+  }, [rawData, filters]);
 
-  useEffect(() => {
-    loadData();
-  }, [filters]);
-
-  /* ================= DROPDOWN VALUES (LIKE UNIT ECONOMICS) ================= */
+  /* ================= DROPDOWN VALUES ================= */
   const invoices = useMemo(
     () =>
-      [...new Set(data.map((d) => d.Do_Inv_No))].filter((v) =>
-        v?.toLowerCase().includes(searchText.toLowerCase())
+      [...new Set(rawData.map((d) => d.Do_Inv_No))].filter(
+        (v) => v && v.toLowerCase().includes(searchText.toLowerCase())
       ),
-    [data, searchText]
+    [rawData, searchText]
   );
 
   const customers = useMemo(
     () =>
-      [...new Set(data.map((d) => d.Retailer_Name))].filter((v) =>
-        v?.toLowerCase().includes(searchText.toLowerCase())
+      [...new Set(rawData.map((d) => d.Retailer_Name))].filter(
+        (v) => v && v.toLowerCase().includes(searchText.toLowerCase())
       ),
-    [data, searchText]
+    [rawData, searchText]
   );
 
   const vouchers = useMemo(
     () =>
-      [...new Set(data.map((d) => d.VoucherTypeGet))].filter((v) =>
-        v?.toLowerCase().includes(searchText.toLowerCase())
+      [...new Set(rawData.map((d) => d.VoucherTypeGet))].filter(
+        (v) => v && v.toLowerCase().includes(searchText.toLowerCase())
       ),
-    [data, searchText]
+    [rawData, searchText]
   );
 
   /* ================= PAGINATION ================= */
@@ -139,7 +143,7 @@ const SalesInvoiceReportPage: React.FC = () => {
     setActiveHeader(column);
     setFilterAnchor(e.currentTarget);
     setSummaryType(null);
-    setSearchText(""); // IMPORTANT (same as UnitEconomics)
+    setSearchText(""); // EXACTLY like UnitEconomics
   };
 
   /* ================= RENDER ================= */
@@ -149,7 +153,7 @@ const SalesInvoiceReportPage: React.FC = () => {
         <TableContainer component={Paper}>
           <Table size="small">
             <TableHead sx={{ background: "#1E3A8A" }}>
-              <TableRow>
+              <TableRow >
                 <TableCell sx={headStyle}>S.No</TableCell>
                 <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Date")}>
                   Date
@@ -178,14 +182,14 @@ const SalesInvoiceReportPage: React.FC = () => {
             <TableBody>
               {paginatedData.map((row, i) => (
                 <TableRow key={row.Do_Id}>
-                  <TableCell>{(page - 1) * ROWS_PER_PAGE + i + 1}</TableCell>
-                  <TableCell>{dayjs(row.Created_on).format("DD/MM/YYYY")}</TableCell>
-                  <TableCell>{row.Do_Inv_No}</TableCell>
-                  <TableCell>{row.Retailer_Name}</TableCell>
-                  <TableCell>{row.VoucherTypeGet}</TableCell>
-                  <TableCell align="right">{Number(row.Total_Before_Tax).toFixed(2)}</TableCell>
-                  <TableCell align="right">{Number(row.Total_Tax).toFixed(2)}</TableCell>
-                  <TableCell align="right">{Number(row.Total_Invoice_value).toFixed(2)}</TableCell>
+                  <TableCell sx={{fontSize: "0.75rem",}} >{(page - 1) * ROWS_PER_PAGE + i + 1}</TableCell>
+                  <TableCell sx={{fontSize: "0.75rem",}}>{dayjs(row.Created_on).format("DD/MM/YYYY")}</TableCell>
+                  <TableCell sx={{fontSize: "0.75rem",}}>{row.Do_Inv_No}</TableCell>
+                  <TableCell sx={{fontSize: "0.75rem",}}>{row.Retailer_Name}</TableCell>
+                  <TableCell sx={{fontSize: "0.75rem",}}>{row.VoucherTypeGet}</TableCell>
+                  <TableCell sx={{fontSize: "0.75rem",}} align="right">{Number(row.Total_Before_Tax).toFixed(2)}</TableCell>
+                  <TableCell sx={{fontSize: "0.75rem",}} align="right">{Number(row.Total_Tax).toFixed(2)}</TableCell>
+                  <TableCell sx={{fontSize: "0.75rem",}} align="right">{Number(row.Total_Invoice_value).toFixed(2)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -217,20 +221,49 @@ const SalesInvoiceReportPage: React.FC = () => {
           open={Boolean(filterAnchor)}
           onClose={() => setFilterAnchor(null)}
         >
-          {/* SEARCH (ONLY DROPDOWN FILTER) */}
           {["Invoice", "Customer", "Voucher"].includes(activeHeader || "") && (
-            <Box p={1}>
+            <Box p={2} sx={{ minWidth: 220 }}>
               <TextField
                 size="small"
                 fullWidth
                 placeholder="Search..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
+                sx={{ mb: 1 }}
               />
+
+              {(activeHeader === "Invoice"
+                ? invoices
+                : activeHeader === "Customer"
+                ? customers
+                : vouchers
+              ).map((v) => (
+                <MenuItem
+                  key={v}
+                  onClick={() => {
+                    setFilters((p) => ({ ...p, [activeHeader!]: v }));
+                    setSearchText("");
+                    setPage(1);
+                    setFilterAnchor(null);
+                  }}
+                >
+                  {v}
+                </MenuItem>
+              ))}
+
+              <MenuItem
+                onClick={() => {
+                  setFilters((p) => ({ ...p, [activeHeader!]: "" }));
+                  setSearchText("");
+                  setPage(1);
+                  setFilterAnchor(null);
+                }}
+              >
+                All
+              </MenuItem>
             </Box>
           )}
 
-          {/* DATE */}
           {activeHeader === "Date" && (
             <Box p={2} display="flex" flexDirection="column" gap={1}>
               <TextField
@@ -253,42 +286,11 @@ const SalesInvoiceReportPage: React.FC = () => {
                   setFilters((p) => ({ ...p, Date: tempDate }));
                   setFilterAnchor(null);
                 }}
+                sx={{ background: "#1E3A8A", fontWeight: 600 }}
               >
                 Apply
               </Button>
             </Box>
-          )}
-
-          {(activeHeader === "Invoice"
-            ? invoices
-            : activeHeader === "Customer"
-            ? customers
-            : activeHeader === "Voucher"
-            ? vouchers
-            : []
-          ).map((v) => (
-            <MenuItem
-              key={v}
-              onClick={() => {
-                setFilters((p) => ({ ...p, [activeHeader!]: v }));
-                setSearchText("");
-                setFilterAnchor(null);
-              }}
-            >
-              {v}
-            </MenuItem>
-          ))}
-
-          {["Invoice", "Customer", "Voucher"].includes(activeHeader || "") && (
-            <MenuItem
-              onClick={() => {
-                setFilters((p) => ({ ...p, [activeHeader!]: "" }));
-                setSearchText("");
-                setFilterAnchor(null);
-              }}
-            >
-              All
-            </MenuItem>
           )}
 
           {["BeforeTax", "Tax", "InvoiceAmount"].includes(activeHeader || "") && (
