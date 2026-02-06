@@ -9,6 +9,9 @@ import {
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authContext";
+import Header from "../Layout/Header";
+
+const HEADER_HEIGHT = 64;
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -16,79 +19,95 @@ const Dashboard: React.FC = () => {
 
   const menuList = [
     { label: "Sales Invoice", path: "/salesinvoice" },
-    { label: "Sales Report", path: "/salesreport"},
+    { label: "Sales Report", path: "/salesreport" },
     { label: "Unit Economics", path: "/uniteconomics" },
   ];
 
   return (
-    <Box sx={{ display: "flex", height: "100%", width: "100%" }}>
-      {/* ===== LEFT : WELCOME ===== */}
+    <>
+      {/* ===== HEADER ===== */}
+      <Header headerColor="#1E3A8A" showSearch={false} />
+
+      {/* ===== DASHBOARD BODY (FULL FIXED LAYER) ===== */}
       <Box
         sx={{
-          width: 320,
-          p: 4,
           display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
+          height: `calc(100vh - ${HEADER_HEIGHT}px)`,
+          width: "100%",
+          overflow: "hidden",
+          backgroundColor: "#cfe6ec",
         }}
       >
-        <Typography
-          variant="h4"
+        {/* ===== LEFT PANEL ===== */}
+        <Box
           sx={{
-            fontWeight: 500,
-            fontFamily: `"Montserrat", sans-serif`,
-            letterSpacing: 1,
-            mb: 1,
-            textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
+            width: 360,
+            px: 5,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
           }}
         >
-          Welcome {user?.Name || "User"},
-        </Typography>
+          <Typography
+            sx={{
+              fontSize: 32,
+              fontWeight: 400,
+              mb: 1,
+            }}
+          >
+            Welcome {user?.Name || "admin"},
+          </Typography>
 
-        <Typography
-          variant="h5"
+          <Typography
+            sx={{
+              fontSize: 22,
+              fontWeight: 700,
+              letterSpacing: 1,
+              fontFamily: "serif",
+            }}
+          >
+            {user?.Company_Name || "PUKAL FOODS PVT LTD"}
+          </Typography>
+        </Box>
+
+        {/* ===== CENTER DIVIDER ===== */}
+        <Divider orientation="vertical" flexItem />
+
+        {/* ===== RIGHT MENU ===== */}
+        <Box
           sx={{
-            fontWeight: 700,
-            fontFamily: `"Roboto Slab", serif`,
-            textTransform: "uppercase",
-            letterSpacing: 2,
-            textShadow: "1px 1px 2px rgba(0,0,0,0.3)",
+            flex: 1,
+            px: 5,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
           }}
         >
-          {user?.Company_Name || "Company"}
-        </Typography>
+          <Typography fontSize={20} fontWeight={600} mb={1}>
+            Menu
+          </Typography>
+
+          <Divider sx={{ mb: 2 }} />
+
+          <List disablePadding>
+            {menuList.map((item) => (
+              <ListItemButton
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                sx={{
+                  mb: 1,
+                  borderRadius: 1,
+                  width: "fit-content",
+                  px: 2,
+                }}
+              >
+                <ListItemText primary={item.label} />
+              </ListItemButton>
+            ))}
+          </List>
+        </Box>
       </Box>
-
-      {/* ===== CENTER SPLIT BAR ===== */}
-      <Divider orientation="vertical" flexItem />
-
-      {/* ===== RIGHT : MENU ===== */}
-      <Box sx={{ flexGrow: 1, p: 3 }}>
-        <Typography variant="h6" fontWeight={700} gutterBottom>
-          Menu
-        </Typography>
-
-        <Divider sx={{ mb: 2 }} />
-
-        <List>
-          {menuList.map((item) => (
-            <ListItemButton
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              sx={{
-                borderRadius: 2,
-                mb: 1,
-                "&:hover": {
-                  backgroundColor: "#e3f2fd",
-                },
-              }}
-            >
-              <ListItemText primary={item.label} />
-            </ListItemButton>
-          ))}
-        </List>
-      </Box>
-    </Box>
+    </>
   );
 };
 

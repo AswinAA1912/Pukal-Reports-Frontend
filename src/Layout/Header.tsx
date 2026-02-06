@@ -18,32 +18,32 @@ import { useAuth } from "../auth/authContext";
 interface HeaderProps {
   headerColor?: string;
   showSearch?: boolean;
-  onMenuClick?: () => void;
 }
+
+const HEADER_HEIGHT = 64;
 
 const Header: React.FC<HeaderProps> = ({
   headerColor = "#1E3A8A",
   showSearch = false,
-  onMenuClick,
 }) => {
   const navigate = useNavigate();
   const { logout, token } = useAuth();
 
-    if (!token) return null;
-
-  const handleLogout = () => {
-    
-    logout();
-    navigate("/login", { replace: true });
-  };
+  if (!token) return null;
 
   return (
-    <AppBar position="static" sx={{ background: headerColor }}>
-      <Toolbar>
+    <AppBar
+      position="fixed"
+      sx={{
+        background: headerColor,
+        height: HEADER_HEIGHT,
+        zIndex: (theme) => theme.zIndex.drawer + 10,
+      }}
+    >
+      <Toolbar sx={{ height: HEADER_HEIGHT }}>
         <IconButton
           edge="start"
           color="inherit"
-          onClick={onMenuClick}
           sx={{ display: { xs: "flex", md: "none" } }}
         >
           <MenuIcon />
@@ -57,8 +57,6 @@ const Header: React.FC<HeaderProps> = ({
             fontWeight: 900,
             color: "#FFFFFF",
             fontFamily: `"Montserrat", sans-serif`,
-            letterSpacing: "0.5px",
-            textShadow: "0 2px 6px rgba(0,0,0,0.35)",
           }}
         >
           Pukal Reports
@@ -84,7 +82,7 @@ const Header: React.FC<HeaderProps> = ({
         <Button
           variant="outlined"
           size="small"
-          onClick={handleLogout}
+          onClick={logout}
           sx={{ ml: 2, color: "#fff", borderColor: "#fff" }}
         >
           Logout
@@ -95,3 +93,4 @@ const Header: React.FC<HeaderProps> = ({
 };
 
 export default Header;
+export { HEADER_HEIGHT };

@@ -16,11 +16,16 @@ import {
 } from "@mui/material";
 import dayjs from "dayjs";
 import AppLayout, { useToggleMode } from "../Layout/appLayout";
+import PageHeader from "../Layout/PageHeader";
 import CommonPagination from "../Components/CommonPagination";
 import {
   OnlineSalesReportService,
   OnlineSalesReportItemService,
 } from "../services/OnlineSalesReport.service";
+import { exportToPDF } from "../utils/exportToPDF";
+import { exportToExcel } from "../utils/exportToExcel";
+import { mapForExport } from "../utils/exportMapper";
+
 
 const ROWS_PER_PAGE = 25;
 
@@ -37,7 +42,7 @@ type SummaryType = "sum" | "avg" | null;
 
 const OnlineSalesReportPage: React.FC = () => {
   const today = dayjs().format("YYYY-MM-DD");
-  const { toggleMode } = useToggleMode();
+  const { toggleMode, setToggleMode } = useToggleMode();
 
   const [rawAbstract, setRawAbstract] = useState<any[]>([]);
   const [rawExpanded, setRawExpanded] = useState<any[]>([]);
@@ -61,6 +66,54 @@ const OnlineSalesReportPage: React.FC = () => {
     Invoice: "",
     Product: "",
   });
+
+  const ABSTRACT_COLUMNS = [
+    { label: "S.No", key: "sno" },
+    { label: "Date", key: "Ledger_Date", type: "date" },
+    { label: "Invoice", key: "invoice_no" },
+    { label: "Customer", key: "Retailer_Name" },
+    { label: "Count", key: "Item_Count", type: "number" },
+    { label: "Amount", key: "Total_Invoice_value", altKey: "Amount", type: "number" },
+  ];
+
+  const EXPANDED_COLUMNS = [
+    { label: "S.No", key: "sno" },
+    { label: "Date", key: "Ledger_Date", type: "date" },
+    { label: "Invoice", key: "invoice_no" },
+    { label: "Customer", key: "Retailer_Name" },
+    { label: "Product", key: "Product_Name" },
+    { label: "Quantity", key: "Bill_Qty", type: "number" },
+    { label: "Rate", key: "Rate", type: "number" },
+    { label: "Amount", key: "Total_Invoice_value", altKey: "Amount", type: "number" },
+  ];
+
+  const handleExportPDF = () => {
+    const isAbstract = toggleMode === "Abstract";
+    const rows = isAbstract ? filteredAbstract : filteredExpanded;
+    const columns = isAbstract ? ABSTRACT_COLUMNS : EXPANDED_COLUMNS;
+
+    const { headers, data } = mapForExport(columns, rows);
+
+    exportToPDF(
+      `Online Sales Report (${toggleMode})`,
+      headers,
+      data
+    );
+  };
+
+  const handleExportExcel = () => {
+    const isAbstract = toggleMode === "Abstract";
+    const rows = isAbstract ? filteredAbstract : filteredExpanded;
+    const columns = isAbstract ? ABSTRACT_COLUMNS : EXPANDED_COLUMNS;
+
+    const { headers, data } = mapForExport(columns, rows);
+
+    exportToExcel(
+      `Online Sales Report (${toggleMode})`,
+      headers,
+      data
+    );
+  };
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
@@ -226,32 +279,32 @@ const OnlineSalesReportPage: React.FC = () => {
         <TableBody>
           {paginated.map((row, i) => (
             <TableRow key={i}>
-              <TableCell  sx={{fontSize: "0.75rem",}}>
+              <TableCell sx={{ fontSize: "0.75rem", }}>
                 {(pageNo - 1) * ROWS_PER_PAGE + i + 1}
               </TableCell>
               {columns.slice(1).map((c) => {
                 switch (c) {
                   case "Date":
                     return (
-                      <TableCell sx={{fontSize: "0.75rem",}} key={c}>
+                      <TableCell sx={{ fontSize: "0.75rem", }} key={c}>
                         {dayjs(row.Ledger_Date).format("DD/MM/YYYY")}
                       </TableCell>
                     );
                   case "Invoice":
-                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.invoice_no}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.invoice_no}</TableCell>;
                   case "Customer":
-                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Retailer_Name}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Retailer_Name}</TableCell>;
                   case "Product":
-                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Product_Name}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Product_Name}</TableCell>;
                   case "Count":
-                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Item_Count}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Item_Count}</TableCell>;
                   case "Quantity":
-                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Bill_Qty}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Bill_Qty}</TableCell>;
                   case "Rate":
-                    return <TableCell sx={{fontSize: "0.75rem",}} key={c}>{row.Rate}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Rate}</TableCell>;
                   case "Amount":
                     return (
-                      <TableCell sx={{fontSize: "0.75rem",}} key={c}>
+                      <TableCell sx={{ fontSize: "0.75rem", }} key={c}>
                         {row.Total_Invoice_value ?? row.Amount}
                       </TableCell>
                     );
@@ -285,163 +338,177 @@ const OnlineSalesReportPage: React.FC = () => {
 
   /* ================= RENDER ================= */
   return (
-    <AppLayout showHeader={false} fullWidth>
-      <Box>
-        {toggleMode === "Abstract" ? (
-          <>
-            {renderTable(
-              filteredAbstract,
-              paginatedAbstract,
-              ["S.No", "Date", "Invoice", "Customer", "Count", "Amount"],
-              page
-            )}
-            <CommonPagination
-              totalRows={filteredAbstract.length}
-              page={page}
-              onPageChange={setPage}
-            />
-          </>
-        ) : (
-          <>
-            {renderTable(
-              filteredExpanded,
-              paginatedExpanded,
-              [
-                "S.No",
-                "Date",
-                "Invoice",
-                "Customer",
-                "Product",
-                "Quantity",
-                "Rate",
-                "Amount",
-              ],
-              expandedPage
-            )}
-            <CommonPagination
-              totalRows={filteredExpanded.length}
-              page={expandedPage}
-              onPageChange={setExpandedPage}
-            />
-          </>
-        )}
+    <>
+      <PageHeader
+        pages={[
+          { label: "Sales Invoice", path: "/salesinvoice" },
+          { label: "Online Sales Report", path: "/salesreport" },
+          { label: "Unit Economics", path: "/uniteconomics" },
+        ]}
+        toggleMode={toggleMode}
+        onToggleChange={setToggleMode}
+        onExportPDF={handleExportPDF}
+        onExportExcel={handleExportExcel}
+      />
+      <AppLayout fullWidth >
 
-        {/* ================= FILTER MENU ================= */}
-        <Menu
-          anchorEl={filterAnchor}
-          open={Boolean(filterAnchor)}
-          onClose={() => setFilterAnchor(null)}
-        >
-          {/* ===== DATE FILTER ===== */}
-          {activeHeader === "Date" && (
-            <Box  p={2} display="flex" flexDirection="column" gap={1}>
-              <TextField
-                type="date"
-                value={filters.Date.from}
-                onChange={(e) =>
-                  setFilters((p) => ({
-                    ...p,
-                    Date: { ...p.Date, from: e.target.value },
-                  }))
-                }
+        <Box>
+          {toggleMode === "Abstract" ? (
+            <>
+              {renderTable(
+                filteredAbstract,
+                paginatedAbstract,
+                ["S.No", "Date", "Invoice", "Customer", "Count", "Amount"],
+                page
+              )}
+              <CommonPagination
+                totalRows={filteredAbstract.length}
+                page={page}
+                onPageChange={setPage}
               />
-              <TextField
-                type="date"
-                value={filters.Date.to}
-                onChange={(e) =>
-                  setFilters((p) => ({
-                    ...p,
-                    Date: { ...p.Date, to: e.target.value },
-                  }))
-                }
+            </>
+          ) : (
+            <>
+              {renderTable(
+                filteredExpanded,
+                paginatedExpanded,
+                [
+                  "S.No",
+                  "Date",
+                  "Invoice",
+                  "Customer",
+                  "Product",
+                  "Quantity",
+                  "Rate",
+                  "Amount",
+                ],
+                expandedPage
+              )}
+              <CommonPagination
+                totalRows={filteredExpanded.length}
+                page={expandedPage}
+                onPageChange={setExpandedPage}
               />
-              <Button
-                size="small"
-                variant="contained"
-                onClick={() => setFilterAnchor(null)}
-                sx={{
-                  backgroundColor: "#1E3A8A",
-                  fontWeight: 600,
-                }}
-              >
-                Apply
-              </Button>
-            </Box>
+            </>
           )}
 
-          {/* ===== TEXT FILTERS ===== */}
-          {activeHeader &&
-            ["Customer", "Invoice", "Product"].includes(activeHeader) && (
-              <Box p={2} sx={{ minWidth: 220 }}>
+          {/* ================= FILTER MENU ================= */}
+          <Menu
+            anchorEl={filterAnchor}
+            open={Boolean(filterAnchor)}
+            onClose={() => setFilterAnchor(null)}
+          >
+            {/* ===== DATE FILTER ===== */}
+            {activeHeader === "Date" && (
+              <Box p={2} display="flex" flexDirection="column" gap={1}>
                 <TextField
-                  size="small"
-                  fullWidth
-                  placeholder={`Search ${activeHeader}`}
-                  value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
-                  sx={{ mb: 1 }}
+                  type="date"
+                  value={filters.Date.from}
+                  onChange={(e) =>
+                    setFilters((p) => ({
+                      ...p,
+                      Date: { ...p.Date, from: e.target.value },
+                    }))
+                  }
                 />
-
-                {(activeHeader === "Customer"
-                  ? retailers
-                  : activeHeader === "Invoice"
-                    ? invoices
-                    : products
-                )
-                  .filter((v) =>
-                    v.toLowerCase().includes(searchText.toLowerCase())
-                  )
-                  .map((v) => (
-                    <MenuItem
-                      key={v}
-                      onClick={() => {
-                        setFilters((p) => ({ ...p, [activeHeader]: v }));
-                        setPage(1);
-                        setExpandedPage(1);
-                        setFilterAnchor(null);
-                      }}
-                    >
-                      {v}
-                    </MenuItem>
-                  ))}
-
-                <MenuItem
-                  onClick={() => {
-                    setFilters((p) => ({ ...p, [activeHeader]: "" }));
-                    setPage(1);
-                    setExpandedPage(1);
-                    setFilterAnchor(null);
+                <TextField
+                  type="date"
+                  value={filters.Date.to}
+                  onChange={(e) =>
+                    setFilters((p) => ({
+                      ...p,
+                      Date: { ...p.Date, to: e.target.value },
+                    }))
+                  }
+                />
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => setFilterAnchor(null)}
+                  sx={{
+                    backgroundColor: "#1E3A8A",
+                    fontWeight: 600,
                   }}
                 >
-                  All
-                </MenuItem>
+                  Apply
+                </Button>
               </Box>
             )}
 
-          {/* ===== NUMERIC SUMMARY ===== */}
-          {activeHeader && NUMERIC_HEADERS.includes(activeHeader) && (
-            <>
-              <MenuItem
-                onClick={() => {
-                  setSummaryType("sum");
-                  setFilterAnchor(null);
-                }}
-              >
-                Sum
-              </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  setSummaryType("avg");
-                  setFilterAnchor(null);
-                }}
-              >
-                Avg
-              </MenuItem>
-            </>
-          )}
-        </Menu>
-      </Box>
-    </AppLayout>
+            {/* ===== TEXT FILTERS ===== */}
+            {activeHeader &&
+              ["Customer", "Invoice", "Product"].includes(activeHeader) && (
+                <Box p={2} sx={{ minWidth: 220 }}>
+                  <TextField
+                    size="small"
+                    fullWidth
+                    placeholder={`Search ${activeHeader}`}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    sx={{ mb: 1 }}
+                  />
+
+                  {(activeHeader === "Customer"
+                    ? retailers
+                    : activeHeader === "Invoice"
+                      ? invoices
+                      : products
+                  )
+                    .filter((v) =>
+                      v.toLowerCase().includes(searchText.toLowerCase())
+                    )
+                    .map((v) => (
+                      <MenuItem
+                        key={v}
+                        onClick={() => {
+                          setFilters((p) => ({ ...p, [activeHeader]: v }));
+                          setPage(1);
+                          setExpandedPage(1);
+                          setFilterAnchor(null);
+                        }}
+                      >
+                        {v}
+                      </MenuItem>
+                    ))}
+
+                  <MenuItem
+                    onClick={() => {
+                      setFilters((p) => ({ ...p, [activeHeader]: "" }));
+                      setPage(1);
+                      setExpandedPage(1);
+                      setFilterAnchor(null);
+                    }}
+                  >
+                    All
+                  </MenuItem>
+                </Box>
+              )}
+
+            {/* ===== NUMERIC SUMMARY ===== */}
+            {activeHeader && NUMERIC_HEADERS.includes(activeHeader) && (
+              <>
+                <MenuItem
+                  onClick={() => {
+                    setSummaryType("sum");
+                    setFilterAnchor(null);
+                  }}
+                >
+                  Sum
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setSummaryType("avg");
+                    setFilterAnchor(null);
+                  }}
+                >
+                  Avg
+                </MenuItem>
+              </>
+            )}
+          </Menu>
+        </Box>
+      </AppLayout>
+    </>
   );
 };
 

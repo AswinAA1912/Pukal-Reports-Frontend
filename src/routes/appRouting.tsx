@@ -52,12 +52,6 @@ const AppRouting: React.FC<AppRoutingProps> = ({
 
   if (isInitializing) return <GlobalLoader loading />;
 
-  const pages = [
-    { label: "Sales Invoice", path: "/salesinvoice" },
-    { label: "Online Sales Report", path: "/salesreport" },
-    { label: "Unit Economics", path: "/uniteconomics" },
-  ];
-
   return (
     <>
       {globalLoading && <GlobalLoader loading />}
@@ -75,7 +69,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
           path="/dashboard"
           element={
             <RequireAuth>
-              <AppLayout headerVariant="dashboard">
+              <AppLayout>
                 <Dashboard />
               </AppLayout>
             </RequireAuth>
@@ -88,9 +82,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
           element={
             <RequireAuth>
               <AppLayout
-                headerVariant="page"
                 fullWidth
-                pages={pages}
               >
                 <SalesInvoiceReportPage />
               </AppLayout>
@@ -104,9 +96,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
           element={
             <RequireAuth>
               <AppLayout
-                headerVariant="page"
                 fullWidth
-                pages={pages}
               >
                 <OnlineSalesReportPage />
               </AppLayout>
@@ -119,9 +109,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
           element={
             <RequireAuth>
               <AppLayout
-                headerVariant="page"
                 fullWidth
-                pages={pages}
               >
                 <UnitEconomicsReportPage />
               </AppLayout>

@@ -15,12 +15,16 @@ import {
   Button,
 } from "@mui/material";
 import dayjs from "dayjs";
+import AppLayout from "../Layout/appLayout";
+import PageHeader from "../Layout/PageHeader";
 import CommonPagination from "../Components/CommonPagination";
+import { exportToPDF } from "../utils/exportToPDF";
+import { exportToExcel } from "../utils/exportToExcel";
+import { mapForExport } from "../utils/exportMapper";
 import {
   SalesInvoiceReport,
   SalesInvoiceReportService,
 } from "../services/salesinvoicereports.service";
-import AppLayout from "../Layout/appLayout";
 
 /* ================= CONSTANTS ================= */
 const ROWS_PER_PAGE = 25;
@@ -53,14 +57,23 @@ const SalesInvoiceReportPage: React.FC = () => {
   /* -------- HEADER FILTER -------- */
   const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
   const [activeHeader, setActiveHeader] = useState<string | null>(null);
-
-  /* -------- DROPDOWN SEARCH (ONLY MENU) -------- */
   const [searchText, setSearchText] = useState("");
 
   /* -------- SUMMARY -------- */
   const [summaryType, setSummaryType] = useState<"sum" | "avg" | null>(null);
 
-  /* ================= LOAD DATA (DATE ONLY) ================= */
+  const EXPORT_COLUMNS = [
+    { label: "S.No", key: "sno" },
+    { label: "Date", key: "Created_on", type: "date" },
+    { label: "Invoice", key: "Do_Inv_No" },
+    { label: "Customer", key: "Retailer_Name" },
+    { label: "Voucher", key: "VoucherTypeGet" },
+    { label: "Before Tax", key: "Total_Before_Tax", type: "number" },
+    { label: "Tax", key: "Total_Tax", type: "number" },
+    { label: "Invoice Amount", key: "Total_Invoice_value", type: "number" },
+  ];
+
+  /* ================= LOAD DATA ================= */
   useEffect(() => {
     const loadData = async () => {
       const res = await SalesInvoiceReportService.getReports({
@@ -74,7 +87,7 @@ const SalesInvoiceReportPage: React.FC = () => {
     loadData();
   }, [filters.Date]);
 
-  /* ================= APPLY FILTERS (CLICK ONLY) ================= */
+  /* ================= APPLY FILTERS ================= */
   const data = useMemo(() => {
     let rows = rawData;
 
@@ -90,7 +103,7 @@ const SalesInvoiceReportPage: React.FC = () => {
     return rows;
   }, [rawData, filters]);
 
-  /* ================= DROPDOWN VALUES ================= */
+  /* ================= DROPDOWNS ================= */
   const invoices = useMemo(
     () =>
       [...new Set(rawData.map((d) => d.Do_Inv_No))].filter(
@@ -124,15 +137,13 @@ const SalesInvoiceReportPage: React.FC = () => {
   /* ================= SUMMARY ================= */
   const getSummary = (field: keyof SalesInvoiceReport) => {
     if (!summaryType) return 0;
-
     const values = data.map((r) => Number(r[field]) || 0);
     const total = values.reduce((a, b) => a + b, 0);
-
     return summaryType === "sum"
       ? total
       : values.length
-      ? total / values.length
-      : 0;
+        ? total / values.length
+        : 0;
   };
 
   /* ================= HEADER CLICK ================= */
@@ -143,169 +154,161 @@ const SalesInvoiceReportPage: React.FC = () => {
     setActiveHeader(column);
     setFilterAnchor(e.currentTarget);
     setSummaryType(null);
-    setSearchText(""); // EXACTLY like UnitEconomics
+    setSearchText("");
   };
+
+  /* ================= EXPORT ================= */
+  const handleExportPDF = () => {
+    const { headers, data: exportData } = mapForExport(EXPORT_COLUMNS, data);
+
+    exportToPDF("Sales Invoice Report", headers, exportData);
+  };
+
+  const handleExportExcel = () => {
+    const { headers, data: exportData } = mapForExport(EXPORT_COLUMNS, data);
+
+    exportToExcel("Sales Invoice Report", headers, exportData);
+  };
+
 
   /* ================= RENDER ================= */
   return (
-    <AppLayout showHeader={false} fullWidth>
-      <Box>
-        <TableContainer component={Paper}>
-          <Table size="small">
-            <TableHead sx={{ background: "#1E3A8A" }}>
-              <TableRow >
-                <TableCell sx={headStyle}>S.No</TableCell>
-                <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Date")}>
-                  Date
-                </TableCell>
-                <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Invoice")}>
-                  Invoice
-                </TableCell>
-                <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Customer")}>
-                  Customer
-                </TableCell>
-                <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Voucher")}>
-                  Voucher
-                </TableCell>
-                <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "BeforeTax")}>
-                  Before Tax
-                </TableCell>
-                <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Tax")}>
-                  Tax
-                </TableCell>
-                <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "InvoiceAmount")}>
-                  Invoice Amount
-                </TableCell>
-              </TableRow>
-            </TableHead>
+    <>
+      {/* ===== FIXED HEADER ===== */}
+      <PageHeader
+        pages={[
+          { label: "Sales Invoice", path: "/salesinvoice" },
+          { label: "Online Sales Report", path: "/salesreport" },
+          { label: "Unit Economics", path: "/uniteconomics" },
+        ]}
+        onExportPDF={handleExportPDF}
+        onExportExcel={handleExportExcel}
+      />
 
-            <TableBody>
-              {paginatedData.map((row, i) => (
-                <TableRow key={row.Do_Id}>
-                  <TableCell sx={{fontSize: "0.75rem",}} >{(page - 1) * ROWS_PER_PAGE + i + 1}</TableCell>
-                  <TableCell sx={{fontSize: "0.75rem",}}>{dayjs(row.Created_on).format("DD/MM/YYYY")}</TableCell>
-                  <TableCell sx={{fontSize: "0.75rem",}}>{row.Do_Inv_No}</TableCell>
-                  <TableCell sx={{fontSize: "0.75rem",}}>{row.Retailer_Name}</TableCell>
-                  <TableCell sx={{fontSize: "0.75rem",}}>{row.VoucherTypeGet}</TableCell>
-                  <TableCell sx={{fontSize: "0.75rem",}} align="right">{Number(row.Total_Before_Tax).toFixed(2)}</TableCell>
-                  <TableCell sx={{fontSize: "0.75rem",}} align="right">{Number(row.Total_Tax).toFixed(2)}</TableCell>
-                  <TableCell sx={{fontSize: "0.75rem",}} align="right">{Number(row.Total_Invoice_value).toFixed(2)}</TableCell>
+      {/* ===== SCROLLABLE CONTENT ===== */}
+      <AppLayout fullWidth>
+        <Box>
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead sx={{ background: "#1E3A8A" }}>
+                <TableRow>
+                  <TableCell sx={headStyle}>S.No</TableCell>
+                  <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Date")}>Date</TableCell>
+                  <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Invoice")}>Invoice</TableCell>
+                  <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Customer")}>Customer</TableCell>
+                  <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Voucher")}>Voucher</TableCell>
+                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "BeforeTax")}>Before Tax</TableCell>
+                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Tax")}>Tax</TableCell>
+                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "InvoiceAmount")}>Invoice Amount</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
+              </TableHead>
 
-            {summaryType && (
-              <TableFooter>
-                <TableRow sx={{ background: "#f3f4f6" }}>
-                  <TableCell colSpan={5} sx={{ fontWeight: 600 }}>
-                    {summaryType === "sum" ? "Total" : "Average"}
-                  </TableCell>
-                  <TableCell align="right">{getSummary("Total_Before_Tax").toFixed(2)}</TableCell>
-                  <TableCell align="right">{getSummary("Total_Tax").toFixed(2)}</TableCell>
-                  <TableCell align="right">{getSummary("Total_Invoice_value").toFixed(2)}</TableCell>
-                </TableRow>
-              </TableFooter>
-            )}
-          </Table>
-        </TableContainer>
+              <TableBody>
+                {paginatedData.map((row, i) => (
+                  <TableRow key={row.Do_Id}>
+                    <TableCell sx={{ fontSize: "0.75rem" }}>{(page - 1) * ROWS_PER_PAGE + i + 1}</TableCell>
+                    <TableCell sx={{ fontSize: "0.75rem" }}>{dayjs(row.Created_on).format("DD/MM/YYYY")}</TableCell>
+                    <TableCell sx={{ fontSize: "0.75rem" }}>{row.Do_Inv_No}</TableCell>
+                    <TableCell sx={{ fontSize: "0.75rem" }}>{row.Retailer_Name}</TableCell>
+                    <TableCell sx={{ fontSize: "0.75rem" }}>{row.VoucherTypeGet}</TableCell>
+                    <TableCell align="right">{Number(row.Total_Before_Tax).toFixed(2)}</TableCell>
+                    <TableCell align="right">{Number(row.Total_Tax).toFixed(2)}</TableCell>
+                    <TableCell align="right">{Number(row.Total_Invoice_value).toFixed(2)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
 
-        <CommonPagination
-          totalRows={data.length}
-          page={page}
-          onPageChange={setPage}
-        />
+              {summaryType && (
+                <TableFooter>
+                  <TableRow sx={{ background: "#f3f4f6" }}>
+                    <TableCell colSpan={5} sx={{ fontWeight: 600 }}>
+                      {summaryType === "sum" ? "Total" : "Average"}
+                    </TableCell>
+                    <TableCell align="right">{getSummary("Total_Before_Tax").toFixed(2)}</TableCell>
+                    <TableCell align="right">{getSummary("Total_Tax").toFixed(2)}</TableCell>
+                    <TableCell align="right">{getSummary("Total_Invoice_value").toFixed(2)}</TableCell>
+                  </TableRow>
+                </TableFooter>
+              )}
+            </Table>
+          </TableContainer>
 
-        {/* ================= FILTER MENU ================= */}
-        <Menu
-          anchorEl={filterAnchor}
-          open={Boolean(filterAnchor)}
-          onClose={() => setFilterAnchor(null)}
-        >
-          {["Invoice", "Customer", "Voucher"].includes(activeHeader || "") && (
-            <Box p={2} sx={{ minWidth: 220 }}>
-              <TextField
-                size="small"
-                fullWidth
-                placeholder="Search..."
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                sx={{ mb: 1 }}
-              />
+          <CommonPagination
+            totalRows={data.length}
+            page={page}
+            onPageChange={setPage}
+          />
 
-              {(activeHeader === "Invoice"
-                ? invoices
-                : activeHeader === "Customer"
-                ? customers
-                : vouchers
-              ).map((v) => (
+          {/* ===== FILTER MENU ===== */}
+          <Menu
+            anchorEl={filterAnchor}
+            open={Boolean(filterAnchor)}
+            onClose={() => setFilterAnchor(null)}
+          >
+            {["Invoice", "Customer", "Voucher"].includes(activeHeader || "") && (
+              <Box p={2} sx={{ minWidth: 220 }}>
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Search..."
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  sx={{ mb: 1 }}
+                />
+
+                {(activeHeader === "Invoice"
+                  ? invoices
+                  : activeHeader === "Customer"
+                    ? customers
+                    : vouchers
+                ).map((v) => (
+                  <MenuItem
+                    key={v}
+                    onClick={() => {
+                      setFilters((p) => ({ ...p, [activeHeader!]: v }));
+                      setPage(1);
+                      setFilterAnchor(null);
+                    }}
+                  >
+                    {v}
+                  </MenuItem>
+                ))}
+
                 <MenuItem
-                  key={v}
                   onClick={() => {
-                    setFilters((p) => ({ ...p, [activeHeader!]: v }));
-                    setSearchText("");
+                    setFilters((p) => ({ ...p, [activeHeader!]: "" }));
                     setPage(1);
                     setFilterAnchor(null);
                   }}
                 >
-                  {v}
+                  All
                 </MenuItem>
-              ))}
+              </Box>
+            )}
 
-              <MenuItem
-                onClick={() => {
-                  setFilters((p) => ({ ...p, [activeHeader!]: "" }));
-                  setSearchText("");
-                  setPage(1);
-                  setFilterAnchor(null);
-                }}
-              >
-                All
-              </MenuItem>
-            </Box>
-          )}
+            {activeHeader === "Date" && (
+              <Box p={2} display="flex" flexDirection="column" gap={1}>
+                <TextField type="date" value={tempDate.from} onChange={(e) => setTempDate((p) => ({ ...p, from: e.target.value }))} />
+                <TextField type="date" value={tempDate.to} onChange={(e) => setTempDate((p) => ({ ...p, to: e.target.value }))} />
+                <Button variant="contained"   sx={{
+                    backgroundColor: "#1E3A8A",
+                    fontWeight: 600,
+                  }} onClick={() => { setFilters((p) => ({ ...p, Date: tempDate })); setFilterAnchor(null); }}>
+                  Apply
+                </Button>
+              </Box>
+            )}
 
-          {activeHeader === "Date" && (
-            <Box p={2} display="flex" flexDirection="column" gap={1}>
-              <TextField
-                type="date"
-                value={tempDate.from}
-                onChange={(e) =>
-                  setTempDate((p) => ({ ...p, from: e.target.value }))
-                }
-              />
-              <TextField
-                type="date"
-                value={tempDate.to}
-                onChange={(e) =>
-                  setTempDate((p) => ({ ...p, to: e.target.value }))
-                }
-              />
-              <Button
-                variant="contained"
-                onClick={() => {
-                  setFilters((p) => ({ ...p, Date: tempDate }));
-                  setFilterAnchor(null);
-                }}
-                sx={{ background: "#1E3A8A", fontWeight: 600 }}
-              >
-                Apply
-              </Button>
-            </Box>
-          )}
-
-          {["BeforeTax", "Tax", "InvoiceAmount"].includes(activeHeader || "") && (
-            <>
-              <MenuItem onClick={() => { setSummaryType("sum"); setFilterAnchor(null); }}>
-                Sum
-              </MenuItem>
-              <MenuItem onClick={() => { setSummaryType("avg"); setFilterAnchor(null); }}>
-                Avg
-              </MenuItem>
-            </>
-          )}
-        </Menu>
-      </Box>
-    </AppLayout>
+            {["BeforeTax", "Tax", "InvoiceAmount"].includes(activeHeader || "") && (
+              <>
+                <MenuItem onClick={() => { setSummaryType("sum"); setFilterAnchor(null); }}>Sum</MenuItem>
+                <MenuItem onClick={() => { setSummaryType("avg"); setFilterAnchor(null); }}>Avg</MenuItem>
+              </>
+            )}
+          </Menu>
+        </Box>
+      </AppLayout>
+    </>
   );
 };
 
