@@ -1,5 +1,5 @@
 import axios from "axios";
-import baseURL from "../config/portalBaseURL";
+import {getBaseURL} from "../config/portalBaseURL";
 
 /* =========================
    Types
@@ -34,7 +34,7 @@ export const SalesInvoiceReportService = {
         Retailer_Id?: number;
     }) =>
         axios.get<{ success: boolean; data: SalesInvoiceReport[] }>(
-            `${baseURL}reports/salesinvoice/invoicereport`,
+            `${getBaseURL()}api/sales/salesInvoice`,
             { params }
         ),
 

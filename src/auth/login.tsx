@@ -13,6 +13,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authContext";
 import { toast } from "react-toastify";
+import { encryptPassword } from "../utils/encryption";
 import { fetchCompanies, globalLogin, getUserByAuth, CompanyResponse } from "../services/auth.services";
 
 type Step = "USERNAME" | "COMPANY" | "PASSWORD";
@@ -30,7 +31,7 @@ const Login: React.FC = () => {
     Company_Name: "",
     Local_Id: "",
     Global_Id: 0,
-    Back_End_API: "",
+    Web_Api: "",
     Global_User_ID: "",
     username: "",
     password: "",
@@ -74,56 +75,60 @@ const Login: React.FC = () => {
 
   // STEP 3: Login
   const handleLogin = async () => {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      // 1️⃣ Global login
-      const loginResponse = await globalLogin({
-        Global_User_ID: form.Global_User_ID,
-        Password: form.password,
-      });
+    // 🔐 Encrypt password
+    const encryptedPassword = encryptPassword(form.password);
 
-      const { Back_End_API, Autheticate_Id } = loginResponse;
+    // 1️⃣ Global login (HOST API)
+    const loginResponse = await globalLogin({
+      Global_User_ID: form.Global_User_ID,
+      Password: encryptedPassword, // ✅ encrypted
+    });
 
-      if (!Back_End_API || !Autheticate_Id) {
-        toast.error("Incomplete login data from server");
-        return;
-      }
+    const { Autheticate_Id } = loginResponse;
 
-      // Save backend API & Auth ID
-      localStorage.setItem("COMPANY_API", Back_End_API);
-      localStorage.setItem("AUTH_ID", Autheticate_Id);
-
-      // 2️⃣ Get full user details from backend
-      const fullUser = await getUserByAuth(Autheticate_Id);
-
-      console.log("FULLUSER:", fullUser)
-
-      if (!fullUser.UserId) {
-        toast.error("User not found in selected company");
-        return;
-      }
-
-
-      login(Autheticate_Id, {
-        id: Number(fullUser.UserId),
-        uniqueName: fullUser.UserName,
-        Name: fullUser.Name,
-        companyId: Number(fullUser.Company_id),
-        Company_Name: fullUser.Company_Name,
-      });
-
-      localStorage.setItem("user", JSON.stringify(fullUser));
-
-
-      toast.success("Login successful");
-      navigate("/dashboard", { replace: true });
-    } catch (err: any) {
-      toast.error(err.message || "Login failed");
-    } finally {
-      setLoading(false);
+    if (!Autheticate_Id || !form.Web_Api) {
+      toast.error("Incomplete login data");
+      return;
     }
-  };
+
+    // ✅ Normalize & save COMPANY API from selected company
+    const companyAPI = form.Web_Api.endsWith("/")
+      ? `${form.Web_Api}`
+      : `${form.Web_Api}`;
+
+    localStorage.setItem("COMPANY_API", companyAPI);
+    localStorage.setItem("AUTH_ID", Autheticate_Id);
+
+    // 2️⃣ Fetch user from COMPANY API
+    const fullUser = await getUserByAuth(Autheticate_Id);
+
+    if (!fullUser.UserId) {
+      toast.error("User not found in selected company");
+      return;
+    }
+
+    login(Autheticate_Id, {
+      id: Number(fullUser.UserId),
+      uniqueName: fullUser.UserName,
+      Name: fullUser.Name,
+      companyId: Number(fullUser.Company_id),
+      Company_Name: fullUser.Company_Name,
+    });
+
+    localStorage.setItem("user", JSON.stringify(fullUser));
+
+    toast.success("Login successful");
+    navigate("/dashboard", { replace: true });
+
+  } catch (err: any) {
+    toast.error(err.message || "Login failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <Box

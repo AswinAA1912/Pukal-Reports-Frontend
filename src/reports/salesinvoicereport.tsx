@@ -177,7 +177,7 @@ const SalesInvoiceReportPage: React.FC = () => {
       {/* ===== FIXED HEADER ===== */}
       <PageHeader
         pages={[
-          { label: "Sales Invoice", path: "/salesinvoice" },
+          // { label: "Sales Invoice", path: "/salesinvoice" },
           { label: "Online Sales Report", path: "/salesreport" },
           { label: "Unit Economics", path: "/uniteconomics" },
         ]}
@@ -290,10 +290,10 @@ const SalesInvoiceReportPage: React.FC = () => {
               <Box p={2} display="flex" flexDirection="column" gap={1}>
                 <TextField type="date" value={tempDate.from} onChange={(e) => setTempDate((p) => ({ ...p, from: e.target.value }))} />
                 <TextField type="date" value={tempDate.to} onChange={(e) => setTempDate((p) => ({ ...p, to: e.target.value }))} />
-                <Button variant="contained"   sx={{
-                    backgroundColor: "#1E3A8A",
-                    fontWeight: 600,
-                  }} onClick={() => { setFilters((p) => ({ ...p, Date: tempDate })); setFilterAnchor(null); }}>
+                <Button variant="contained" sx={{
+                  backgroundColor: "#1E3A8A",
+                  fontWeight: 600,
+                }} onClick={() => { setFilters((p) => ({ ...p, Date: tempDate })); setFilterAnchor(null); }}>
                   Apply
                 </Button>
               </Box>

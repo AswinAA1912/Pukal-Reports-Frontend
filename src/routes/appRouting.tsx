@@ -27,7 +27,7 @@ const URLSyncHandler: React.FC<{ setActiveCategory: (cat: string) => void }> = (
   useEffect(() => {
     const routeToCategory: Record<string, string> = {
       "/dashboard": "Dashboard",
-      "/salesinvoice": "Sales Invoice Report",
+      // "/salesinvoice": "Sales Invoice Report",
       "/salesreport": "Online Sales Report",
       "/uniteconomics": "Unit Economics Report",
       "/": "Login",

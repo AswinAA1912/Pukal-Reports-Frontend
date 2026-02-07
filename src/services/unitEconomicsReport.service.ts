@@ -1,5 +1,5 @@
 import axios from "axios";
-import baseURL from "../config/portalBaseURL";
+import {getBaseURL} from "../config/portalBaseURL";
 
 /* =========================
    Types
@@ -35,7 +35,7 @@ export const UnitEconomicsReportService = {
     Product_Id?: number;
   }) =>
     axios.get<{ success: boolean; data: UnitEconomicsReport[] }>(
-      `${baseURL}reports/uniteconomics/uniteconomicsreport`,
+      `${getBaseURL()}api/reports/externalAPI/unitEconomicsReport`,
       { params }
     ),
 };

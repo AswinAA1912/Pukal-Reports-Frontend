@@ -1,5 +1,5 @@
 import axios from "axios";
-import baseURL from "../config/portalBaseURL";
+import {getBaseURL} from "../config/portalBaseURL";
 
 /* =========================
    Types
@@ -30,7 +30,7 @@ export interface OnlineSalesReport {
 export const OnlineSalesReportService = {
     getReports: (params?: { Fromdate?: string; Todate?: string;invoice_no?: string }) =>
         axios.get<{ success: boolean; data: OnlineSalesReport[] }>(
-            `${baseURL}reports/salesinvoice/onlineSalesReport`,
+            `${getBaseURL()}api/reports/externalAPI/onlineSalesReport`,
             { params }
         ),
 };
@@ -38,7 +38,7 @@ export const OnlineSalesReportService = {
 export const OnlineSalesReportItemService = {
     getReportsitem: (params?: { Fromdate?: string; Todate?: string;invoice_no?: string   }) =>
         axios.get<{ success: boolean; data: OnlineSalesReport[] }>(
-            `${baseURL}reports/salesinvoice/onlinesSalesReportItem`,
+            `${getBaseURL()}api/reports/externalAPI/onlineSalesReportItem`,
             { params }
         ),
 };

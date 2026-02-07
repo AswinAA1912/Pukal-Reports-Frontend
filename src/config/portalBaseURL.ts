@@ -1,16 +1,31 @@
-const getPortalBaseURL = (): string => {
-  if (import.meta.env.DEV) {
-    return "http://192.168.1.92:5001/api/";
-  }
+// src/config/portalBaseURL.ts
 
-  const { protocol, hostname } = window.location;
+// export const getHostAPI = (): string => {
+//   const { protocol, host } = window.location;
+//   return `${protocol}//${host}/api/`;
+// };
 
-  if (hostname === "pukalerp.in") {
-    return `${protocol}//pukalerp.in/api/`;
-  }
-
-  return `${protocol}//${hostname}/api/`;
+export const getHostAPI = (): string => {
+  return `https://erpsmt.in/api/`;
 };
 
-const portalBaseURL = getPortalBaseURL();
-export default portalBaseURL;
+export const getCompanyAPI = (): string => {
+  const companyAPI = localStorage.getItem("COMPANY_API");
+
+  if (companyAPI && companyAPI.startsWith("http")) {
+    return companyAPI.endsWith("/") ? companyAPI : `${companyAPI}/`;
+  }
+
+  return "";
+};
+
+/**
+ * Default export:
+ * - Used by normal services
+ * - After login → COMPANY_API
+ * - Before login → HOST API
+ */
+export const getBaseURL = (): string => {
+  const companyAPI = getCompanyAPI();
+  return companyAPI || getHostAPI();
+};

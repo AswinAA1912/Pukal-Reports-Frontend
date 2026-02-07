@@ -1,5 +1,5 @@
 // src/services/auth.services.ts
-import baseURL from "../config/portalBaseURL";
+import { getHostAPI } from "../config/portalBaseURL";
 
 // Payload we send to backend
 export interface GlobalLoginPayload {
@@ -8,7 +8,7 @@ export interface GlobalLoginPayload {
 }
 
 export interface GlobalLoginData {
-  Back_End_API: string;
+  Web_Api: string;
   Autheticate_Id: string;
   Name: string;
 }
@@ -16,7 +16,7 @@ export interface GlobalLoginData {
 // Response returned from backend
 export interface GlobalLoginResponse {
   Autheticate_Id: string;
-  Back_End_API: string;
+  Web_Api: string;
   LOGIN_URL: string;
   Name: string;
   Global_User_ID: number;
@@ -35,7 +35,7 @@ export interface CompanyResponse {
   Company_Name: string,
   Local_Id: string,
   Global_Id: number,
-  Back_End_API: string,
+  Web_Api: string,
   Global_User_ID: string,
   username: string,
   password: string,
@@ -57,7 +57,7 @@ export type FullUser = {
 
 // Fetch companies mapped to username
 export async function fetchCompanies(username: string): Promise<CompanyResponse[]> {
-  const res = await fetch(`${baseURL}auth/companies?username=${username}`);
+  const res = await fetch(`https://erpsmt.in/api/authorization/userPortal/accounts?username=${username}`);
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || "Failed to fetch companies");
   return data.data || [];
@@ -67,11 +67,14 @@ export async function fetchCompanies(username: string): Promise<CompanyResponse[
 export async function globalLogin(
   payload: GlobalLoginPayload
 ): Promise<GlobalLoginResponse> {
-  const res = await fetch(`${baseURL}auth/globallogin`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const res = await fetch(
+    `${getHostAPI()}authorization/userPortal/login`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
 
   const data = await res.json();
 
@@ -79,6 +82,7 @@ export async function globalLogin(
 
   return data.data as GlobalLoginResponse;
 }
+
 
 // src/services/auth.services.ts
 
@@ -93,7 +97,7 @@ export const getUserByAuth = async (auth: string): Promise<FullUser> => {
     ? COMPANY_API.slice(0, -1)
     : COMPANY_API;
 
-  const res = await fetch(`${apiBase}/authorization/userAuth`, {
+  const res = await fetch(`${apiBase}/api/authorization/userAuth`, {
     headers: {
       Authorization: auth,
     },
@@ -110,7 +114,7 @@ export const getUserByAuth = async (auth: string): Promise<FullUser> => {
     throw new Error("User not found");
   }
 
-  return data.data[0]; 
+  return data.data[0];
 };
 
 

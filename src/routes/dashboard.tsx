@@ -18,7 +18,7 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
 
   const menuList = [
-    { label: "Sales Invoice", path: "/salesinvoice" },
+    // { label: "Sales Invoice", path: "/salesinvoice" },
     { label: "Sales Report", path: "/salesreport" },
     { label: "Unit Economics", path: "/uniteconomics" },
   ];

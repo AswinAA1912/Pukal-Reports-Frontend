@@ -341,7 +341,7 @@ const OnlineSalesReportPage: React.FC = () => {
     <>
       <PageHeader
         pages={[
-          { label: "Sales Invoice", path: "/salesinvoice" },
+          // { label: "Sales Invoice", path: "/salesinvoice" },
           { label: "Online Sales Report", path: "/salesreport" },
           { label: "Unit Economics", path: "/uniteconomics" },
         ]}
