@@ -7,7 +7,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TableFooter,
   Paper,
   Menu,
   MenuItem,
@@ -154,36 +153,65 @@ const UnitEconomicsReportPage: React.FC = () => {
         onExportExcel={handleExportExcel}
       />
       <AppLayout fullWidth>
-        <Box>
-          <TableContainer component={Paper}>
+        <Box sx={{ overflow: "auto"}}>
+          <TableContainer
+            component={Paper}
+            sx={{
+              position: 'relative',
+              maxHeight: "calc(100vh - 90px)",
+              overflow: "auto"
+            }}
+          >
             <Table size="small">
-              {/* ===== HEADER (MATCHES SALES INVOICE PAGE) ===== */}
-              <TableHead sx={{ background: "#1E3A8A" }}>
+              {/* ===== FIXED HEADER ===== */}
+              <TableHead sx={{
+                background: "#1E3A8A",
+                position: "sticky",
+                top: 0,
+                zIndex: 2
+              }}>
                 <TableRow>
                   <TableCell sx={headStyle}>S.No</TableCell>
-                  <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Date")}>
-                    Date
-                  </TableCell>
-                  <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Product")}>
-                    Product
-                  </TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Bill_Qty")}>
-                    Quantity
-                  </TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Rate")}>
-                    Rate
-                  </TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Amount")}>
-                    Amount
-                  </TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "COGS")}>
-                    COGS
-                  </TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "COGS_Amount")}>
-                    COGS Amount
-                  </TableCell>
+                  <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Date")}>Date</TableCell>
+                  <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Product")}>Product</TableCell>
+                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Bill_Qty")}>Quantity</TableCell>
+                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Rate")}>Rate</TableCell>
+                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Amount")}>Amount</TableCell>
+                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "COGS")}>COGS</TableCell>
+                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "COGS_Amount")}>COGS Amount</TableCell>
                 </TableRow>
               </TableHead>
+
+              {/* ===== FIXED SUMMARY ROW ABOVE BODY ===== */}
+              {summaryType && (
+                <TableBody>
+                  <TableRow sx={{
+                    background: "#f3f4f6",
+                    position: "sticky",
+                    top: 37, // Height of the header row
+                    zIndex: 1
+                  }}>
+                    <TableCell colSpan={3} sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                      {summaryType === "sum" ? "Total" : "Average"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                      {getSummary("Bill_Qty").toFixed(2)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                      {getSummary("Rate").toFixed(2)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                      {getSummary("Amount").toFixed(2)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                      {getSummary("COGS").toFixed(2)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                      {getSummary("COGS_Amount").toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              )}
 
               {/* ===== BODY ===== */}
               <TableBody>
@@ -195,9 +223,7 @@ const UnitEconomicsReportPage: React.FC = () => {
                     <TableCell sx={{ fontSize: "0.75rem" }}>
                       {dayjs(row.Trans_Date).format("DD/MM/YYYY")}
                     </TableCell>
-                    <TableCell sx={{ fontSize: "0.75rem" }}>
-                      {row.Product_Name}
-                    </TableCell>
+                    <TableCell sx={{ fontSize: "0.75rem" }}>{row.Product_Name}</TableCell>
                     <TableCell align="right">{row.Bill_Qty}</TableCell>
                     <TableCell align="right">{Number(row.Rate).toFixed(2)}</TableCell>
                     <TableCell align="right">{Number(row.Amount).toFixed(2)}</TableCell>
@@ -206,30 +232,8 @@ const UnitEconomicsReportPage: React.FC = () => {
                   </TableRow>
                 ))}
               </TableBody>
-
-              {/* ===== SUMMARY (ALIGNED) ===== */}
-              {summaryType && (
-                <TableFooter>
-                  <TableRow sx={{ background: "#f3f4f6" }}>
-                    <TableCell colSpan={3} sx={{ fontWeight: 600 }}>
-                      {summaryType === "sum" ? "Total" : "Average"}
-                    </TableCell>
-                    <TableCell align="right">{getSummary("Bill_Qty").toFixed(2)}</TableCell>
-                    <TableCell align="right">{getSummary("Rate").toFixed(2)}</TableCell>
-                    <TableCell align="right">{getSummary("Amount").toFixed(2)}</TableCell>
-                    <TableCell align="right">{getSummary("COGS").toFixed(2)}</TableCell>
-                    <TableCell align="right">{getSummary("COGS_Amount").toFixed(2)}</TableCell>
-                  </TableRow>
-                </TableFooter>
-              )}
             </Table>
           </TableContainer>
-
-          <CommonPagination
-            totalRows={data.length}
-            page={page}
-            onPageChange={setPage}
-          />
 
           {/* ===== FILTER MENU (SAME PATTERN AS REFERENCE) ===== */}
           <Menu
@@ -313,6 +317,11 @@ const UnitEconomicsReportPage: React.FC = () => {
             )}
           </Menu>
         </Box>
+        <CommonPagination
+          totalRows={data.length}
+          page={page}
+          onPageChange={setPage}
+        />
       </AppLayout>
     </>
   );

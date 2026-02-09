@@ -83,9 +83,6 @@ export async function globalLogin(
   return data.data as GlobalLoginResponse;
 }
 
-
-// src/services/auth.services.ts
-
 export const getUserByAuth = async (auth: string): Promise<FullUser> => {
   const COMPANY_API = localStorage.getItem("COMPANY_API");
 
@@ -93,29 +90,35 @@ export const getUserByAuth = async (auth: string): Promise<FullUser> => {
     throw new Error("Company API missing. Please login again.");
   }
 
-  const apiBase = COMPANY_API.endsWith("/")
-    ? COMPANY_API.slice(0, -1)
-    : COMPANY_API;
+  // Normalize base URL
+  let apiBase = COMPANY_API.trim();
+  if (apiBase.endsWith("/")) {
+    apiBase = apiBase.slice(0, -1);
+  }
 
-  const res = await fetch(`${apiBase}/api/authorization/userAuth`, {
+  // IMPORTANT: use company API directly
+  const url = `${apiBase}/api/authorization/userAuth`;
+
+  const res = await fetch(url, {
+    method: "GET",
     headers: {
-      Authorization: auth,
+      Authorization: auth, 
     },
     cache: "no-store",
   });
 
   const data = await res.json();
 
-  if (!res.ok || !data.success || !Array.isArray(data.data)) {
+  if (!res.ok || !data.success) {
     throw new Error(data.message || "User not found");
-  }
-
-  if (!data.data.length) {
-    throw new Error("User not found");
   }
 
   return data.data[0];
 };
+
+
+
+
 
 
 

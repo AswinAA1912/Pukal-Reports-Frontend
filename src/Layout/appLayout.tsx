@@ -1,7 +1,6 @@
 import React, { createContext, useState, useContext } from "react";
 import { Outlet } from "react-router-dom";
 import { Box } from "@mui/material";
-import Maincard from "../Components/Maincard";
 
 /* ---------------- CONTEXT ---------------- */
 interface ToggleContextType {
@@ -32,31 +31,34 @@ const AppLayout: React.FC<AppLayoutProps> = ({
 
   return (
     <ToggleContext.Provider value={{ toggleMode, setToggleMode }}>
+      {/* ROOT (NO SCROLL HERE) */}
       <Box
         sx={{
+          height: "100vh",
           display: "flex",
           flexDirection: "column",
-          height: "100vh",
           background: fullWidth
             ? "#F1F5F9"
             : "linear-gradient(to bottom, #87CEFA, #B0E0E6)",
         }}
       >
-        {/* ===== CONTENT ONLY ===== */}
+        {/* ✅ SINGLE SCROLL OWNER */}
         <Box
           sx={{
             flex: 1,
-            overflow: "auto",
-            p: fullWidth ? 1 : 0,
+            minHeight: 0,
+            overflow: "hidden",
           }}
         >
-          {fullWidth ? (
-            <Box sx={{ flex: 1 }}>{children ?? <Outlet />}</Box>
-          ) : (
-            <Maincard fullHeight loading={false}>
-              {children ?? <Outlet />}
-            </Maincard>
-          )}
+          <Box
+            sx={{
+              minHeight: "100%",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {children ?? <Outlet />}
+          </Box>
         </Box>
       </Box>
     </ToggleContext.Provider>

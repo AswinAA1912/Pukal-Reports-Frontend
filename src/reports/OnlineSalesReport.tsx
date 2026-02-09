@@ -7,7 +7,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TableFooter,
   Paper,
   Menu,
   Button,
@@ -238,15 +237,35 @@ const OnlineSalesReportPage: React.FC = () => {
   };
 
   /* ================= TABLE ================= */
-  const renderTable = (
-    rows: any[],
-    paginated: any[],
-    columns: string[],
-    pageNo: number
-  ) => (
-    <TableContainer component={Paper} sx={{ borderRadius: 0 }}>
+ const renderTable = (
+  rows: any[],
+  paginated: any[],
+  columns: string[],
+  pageNo: number
+) => (
+  <Box
+    sx={{
+      overflow: "auto",
+      maxHeight: "calc(100vh - 100px)",
+    }}
+  >
+    <TableContainer 
+      component={Paper} 
+      sx={{ 
+        borderRadius: 0,
+        position: 'relative',
+        maxHeight: "calc(100vh - 50px)",
+        overflow: "auto"
+      }}
+    >
       <Table size="small">
-        <TableHead sx={{ background: "#1E3A8A" }}>
+        {/* ===== FIXED HEADER ===== */}
+        <TableHead sx={{ 
+          background: "#1E3A8A",
+          position: "sticky",
+          top: 0,
+          zIndex: 2
+        }}>
           <TableRow>
             {columns.map((h) => (
               <TableCell
@@ -276,35 +295,61 @@ const OnlineSalesReportPage: React.FC = () => {
           </TableRow>
         </TableHead>
 
+        {/* ===== FIXED SUMMARY ROW ABOVE BODY ===== */}
+        {summaryType && (
+          <TableBody>
+            <TableRow sx={{ 
+              background: "#f3f4f6", 
+              fontSize: "0.75rem", 
+              fontWeight: 700,
+              position: "sticky",
+              top: 37, 
+              zIndex: 1
+            }}>
+              <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
+              {columns.slice(1).map((c) =>
+                NUMERIC_HEADERS.includes(c) ? (
+                  <TableCell key={c} sx={{ fontWeight: 700 }}>
+                    {getSummary(rows, c).toFixed(2)}
+                  </TableCell>
+                ) : (
+                  <TableCell key={c} />
+                )
+              )}
+            </TableRow>
+          </TableBody>
+        )}
+
+        {/* ===== TABLE BODY ===== */}
         <TableBody>
           {paginated.map((row, i) => (
             <TableRow key={i}>
-              <TableCell sx={{ fontSize: "0.75rem", }}>
+              <TableCell sx={{ fontSize: "0.75rem" }}>
                 {(pageNo - 1) * ROWS_PER_PAGE + i + 1}
               </TableCell>
               {columns.slice(1).map((c) => {
                 switch (c) {
                   case "Date":
                     return (
-                      <TableCell sx={{ fontSize: "0.75rem", }} key={c}>
+                      <TableCell sx={{ fontSize: "0.75rem" }} key={c}>
                         {dayjs(row.Ledger_Date).format("DD/MM/YYYY")}
                       </TableCell>
                     );
                   case "Invoice":
-                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.invoice_no}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.invoice_no}</TableCell>;
                   case "Customer":
-                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Retailer_Name}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Retailer_Name}</TableCell>;
                   case "Product":
-                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Product_Name}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Product_Name}</TableCell>;
                   case "Count":
-                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Item_Count}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Item_Count}</TableCell>;
                   case "Quantity":
-                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Bill_Qty}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Bill_Qty}</TableCell>;
                   case "Rate":
-                    return <TableCell sx={{ fontSize: "0.75rem", }} key={c}>{row.Rate}</TableCell>;
+                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Rate}</TableCell>;
                   case "Amount":
                     return (
-                      <TableCell sx={{ fontSize: "0.75rem", }} key={c}>
+                      <TableCell sx={{ fontSize: "0.75rem" }} key={c}>
                         {row.Total_Invoice_value ?? row.Amount}
                       </TableCell>
                     );
@@ -315,26 +360,10 @@ const OnlineSalesReportPage: React.FC = () => {
             </TableRow>
           ))}
         </TableBody>
-
-        {summaryType && (
-          <TableFooter>
-            <TableRow sx={{ background: "#f3f4f6", fontSize: "0.75rem", fontWeight: 600 }}>
-              <TableCell>Total</TableCell>
-              {columns.slice(1).map((c) =>
-                NUMERIC_HEADERS.includes(c) ? (
-                  <TableCell key={c}>
-                    {getSummary(rows, c).toFixed(2)}
-                  </TableCell>
-                ) : (
-                  <TableCell key={c} />
-                )
-              )}
-            </TableRow>
-          </TableFooter>
-        )}
       </Table>
     </TableContainer>
-  );
+  </Box>
+);
 
   /* ================= RENDER ================= */
   return (
@@ -384,11 +413,7 @@ const OnlineSalesReportPage: React.FC = () => {
                 ],
                 expandedPage
               )}
-              <CommonPagination
-                totalRows={filteredExpanded.length}
-                page={expandedPage}
-                onPageChange={setExpandedPage}
-              />
+
             </>
           )}
 
@@ -507,6 +532,11 @@ const OnlineSalesReportPage: React.FC = () => {
             )}
           </Menu>
         </Box>
+        <CommonPagination
+          totalRows={filteredExpanded.length}
+          page={expandedPage}
+          onPageChange={setExpandedPage}
+        />
       </AppLayout>
     </>
   );
