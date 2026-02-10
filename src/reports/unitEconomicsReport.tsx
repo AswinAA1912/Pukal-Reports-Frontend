@@ -56,7 +56,7 @@ const UnitEconomicsReportPage: React.FC = () => {
   const [searchText, setSearchText] = useState("");
 
   /* -------- SUMMARY -------- */
-  const [summaryType, setSummaryType] = useState<"sum" | "avg" | null>(null);
+  const [summaryType, setSummaryType] = useState<"sum" | "avg">("sum");
 
   const EXPORT_COLUMNS = [
     { label: "S.No", key: "sno" },
@@ -84,7 +84,7 @@ const UnitEconomicsReportPage: React.FC = () => {
 
       setData(rows);
       setPage(1);
-      setSummaryType(null);
+      setSummaryType("sum");
     };
 
     loadData();
@@ -125,7 +125,7 @@ const UnitEconomicsReportPage: React.FC = () => {
     setActiveHeader(column);
     setFilterAnchor(e.currentTarget);
     setSearchText("");
-    setSummaryType(null);
+    setSummaryType("sum");
   };
 
   /* ================= EXPORT ================= */
@@ -137,6 +137,13 @@ const UnitEconomicsReportPage: React.FC = () => {
   const handleExportExcel = () => {
     const { headers, data: exportData } = mapForExport(EXPORT_COLUMNS, data);
     exportToExcel("Unit Economics Report", headers, exportData);
+  };
+
+  const formatINR = (value: number) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+    }).format(value);
   };
 
 
@@ -152,13 +159,13 @@ const UnitEconomicsReportPage: React.FC = () => {
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
       />
-      <AppLayout fullWidth>
-        <Box sx={{ overflow: "auto"}}>
+      <AppLayout fullWidth >
+        <Box sx={{ overflow: "auto", mt: 1 }}>
           <TableContainer
             component={Paper}
             sx={{
               position: 'relative',
-              maxHeight: "calc(100vh - 90px)",
+              maxHeight: "calc(100vh - 100px)",
               overflow: "auto"
             }}
           >
@@ -185,29 +192,31 @@ const UnitEconomicsReportPage: React.FC = () => {
               {/* ===== FIXED SUMMARY ROW ABOVE BODY ===== */}
               {summaryType && (
                 <TableBody>
-                  <TableRow sx={{
-                    background: "#f3f4f6",
-                    position: "sticky",
-                    top: 37, // Height of the header row
-                    zIndex: 1
-                  }}>
+                  <TableRow
+                    sx={{
+                      background: "#f3f4f6",
+                      position: "sticky",
+                      top: 37,
+                      zIndex: 1,
+                    }}
+                  >
                     <TableCell colSpan={3} sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {summaryType === "sum" ? "Total" : "Average"}
+                      Total
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
                       {getSummary("Bill_Qty").toFixed(2)}
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {getSummary("Rate").toFixed(2)}
+                      {formatINR(getSummary("Rate"))}
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {getSummary("Amount").toFixed(2)}
+                      {formatINR(getSummary("Amount"))}
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
                       {getSummary("COGS").toFixed(2)}
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {getSummary("COGS_Amount").toFixed(2)}
+                      {formatINR(getSummary("COGS_Amount"))}
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -224,11 +233,11 @@ const UnitEconomicsReportPage: React.FC = () => {
                       {dayjs(row.Trans_Date).format("DD/MM/YYYY")}
                     </TableCell>
                     <TableCell sx={{ fontSize: "0.75rem" }}>{row.Product_Name}</TableCell>
-                    <TableCell align="right">{row.Bill_Qty}</TableCell>
-                    <TableCell align="right">{Number(row.Rate).toFixed(2)}</TableCell>
-                    <TableCell align="right">{Number(row.Amount).toFixed(2)}</TableCell>
+                    <TableCell align="right">{Number(row.Bill_Qty).toFixed(2)}</TableCell>
+                    <TableCell align="right">{formatINR(Number(row.Rate))}</TableCell>
+                    <TableCell align="right">{formatINR(Number(row.Amount))}</TableCell>
                     <TableCell align="right">{Number(row.COGS).toFixed(2)}</TableCell>
-                    <TableCell align="right">{Number(row.COGS_Amount).toFixed(2)}</TableCell>
+                    <TableCell align="right">{formatINR(Number(row.COGS_Amount))}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

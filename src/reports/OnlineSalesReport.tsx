@@ -37,8 +37,6 @@ type HeaderFilters = {
   Product: string;
 };
 
-type SummaryType = "sum" | "avg" | null;
-
 const OnlineSalesReportPage: React.FC = () => {
   const today = dayjs().format("YYYY-MM-DD");
   const { toggleMode, setToggleMode } = useToggleMode();
@@ -57,7 +55,7 @@ const OnlineSalesReportPage: React.FC = () => {
   const [activeHeader, setActiveHeader] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
 
-  const [summaryType, setSummaryType] = useState<SummaryType>(null);
+  const [summaryType, setSummaryType] = useState<"sum" | "avg">("sum");
 
   const [filters, setFilters] = useState<HeaderFilters>({
     Date: { from: today, to: today },
@@ -113,6 +111,14 @@ const OnlineSalesReportPage: React.FC = () => {
       data
     );
   };
+
+  const formatINR = (value: number) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+    }).format(value);
+  };
+
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
@@ -209,7 +215,11 @@ const OnlineSalesReportPage: React.FC = () => {
         case "Count":
           return Number(r.Item_Count || 0);
         case "Amount":
-          return Number((r.Total_Invoice_value ?? r.Amount) || 0);
+          return Number(
+            toggleMode === "Abstract"
+              ? r.Total_Invoice_value
+              : r.Amount
+          ) || 0;
         case "Rate":
           return Number(r.Rate || 0);
         case "Quantity":
@@ -237,133 +247,152 @@ const OnlineSalesReportPage: React.FC = () => {
   };
 
   /* ================= TABLE ================= */
- const renderTable = (
-  rows: any[],
-  paginated: any[],
-  columns: string[],
-  pageNo: number
-) => (
-  <Box
-    sx={{
-      overflow: "auto",
-      maxHeight: "calc(100vh - 100px)",
-    }}
-  >
-    <TableContainer 
-      component={Paper} 
-      sx={{ 
-        borderRadius: 0,
-        position: 'relative',
-        maxHeight: "calc(100vh - 50px)",
-        overflow: "auto"
+  const renderTable = (
+    rows: any[],
+    paginated: any[],
+    columns: string[],
+    pageNo: number,
+    isAbstract: boolean
+  ) => (
+    <Box
+      sx={{
+        overflow: "hidden",
+        maxHeight: "calc(100vh - 100px)",
       }}
     >
-      <Table size="small">
-        {/* ===== FIXED HEADER ===== */}
-        <TableHead sx={{ 
-          background: "#1E3A8A",
-          position: "sticky",
-          top: 0,
-          zIndex: 2
-        }}>
-          <TableRow>
-            {columns.map((h) => (
-              <TableCell
-                key={h}
-                sx={{
-                  color: "#fff",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  cursor:
+      <TableContainer
+        component={Paper}
+        sx={{
+          borderRadius: 0,
+          position: 'relative',
+          maxHeight: "calc(100vh - 100px)",
+          overflow: "auto"
+        }}
+      >
+        <Table size="small">
+          {/* ===== FIXED HEADER ===== */}
+          <TableHead sx={{
+            background: "#1E3A8A",
+            position: "sticky",
+            top: 0,
+            zIndex: 2
+          }}>
+            <TableRow>
+              {columns.map((h) => (
+                <TableCell
+                  key={h}
+                  sx={{
+                    color: "#fff",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    cursor:
+                      ["Date", "Customer", "Invoice", "Product", ...NUMERIC_HEADERS].includes(
+                        h
+                      )
+                        ? "pointer"
+                        : "default",
+                  }}
+                  onClick={(e) =>
                     ["Date", "Customer", "Invoice", "Product", ...NUMERIC_HEADERS].includes(
                       h
                     )
-                      ? "pointer"
-                      : "default",
+                      ? handleHeaderClick(e, h)
+                      : undefined
+                  }
+                >
+                  {h}
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+
+          {/* ===== FIXED SUMMARY ROW ABOVE BODY ===== */}
+          {summaryType && (
+            < TableBody >
+              <TableRow
+                sx={{
+                  background: "#f3f4f6",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  position: "sticky",
+                  top: 37,
+                  zIndex: 1,
                 }}
-                onClick={(e) =>
-                  ["Date", "Customer", "Invoice", "Product", ...NUMERIC_HEADERS].includes(
-                    h
-                  )
-                    ? handleHeaderClick(e, h)
-                    : undefined
-                }
               >
-                {h}
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-
-        {/* ===== FIXED SUMMARY ROW ABOVE BODY ===== */}
-        {summaryType && (
-          <TableBody>
-            <TableRow sx={{ 
-              background: "#f3f4f6", 
-              fontSize: "0.75rem", 
-              fontWeight: 700,
-              position: "sticky",
-              top: 37, 
-              zIndex: 1
-            }}>
-              <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
-              {columns.slice(1).map((c) =>
-                NUMERIC_HEADERS.includes(c) ? (
-                  <TableCell key={c} sx={{ fontWeight: 700 }}>
-                    {getSummary(rows, c).toFixed(2)}
-                  </TableCell>
-                ) : (
-                  <TableCell key={c} />
-                )
-              )}
-            </TableRow>
-          </TableBody>
-        )}
-
-        {/* ===== TABLE BODY ===== */}
-        <TableBody>
-          {paginated.map((row, i) => (
-            <TableRow key={i}>
-              <TableCell sx={{ fontSize: "0.75rem" }}>
-                {(pageNo - 1) * ROWS_PER_PAGE + i + 1}
-              </TableCell>
-              {columns.slice(1).map((c) => {
-                switch (c) {
-                  case "Date":
+                <TableCell sx={{ fontWeight: 700 }}>
+                  {summaryType === "sum" ? "Total" : "Average"}
+                </TableCell>
+                {columns.slice(1).map((c) => {
+                  if (c === "Rate" || c === "Amount") {
                     return (
-                      <TableCell sx={{ fontSize: "0.75rem" }} key={c}>
-                        {dayjs(row.Ledger_Date).format("DD/MM/YYYY")}
+                      <TableCell key={c} sx={{ fontWeight: 700 }}>
+                        {formatINR(getSummary(rows, c))}
                       </TableCell>
                     );
-                  case "Invoice":
-                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.invoice_no}</TableCell>;
-                  case "Customer":
-                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Retailer_Name}</TableCell>;
-                  case "Product":
-                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Product_Name}</TableCell>;
-                  case "Count":
-                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Item_Count}</TableCell>;
-                  case "Quantity":
-                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Bill_Qty}</TableCell>;
-                  case "Rate":
-                    return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Rate}</TableCell>;
-                  case "Amount":
+                  } else if (NUMERIC_HEADERS.includes(c)) {
                     return (
-                      <TableCell sx={{ fontSize: "0.75rem" }} key={c}>
-                        {row.Total_Invoice_value ?? row.Amount}
+                      <TableCell key={c} sx={{ fontWeight: 700 }}>
+                        {getSummary(rows, c).toFixed(2)}
                       </TableCell>
                     );
-                  default:
+                  } else {
                     return <TableCell key={c} />;
-                }
-              })}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-  </Box>
-);
+                  }
+                })}
+              </TableRow>
+            </TableBody>
+
+          )}
+
+          {/* ===== TABLE BODY ===== */}
+          <TableBody>
+            {paginated.map((row, i) => (
+              <TableRow key={i}>
+                <TableCell sx={{ fontSize: "0.75rem" }}>
+                  {(pageNo - 1) * ROWS_PER_PAGE + i + 1}
+                </TableCell>
+                {columns.slice(1).map((c) => {
+                  switch (c) {
+                    case "Date":
+                      return (
+                        <TableCell sx={{ fontSize: "0.75rem" }} key={c}>
+                          {dayjs(row.Ledger_Date).format("DD/MM/YYYY")}
+                        </TableCell>
+                      );
+                    case "Invoice":
+                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.invoice_no}</TableCell>;
+                    case "Customer":
+                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Retailer_Name}</TableCell>;
+                    case "Product":
+                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Product_Name}</TableCell>;
+                    case "Count":
+                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Item_Count}</TableCell>;
+                    case "Quantity":
+                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Bill_Qty}</TableCell>;
+                    case "Rate":
+                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{formatINR(row.Rate)}</TableCell>;
+                    case "Amount":
+                      return (
+                        <TableCell sx={{ fontSize: "0.75rem" }} key={c}>
+                          {formatINR(
+                            isAbstract
+                              ? row.Total_Invoice_value
+                              : row.Amount
+                          )}
+                        </TableCell>
+                      );
+
+                    default:
+                      return <TableCell key={c} />;
+                  }
+                })}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box >
+  );
 
   /* ================= RENDER ================= */
   return (
@@ -381,14 +410,15 @@ const OnlineSalesReportPage: React.FC = () => {
       />
       <AppLayout fullWidth >
 
-        <Box>
+        <Box sx={{ mt: 1 }}>
           {toggleMode === "Abstract" ? (
             <>
               {renderTable(
                 filteredAbstract,
                 paginatedAbstract,
                 ["S.No", "Date", "Invoice", "Customer", "Count", "Amount"],
-                page
+                page,
+                true
               )}
               <CommonPagination
                 totalRows={filteredAbstract.length}
@@ -411,9 +441,9 @@ const OnlineSalesReportPage: React.FC = () => {
                   "Rate",
                   "Amount",
                 ],
-                expandedPage
+                expandedPage,
+                false
               )}
-
             </>
           )}
 
@@ -530,6 +560,7 @@ const OnlineSalesReportPage: React.FC = () => {
                 </MenuItem>
               </>
             )}
+
           </Menu>
         </Box>
         <CommonPagination
