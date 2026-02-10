@@ -25,7 +25,14 @@ const CommonPagination: React.FC<CommonPaginationProps> = ({
       justifyContent="space-between"
       alignItems="center"
     >
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          fontWeight: 700,          
+          color: "#01050a",         
+          letterSpacing: 0.2,
+        }}
+      >
         Showing {(page - 1) * rowsPerPage + 1}–
         {Math.min(page * rowsPerPage, totalRows)} of {totalRows}
       </Typography>
@@ -37,18 +44,18 @@ const CommonPagination: React.FC<CommonPaginationProps> = ({
         shape="rounded"
         sx={{
           "& .MuiPaginationItem-root": {
-            color: "#0D47A1",              
+            color: "#0D47A1",
             borderColor: "#0D47A1",
           },
           "& .Mui-selected": {
-            backgroundColor: "#0D47A1",    
+            backgroundColor: "#0D47A1",
             color: "#fff",
             "&:hover": {
-              backgroundColor: "#08306B",  
+              backgroundColor: "#08306B",
             },
           },
           "& .MuiPaginationItem-root:hover": {
-            backgroundColor: "#E3F2FD",    
+            backgroundColor: "#E3F2FD",
           },
         }}
       />

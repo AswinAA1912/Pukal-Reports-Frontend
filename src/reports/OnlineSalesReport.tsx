@@ -55,8 +55,6 @@ const OnlineSalesReportPage: React.FC = () => {
   const [activeHeader, setActiveHeader] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
 
-  const [summaryType, setSummaryType] = useState<"sum" | "avg">("sum");
-
   const [filters, setFilters] = useState<HeaderFilters>({
     Date: { from: today, to: today },
     Customer: "",
@@ -208,8 +206,7 @@ const OnlineSalesReportPage: React.FC = () => {
   );
 
   /* ================= SUMMARY ================= */
-  const getSummary = (rows: any[], column: string) => {
-    if (!summaryType) return 0;
+  const getTotal = (rows: any[], column: string) => {
     const values = rows.map((r) => {
       switch (column) {
         case "Count":
@@ -228,13 +225,10 @@ const OnlineSalesReportPage: React.FC = () => {
           return 0;
       }
     });
-    const total = values.reduce((a, b) => a + b, 0);
-    return summaryType === "sum"
-      ? total
-      : values.length
-        ? total / values.length
-        : 0;
+
+    return values.reduce((a, b) => a + b, 0);
   };
+
 
   /* ================= HEADER CLICK ================= */
   const handleHeaderClick = (
@@ -242,8 +236,10 @@ const OnlineSalesReportPage: React.FC = () => {
     column: string
   ) => {
     setActiveHeader(column);
-    setFilterAnchor(e.currentTarget);
     setSearchText("");
+
+    // ✅ NON-NUMERIC → OPEN FILTER MENU
+    setFilterAnchor(e.currentTarget);
   };
 
   /* ================= TABLE ================= */
@@ -307,42 +303,36 @@ const OnlineSalesReportPage: React.FC = () => {
           </TableHead>
 
           {/* ===== FIXED SUMMARY ROW ABOVE BODY ===== */}
-          {summaryType && (
-            < TableBody >
-              <TableRow
-                sx={{
-                  background: "#f3f4f6",
-                  fontSize: "0.75rem",
-                  fontWeight: 700,
-                  position: "sticky",
-                  top: 37,
-                  zIndex: 1,
-                }}
-              >
-                <TableCell sx={{ fontWeight: 700 }}>
-                  {summaryType === "sum" ? "Total" : "Average"}
-                </TableCell>
-                {columns.slice(1).map((c) => {
-                  if (c === "Rate" || c === "Amount") {
-                    return (
-                      <TableCell key={c} sx={{ fontWeight: 700 }}>
-                        {formatINR(getSummary(rows, c))}
-                      </TableCell>
-                    );
-                  } else if (NUMERIC_HEADERS.includes(c)) {
-                    return (
-                      <TableCell key={c} sx={{ fontWeight: 700 }}>
-                        {getSummary(rows, c).toFixed(2)}
-                      </TableCell>
-                    );
-                  } else {
-                    return <TableCell key={c} />;
-                  }
-                })}
-              </TableRow>
-            </TableBody>
+          <TableBody>
 
-          )}
+            {/* ===== TOTAL ROW (ALWAYS VISIBLE) ===== */}
+            <TableRow
+              sx={{
+                background: "#f3f4f6",
+                fontWeight: 700,
+                position: "sticky",
+                top: 37,
+                zIndex: 2,
+              }}
+            >
+              <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
+
+              {columns.slice(1).map((c) => {
+                if (NUMERIC_HEADERS.includes(c)) {
+                  const value = getTotal(rows, c);
+                  return (
+                    <TableCell key={c} sx={{ fontWeight: 700 }}>
+                      {c === "Amount" || c === "Rate"
+                        ? formatINR(value)
+                        : value.toFixed(2)}
+                    </TableCell>
+                  );
+                }
+                return <TableCell key={c} />;
+              })}
+            </TableRow>
+          </TableBody>
+
 
           {/* ===== TABLE BODY ===== */}
           <TableBody>
@@ -450,9 +440,14 @@ const OnlineSalesReportPage: React.FC = () => {
           {/* ================= FILTER MENU ================= */}
           <Menu
             anchorEl={filterAnchor}
-            open={Boolean(filterAnchor)}
+            open={
+              Boolean(filterAnchor) &&
+              Boolean(activeHeader) &&
+              !NUMERIC_HEADERS.includes(activeHeader!)
+            }
             onClose={() => setFilterAnchor(null)}
           >
+
             {/* ===== DATE FILTER ===== */}
             {activeHeader === "Date" && (
               <Box p={2} display="flex" flexDirection="column" gap={1}>
@@ -538,28 +533,6 @@ const OnlineSalesReportPage: React.FC = () => {
                   </MenuItem>
                 </Box>
               )}
-
-            {/* ===== NUMERIC SUMMARY ===== */}
-            {activeHeader && NUMERIC_HEADERS.includes(activeHeader) && (
-              <>
-                <MenuItem
-                  onClick={() => {
-                    setSummaryType("sum");
-                    setFilterAnchor(null);
-                  }}
-                >
-                  Sum
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    setSummaryType("avg");
-                    setFilterAnchor(null);
-                  }}
-                >
-                  Avg
-                </MenuItem>
-              </>
-            )}
 
           </Menu>
         </Box>

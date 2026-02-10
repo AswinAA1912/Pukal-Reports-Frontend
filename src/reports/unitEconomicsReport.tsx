@@ -56,7 +56,7 @@ const UnitEconomicsReportPage: React.FC = () => {
   const [searchText, setSearchText] = useState("");
 
   /* -------- SUMMARY -------- */
-  const [summaryType, setSummaryType] = useState<"sum" | "avg">("sum");
+  const [summaryColumn, setSummaryColumn] = useState<keyof UnitEconomicsReport | null>(null);
 
   const EXPORT_COLUMNS = [
     { label: "S.No", key: "sno" },
@@ -66,7 +66,6 @@ const UnitEconomicsReportPage: React.FC = () => {
     { label: "Rate", key: "Rate", type: "number" },
     { label: "Amount", key: "Amount", type: "number" },
     { label: "COGS", key: "COGS", type: "number" },
-    { label: "COGS Amount", key: "COGS_Amount", type: "number" },
   ];
 
   /* ================= LOAD DATA ================= */
@@ -84,7 +83,7 @@ const UnitEconomicsReportPage: React.FC = () => {
 
       setData(rows);
       setPage(1);
-      setSummaryType("sum");
+      setSummaryColumn(null);
     };
 
     loadData();
@@ -106,27 +105,30 @@ const UnitEconomicsReportPage: React.FC = () => {
   );
 
   /* ================= SUMMARY ================= */
-  const getSummary = (key: keyof UnitEconomicsReport) => {
-    if (!summaryType) return 0;
-    const values = data.map((r) => Number(r[key]) || 0);
-    const total = values.reduce((a, b) => a + b, 0);
-    return summaryType === "sum"
-      ? total
-      : values.length
-        ? total / values.length
-        : 0;
+  const getTotal = (key: keyof UnitEconomicsReport) => {
+    return data.reduce((sum, r) => sum + (Number(r[key]) || 0), 0);
   };
 
   /* ================= HEADER CLICK ================= */
-  const openFilter = (
-    e: React.MouseEvent<HTMLElement>,
-    column: string
-  ) => {
+  const openFilter = (e: React.MouseEvent<HTMLElement>, column: string) => {
     setActiveHeader(column);
     setFilterAnchor(e.currentTarget);
     setSearchText("");
-    setSummaryType("sum");
+
+    if (["Bill_Qty", "Rate", "Amount", "COGS"].includes(column)) {
+      if (summaryColumn === column) {
+        setSummaryColumn(null);
+      } else {
+        setSummaryColumn(column as keyof UnitEconomicsReport);
+      }
+    }
   };
+
+  useEffect(() => {
+    setSummaryColumn(null);
+  }, [filters.Date, filters.Product]);
+
+
 
   /* ================= EXPORT ================= */
   const handleExportPDF = () => {
@@ -181,46 +183,36 @@ const UnitEconomicsReportPage: React.FC = () => {
                   <TableCell sx={headStyle}>S.No</TableCell>
                   <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Date")}>Date</TableCell>
                   <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Product")}>Product</TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Bill_Qty")}>Quantity</TableCell>
+                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Bill_Qty")}> Quantity </TableCell>
                   <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Rate")}>Rate</TableCell>
                   <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Amount")}>Amount</TableCell>
                   <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "COGS")}>COGS</TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "COGS_Amount")}>COGS Amount</TableCell>
                 </TableRow>
               </TableHead>
 
               {/* ===== FIXED SUMMARY ROW ABOVE BODY ===== */}
-              {summaryType && (
-                <TableBody>
-                  <TableRow
-                    sx={{
-                      background: "#f3f4f6",
-                      position: "sticky",
-                      top: 37,
-                      zIndex: 1,
-                    }}
-                  >
-                    <TableCell colSpan={3} sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      Total
+              <TableBody>
+                <TableRow
+                  sx={{
+                    background: "#f3f4f6",
+                    position: "sticky",
+                    top: 37,
+                    zIndex: 1,
+                  }}
+                >
+                  <TableCell colSpan={3} sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
+                    Total
+                  </TableCell>
+
+                  {(["Bill_Qty", "Rate", "Amount", "COGS"] as const).map((key) => (
+                    <TableCell key={key} align="right" sx={{ fontWeight: 700 }}>
+                      {key === "Rate" || key === "Amount"
+                        ? formatINR(getTotal(key))
+                        : getTotal(key).toFixed(2)}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {getSummary("Bill_Qty").toFixed(2)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {formatINR(getSummary("Rate"))}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {formatINR(getSummary("Amount"))}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {getSummary("COGS").toFixed(2)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                      {formatINR(getSummary("COGS_Amount"))}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              )}
+                  ))}
+                </TableRow>
+              </TableBody>
 
               {/* ===== BODY ===== */}
               <TableBody>
@@ -237,7 +229,6 @@ const UnitEconomicsReportPage: React.FC = () => {
                     <TableCell align="right">{formatINR(Number(row.Rate))}</TableCell>
                     <TableCell align="right">{formatINR(Number(row.Amount))}</TableCell>
                     <TableCell align="right">{Number(row.COGS).toFixed(2)}</TableCell>
-                    <TableCell align="right">{formatINR(Number(row.COGS_Amount))}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -314,16 +305,6 @@ const UnitEconomicsReportPage: React.FC = () => {
               </Box>
             )}
 
-            {["Bill_Qty", "Rate", "Amount", "COGS", "COGS_Amount"].includes(activeHeader || "") && (
-              <>
-                <MenuItem onClick={() => { setSummaryType("sum"); setFilterAnchor(null); }}>
-                  Sum
-                </MenuItem>
-                <MenuItem onClick={() => { setSummaryType("avg"); setFilterAnchor(null); }}>
-                  Avg
-                </MenuItem>
-              </>
-            )}
           </Menu>
         </Box>
         <CommonPagination

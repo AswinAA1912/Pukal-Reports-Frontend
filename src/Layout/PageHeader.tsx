@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   AppBar,
   Toolbar,
@@ -49,6 +49,15 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
+  const companyName = useMemo(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      return user?.Company_Name || "";
+    } catch {
+      return "";
+    }
+  }, []);
+
   return (
     <>
       {/* ===== FIXED HEADER ===== */}
@@ -68,9 +77,9 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             minHeight: `${PAGE_HEADER_HEIGHT}px !important`,
             height: PAGE_HEADER_HEIGHT,
             px: 1,
-            display: "flex",
+            display: "grid",
+            gridTemplateColumns: "auto 1fr auto",
             alignItems: "center",
-            gap: 1.5,
           }}
         >
           {/* LEFT */}
@@ -113,11 +122,30 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             </Select>
           </Box>
 
-          <Box sx={{ flexGrow: 1 }} />
+          {/* CENTER – COMPANY NAME */}
+          <Box
+            sx={{
+              textAlign: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <Typography
+              variant="body2"
+              sx={{
+                color: "#fff",
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                textTransform: "uppercase",
+                fontSize: "1rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {companyName}
+            </Typography>
+          </Box>
 
           {/* RIGHT */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            {/* TOGGLE (ONLY IF PROVIDED) */}
             {toggleMode && onToggleChange && (
               <ToggleButtonGroup
                 exclusive
@@ -139,7 +167,6 @@ const PageHeader: React.FC<PageHeaderProps> = ({
               </ToggleButtonGroup>
             )}
 
-            {/* EXPORT */}
             {(onExportPDF || onExportExcel) && (
               <>
                 <Tooltip title="Export">
@@ -157,11 +184,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                   </IconButton>
                 </Tooltip>
 
-                <Menu
-                  anchorEl={anchorEl}
-                  open={open}
-                  onClose={() => setAnchorEl(null)}
-                >
+                <Menu anchorEl={anchorEl} open={open} onClose={() => setAnchorEl(null)}>
                   {onExportPDF && (
                     <MenuItem
                       onClick={() => {
@@ -187,6 +210,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             )}
           </Box>
         </Toolbar>
+
       </AppBar>
 
       {/* ===== SPACER TO PREVENT OVERLAP ===== */}
