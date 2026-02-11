@@ -1,5 +1,4 @@
-// Header.tsx
-import React from "react";
+import React, { useState } from "react";
 import {
   AppBar,
   Toolbar,
@@ -9,9 +8,12 @@ import {
   InputBase,
   alpha,
   Button,
+  Menu,
+  MenuItem,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import SearchIcon from "@mui/icons-material/Search";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authContext";
 
@@ -27,9 +29,20 @@ const Header: React.FC<HeaderProps> = ({
   showSearch = false,
 }) => {
   const navigate = useNavigate();
-  const { logout, token } = useAuth();
+  const { logout, token, user, companies, switchCompany } = useAuth();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const open = Boolean(anchorEl);
 
   if (!token) return null;
+
+  const handleCompanyClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleCompanyClose = async (company?: any) => {
+    setAnchorEl(null);
+    if (company) await switchCompany(company);
+  };
 
   return (
     <AppBar
@@ -77,6 +90,48 @@ const Header: React.FC<HeaderProps> = ({
             <SearchIcon />
             <InputBase placeholder="Search…" sx={{ ml: 1, color: "inherit" }} />
           </Box>
+        )}
+
+        {/* Switch Company */}
+        {user && companies && companies.length > 1 && (
+          <>
+            <Button
+              color="inherit"
+              endIcon={<ArrowDropDownIcon />}
+              onClick={handleCompanyClick}
+              sx={{
+                ml: 2,
+                color: "#fff", // ✅ make button text white
+                textTransform: "none", // keep company name as-is
+              }}
+            >
+              {user.Company_Name || "Select Company"}
+            </Button>
+            <Menu
+              anchorEl={anchorEl}
+              open={open}
+              onClose={() => handleCompanyClose()}
+              PaperProps={{
+                sx: { minWidth: 200 },
+              }}
+            >
+              {companies.map((company) => {
+                const isSelected = company.id === user.companyId;
+                return (
+                  <MenuItem
+                    key={company.id}
+                    onClick={() => handleCompanyClose(company)}
+                    sx={{
+                      backgroundColor: isSelected ? "rgba(0,0,0,0.08)" : "inherit", 
+                      fontWeight: isSelected ? "bold" : "normal",                   
+                    }}
+                  >
+                    {company.name}
+                  </MenuItem>
+                );
+              })}
+            </Menu>
+          </>
         )}
 
         <Button

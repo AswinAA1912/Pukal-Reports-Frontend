@@ -11,7 +11,7 @@ import {
   ListItemText,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/authContext";
+import { useAuth, Company } from "../auth/authContext";
 import { toast } from "react-toastify";
 import { encryptPassword } from "../utils/encryption";
 import { fetchCompanies, globalLogin, getUserByAuth, CompanyResponse } from "../services/auth.services";
@@ -36,9 +36,6 @@ const Login: React.FC = () => {
     username: "",
     password: "",
   });
-
-
-  console.log("FORM:", form)
 
   const passwordRef = useRef<HTMLInputElement>(null);
 
@@ -74,75 +71,73 @@ const Login: React.FC = () => {
   };
 
   // STEP 3: Login
-  const handleLogin = async () => {
-    try {
-      setLoading(true);
+const handleLogin = async () => {
+  try {
+    setLoading(true);
 
-      // 🔐 Encrypt password
-      const encryptedPassword = encryptPassword(form.password);
+    // 🔐 Encrypt password
+    const encryptedPassword = encryptPassword(form.password);
 
-      // 1️⃣ Global login (HOST API)
-      const loginResponse = await globalLogin({
-        Global_User_ID: form.Global_User_ID,
-        Password: encryptedPassword, // ✅ encrypted
-      });
+    // 1️⃣ Global login (HOST API)
+    const loginResponse = await globalLogin({
+      Global_User_ID: form.Global_User_ID,
+      Password: encryptedPassword, // ✅ encrypted
+    });
 
-      const { Autheticate_Id } = loginResponse;
+    const { Autheticate_Id } = loginResponse;
 
-      if (!Autheticate_Id || !form.Web_Api) {
-        toast.error("Incomplete login data");
-        return;
-      }
+    if (!Autheticate_Id || !form.Web_Api) {
+      toast.error("Incomplete login data");
+      return;
+    }
 
-      // ✅ Normalize & save COMPANY API from selected company
-      const companyAPI = form.Web_Api.endsWith("/")
-        ? `${form.Web_Api}`
-        : `${form.Web_Api}`;
+    // ✅ Normalize & save COMPANY API from selected company
+    const companyAPI = form.Web_Api.endsWith("/")
+      ? `${form.Web_Api}`
+      : `${form.Web_Api}`;
 
-      localStorage.setItem("COMPANY_API", companyAPI);
-      localStorage.setItem("AUTH_ID", Autheticate_Id);
+    localStorage.setItem("COMPANY_API", companyAPI);
+    localStorage.setItem("AUTH_ID", Autheticate_Id);
 
-      // 2️⃣ Fetch user from COMPANY API
-      const fullUser = await getUserByAuth(Autheticate_Id);
+    // 2️⃣ Fetch user from COMPANY API
+    const fullUser = await getUserByAuth(Autheticate_Id);
 
-      if (!fullUser.UserId) {
-        toast.error("User not found in selected company");
-        return;
-      }
+    if (!fullUser.UserId) {
+      toast.error("User not found in selected company");
+      return;
+    }
 
-      // ✅ Get companies mapped to this user from previous step
-      const mappedCompanies = companies.map((c) => ({
-        Company_Name: c.Company_Name,
-        Local_Id: c.Local_Id,
-        Web_Api: c.Web_Api,
-        Global_Id: c.Global_Id,
-      }));
+    // ✅ Map companies to match AuthContext Company type
+    const mappedCompanies: Company[] = companies.map((c) => ({
+      id: Number(c.Local_Id),        // Local_Id → id
+      name: c.Company_Name,          // Company_Name → name
+      api: c.Web_Api,                // Web_Api → api
+    }));
 
-      // ✅ Save user info including Companies array
-      const userWithCompanies = {
-        ...fullUser,
-        Companies: mappedCompanies,
-      };
-
-      login(Autheticate_Id, {
+    // ✅ Call login in AuthContext with correct types
+    login(
+      Autheticate_Id,
+      {
         id: Number(fullUser.UserId),
         uniqueName: fullUser.UserName,
         Name: fullUser.Name,
         companyId: Number(fullUser.Company_id),
         Company_Name: fullUser.Company_Name,
-      });
+      },
+      mappedCompanies,      // ✅ now matches Company[]
+      companyAPI            // ✅ optional selected company API
+    );
 
-      localStorage.setItem("user", JSON.stringify(userWithCompanies));
+    toast.success("Login successful");
+    navigate("/dashboard", { replace: true });
 
-      toast.success("Login successful");
-      navigate("/dashboard", { replace: true });
+  } catch (err: any) {
+    toast.error(err.message || "Login failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
-    } catch (err: any) {
-      toast.error(err.message || "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <Box

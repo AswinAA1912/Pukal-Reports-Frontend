@@ -11,7 +11,7 @@ interface CommonPaginationProps {
 const CommonPagination: React.FC<CommonPaginationProps> = ({
   totalRows,
   page,
-  rowsPerPage = 20,
+  rowsPerPage = 25,
   onPageChange,
 }) => {
   const totalPages = Math.ceil(totalRows / rowsPerPage);
