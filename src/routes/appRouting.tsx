@@ -9,6 +9,7 @@ import Dashboard from "./dashboard";
 import SalesInvoiceReportPage from "../reports/salesinvoicereport";
 import OnlineSalesReportPage from "../reports/OnlineSalesReport";
 import UnitEconomicsReportPage from "../reports/unitEconomicsReport";
+import StockInHandReport from "../reports/stockinhandReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -112,6 +113,19 @@ const AppRouting: React.FC<AppRoutingProps> = ({
                 fullWidth
               >
                 <UnitEconomicsReportPage />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/stockinhand"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <StockInHandReport/>
               </AppLayout>
             </RequireAuth>
           }

@@ -6,9 +6,9 @@ import {
     TextField,
     MenuItem,
     Button,
-    Fab,
+    IconButton,
 } from "@mui/material";
-import FilterListIcon from "@mui/icons-material/FilterList";
+import KeyboardArrowLeftIcon from "@mui/icons-material/KeyboardArrowLeft";
 
 export interface DropdownOption {
     label: string;
@@ -17,7 +17,7 @@ export interface DropdownOption {
 
 interface ReportFilterDrawerProps {
     open: boolean;
-    onOpen: () => void;      // ✅ add this
+    onToggle: () => void;   // 🔥 single toggle handler
     onClose: () => void;
 
     fromDate: string;
@@ -35,7 +35,7 @@ interface ReportFilterDrawerProps {
 
 const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
     open,
-    onOpen,    // ✅ receive callback
+    onToggle,
     onClose,
     fromDate,
     toDate,
@@ -49,25 +49,42 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
 }) => {
     return (
         <>
-            {/* Floating Filter Button */}
-            <Fab
-                size="small"
+            {/* 🔥 FIXED TOGGLE ARROW */}
+            <IconButton
+                onClick={onToggle}
                 sx={{
                     position: "fixed",
-                    right: 24,
-                    top: 80,
-                    zIndex: 1300,
-                    backgroundColor: "#1E3A8A",
+                    right: 1,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    width: 25,
+                    height: 30,
+                    bgcolor: "#1E3A8A",
                     color: "#fff",
+                    zIndex: 1300,
+                    borderRadius: "6px",
+                    boxShadow: 2,
+                    "&:hover": {
+                        bgcolor: "#162E6E",
+                    },
                 }}
-                onClick={onOpen} // ✅ call parent callback
             >
-                <FilterListIcon />
-            </Fab>
+                <KeyboardArrowLeftIcon
+                    sx={{
+                        fontSize: 22,
+                        transition: "0.25s",
+                        transform: open ? "rotate(180deg)" : "rotate(0deg)",
+                    }}
+                />
+            </IconButton>
 
-            {/* Drawer */}
+            {/* DRAWER */}
             <Drawer anchor="right" open={open} onClose={onClose}>
-                <Box width={320} p={2} sx={{ backgroundColor: "#F1F5F9", height: "100%" }}>
+                <Box
+                    width={320}
+                    p={2}
+                    sx={{ backgroundColor: "#F1F5F9", height: "100%" }}
+                >
                     <Typography variant="h6" mb={2} fontWeight={700}>
                         Filters
                     </Typography>
@@ -97,12 +114,16 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                         label={dropdownLabel}
                         fullWidth
                         value={dropdownValue}
-                        onChange={(e) => onDropdownChange(e.target.value)}
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            const option = dropdownOptions.find(opt => String(opt.value) === value);
+                            onDropdownChange(option ? option.value : "");
+                        }}
                         sx={{ mb: 2 }}
                     >
                         <MenuItem value="">All</MenuItem>
                         {dropdownOptions.map((opt) => (
-                            <MenuItem key={opt.value} value={opt.value}>
+                            <MenuItem key={opt.value} value={String(opt.value)}>
                                 {opt.label}
                             </MenuItem>
                         ))}
@@ -116,10 +137,14 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                             fontWeight: 600,
                             "&:hover": { backgroundColor: "#162E6E" },
                         }}
-                        onClick={onApply}
+                        onClick={() => {
+                            onApply(); 
+                            onClose(); 
+                        }}
                     >
                         Apply Filter
                     </Button>
+
                 </Box>
             </Drawer>
         </>

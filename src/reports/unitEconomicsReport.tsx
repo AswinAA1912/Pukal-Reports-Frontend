@@ -157,6 +157,7 @@ const UnitEconomicsReportPage: React.FC = () => {
           // { label: "Sales Invoice", path: "/salesinvoice" },
           { label: "Online Sales Report", path: "/salesreport" },
           { label: "Unit Economics", path: "/uniteconomics" },
+          { label: "Stock in Hand", path: "/stockinhand" },
         ]}
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
