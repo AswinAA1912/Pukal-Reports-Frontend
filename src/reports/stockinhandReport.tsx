@@ -38,6 +38,11 @@ const sum = (rows: stockWiseReport[], key: keyof stockWiseReport) =>
 
 /* ================= COMPONENT ================= */
 
+type Level2Meta = {
+    columnName: string;
+    type: number;
+};
+
 const StockInHandReport: React.FC = () => {
     const today = dayjs().format("YYYY-MM-DD");
     const { toggleMode, setToggleMode } = useToggleMode();
@@ -64,10 +69,10 @@ const StockInHandReport: React.FC = () => {
 
     /* ===== LEVEL 2 META (FROM CONFIG) ===== */
 
-    const [level2Options, setLevel2Options] = useState<
-        { value: string; label: string }[]
-    >([]);
-    const [level2Column, setLevel2Column] = useState<string>("");
+    const [level2Meta, setLevel2Meta] = useState<Level2Meta[]>([]);
+    const [level2TypeOrder, setLevel2TypeOrder] = useState<number[]>([]);
+    const [selectedLevel2ByType, setSelectedLevel2ByType] =
+        useState<Record<number, string>>({});
     /* ================= GROUP CONFIG ================= */
 
     useEffect(() => {
@@ -75,48 +80,56 @@ const StockInHandReport: React.FC = () => {
             ? "StockInhand-Godown"
             : "StockInhand";
 
-        stockGroupingService.getGroupingConfig(reportName).then((res) => {
-            const cfg = res.data.data || [];
+        stockGroupingService
+            .getGroupingConfig(reportName)
+            .then((res) => {
+                const cfg = res.data.data || [];
 
-            // GROUPING
-            setGroupConfig(
-                cfg
-                    .filter(g => g.isGroupFilter)
-                    .sort((a, b) => (a.Level_Id ?? 0) - (b.Level_Id ?? 0))
-            );
+                // GROUPING
+                setGroupConfig(
+                    cfg
+                        .filter(g => g.isGroupFilter)
+                        .sort((a, b) => (a.Level_Id ?? 0) - (b.Level_Id ?? 0))
+                );
 
-            // ✅ LEVEL 1 FILTER
-            const level1Filter = cfg.find(
-                g => g.FilterLevel === 1 && g.isGroupFilter === false
-            );
+                // LEVEL 1 FILTER
+                const level1Filter = cfg.find(
+                    g => g.FilterLevel === 1 && g.isGroupFilter === false
+                );
 
-            if (level1Filter) {
-                setLevel1Options(level1Filter.options || []);
-                setLevel1Column(level1Filter.columnName);
-            } else {
-                setLevel1Options([]);
-                setLevel1Column("");
-            }
+                if (level1Filter) {
+                    setLevel1Options(level1Filter.options || []);
+                    setLevel1Column(level1Filter.columnName);
+                } else {
+                    setLevel1Options([]);
+                    setLevel1Column("");
+                }
 
-            // ✅ LEVEL 2 FILTER
-            const level2Filter = cfg.find(
-                g => g.FilterLevel === 2 && g.isGroupFilter === false
-            );
+                // LEVEL 2 FILTER (CASCADING META)
+                const lvl2 = cfg.filter(
+                    g => g.FilterLevel === 2 && g.isGroupFilter === false
+                );
 
-            if (level2Filter) {
-                setLevel2Options(level2Filter.options || []);
-                setLevel2Column(level2Filter.columnName);
-            } else {
-                setLevel2Options([]);
-                setLevel2Column("");
-            }
+                const meta: Level2Meta[] = lvl2
+                    .filter(l => l.filterType)
+                    .map(l => ({
+                        columnName: l.columnName,
+                        type: Number(l.filterType),
+                    }));
 
-            setSelectedLevel1("");
-            setSelectedLevel2([]);
-            setExpanded({});
-            setPage(1);
-        });
+                setLevel2Meta(meta);
+
+                const orderedTypes = Array.from(
+                    new Set(meta.map(m => m.type))
+                ).sort((a, b) => a - b);
+
+                setLevel2TypeOrder(orderedTypes);
+                setSelectedLevel2ByType({});
+            });
+
+        // optional cleanup not required
     }, [toggleMode]);
+
 
     useEffect(() => {
         if (!level1Column) return;
@@ -144,7 +157,7 @@ const StockInHandReport: React.FC = () => {
         };
 
         if (level1Column && level1Label) {
-            payload[level1Column] = level1Label; // ✅ pass label/string to API
+            payload[level1Column] = level1Label;
         }
 
         api(payload).then(res => {
@@ -165,17 +178,38 @@ const StockInHandReport: React.FC = () => {
 
         // LEVEL 1 FILTER
         if (selectedLevel1 && level1Column) {
-            const level1Label = level1Options.find(opt => opt.value === selectedLevel1)?.label;
-            filtered = filtered.filter(r => r[level1Column] === level1Label);
+            const level1Label =
+                level1Options.find(opt => opt.value === selectedLevel1)?.label;
+
+            filtered = filtered.filter(
+                r => String(r[level1Column]) === String(level1Label)
+            );
         }
 
-        // LEVEL 2 FILTER
-        if (selectedLevel2.length && level2Column) {
-            filtered = filtered.filter(r => selectedLevel2.includes(String(r[level2Column])));
-        }
+        // LEVEL 2 FILTER (CASCADING)
+        level2TypeOrder.forEach(type => {
+            const selected = selectedLevel2ByType[type];
+            if (!selected) return;
+
+            const meta = level2Meta.find(m => m.type === type);
+            if (!meta) return;
+
+            filtered = filtered.filter(
+                r => String(r[meta.columnName]) === String(selected)
+            );
+        });
 
         return filtered;
-    }, [rawData, selectedLevel1, selectedLevel2, level1Column, level2Column, level1Options]);
+    }, [
+        rawData,
+        selectedLevel1,
+        level1Column,
+        level1Options,
+        level2TypeOrder,
+        level2Meta,
+        selectedLevel2ByType
+    ]);
+
 
     useEffect(() => {
         setExpanded({});
@@ -206,7 +240,45 @@ const StockInHandReport: React.FC = () => {
         }));
     };
 
+    // ✅ BASE DATA FOR LEVEL-2 CHIPS (MOBILE PARITY)
+    const level1FilteredData = useMemo(() => {
+        if (!selectedLevel1 || !level1Column) return rawData;
+
+        const level1Label =
+            level1Options.find(opt => opt.value === selectedLevel1)?.label;
+
+        if (!level1Label) return rawData;
+
+        return rawData.filter(
+            r => String(r[level1Column]) === String(level1Label)
+        );
+    }, [rawData, selectedLevel1, level1Column, level1Options]);
+
+
     /* ===== GODOWN FIRST (EXPANDED MODE) ===== */
+    const computeLevel2Values = (
+        columnName: string,
+        parent?: { column: string; value: string }
+    ) => {
+        const map = new Map<string, number>();
+
+        level1FilteredData.forEach((r: any) => {
+            if (parent) {
+                if (String(r[parent.column]) !== parent.value) return;
+            }
+
+            const v = r[columnName];
+            if (!v) return;
+
+            const qty = Number(r.Bal_Qty || 0);
+            map.set(String(v), (map.get(String(v)) || 0) + qty);
+        });
+
+        return Array.from(map.entries())
+            .map(([value, total]) => ({ value, total }))
+            .sort((a, b) => b.total - a.total);
+    };
+
 
     const finalGroups = useMemo(() => {
         if (!isExpanded) return buildGroups(data, 0);
@@ -228,6 +300,58 @@ const StockInHandReport: React.FC = () => {
 
     const formatQty = (value: any) =>
         Number(value || 0).toFixed(2);
+
+    const extractBagKg = (row: any): number | null => {
+        if (!row?.Bag) return null;
+
+        // "1kg", "30KG", "50 Kg" → 1, 30, 50
+        const kg = parseFloat(String(row.Bag).toLowerCase().replace("kg", "").trim());
+        return isNaN(kg) || kg <= 0 ? null : kg;
+    };
+
+    const formatQtyWithBag = (qty: string | number, row: any) => {
+        const q = Number(qty || 0);
+        const bagKg = extractBagKg(row);
+
+        if (!bagKg) {
+            return q.toFixed(2);
+        }
+
+        const bags = Math.round(q / bagKg);
+
+        return `${q.toFixed(2)} (${bags})`;
+    };
+
+
+    const getUniformBagKg = (rows: any[]): number | null => {
+        let bagKg: number | null = null;
+
+        for (const r of rows) {
+            const kg = extractBagKg(r);
+            if (!kg) return null;
+
+            if (bagKg === null) {
+                bagKg = kg;
+            } else if (bagKg !== kg) {
+                return null;
+            }
+        }
+
+        return bagKg;
+    };
+
+  const formatTotalQtyWithBag = (qty: number, rows: any[]) => {
+    const q = Number(qty || 0);
+    const bagKg = getUniformBagKg(rows);
+
+    if (!bagKg) {
+        return q.toFixed(2);
+    }
+
+    const bags = Math.round(q / bagKg); 
+
+    return `${q.toFixed(2)} (${bags})`;
+};
 
 
     const flattenGroupsForExport = (groups: any[], parentKeys: Record<string, string> = {}, isExpandedMode = isExpanded): any[] => {
@@ -328,19 +452,35 @@ const StockInHandReport: React.FC = () => {
                         <TableRow key={i}>
                             <TableCell>{(page - 1) * ROWS_PER_PAGE + i + 1}</TableCell>
                             <TableCell>{r.stock_item_name}</TableCell>
-                            <TableCell align="right">{formatQty(r.OB_Bal_Qty)}</TableCell>
-                            <TableCell align="right">{formatQty(r.Pur_Qty)}</TableCell>
-                            <TableCell align="right">{formatQty(r.Sal_Qty)}</TableCell>
-                            <TableCell align="right">{formatQty(r.Bal_Qty)}</TableCell>
+                            <TableCell align="right">
+                                {formatQtyWithBag(r.OB_Bal_Qty, r)}
+                            </TableCell>
+                            <TableCell align="right">
+                                {formatQtyWithBag(r.Pur_Qty, r)}
+                            </TableCell>
+                            <TableCell align="right">
+                                {formatQtyWithBag(r.Sal_Qty, r)}
+                            </TableCell>
+                            <TableCell align="right">
+                                {formatQtyWithBag(r.Bal_Qty, r)}
+                            </TableCell>
                         </TableRow>
                     ))}
 
                     <TableRow sx={{ background: "#F8FAFC", fontWeight: 700 }}>
                         <TableCell colSpan={2}>TOTAL</TableCell>
-                        <TableCell align="right">{formatQty(sum(rows, "OB_Bal_Qty"))}</TableCell>
-                        <TableCell align="right">{formatQty(sum(rows, "Pur_Qty"))}</TableCell>
-                        <TableCell align="right">{formatQty(sum(rows, "Sal_Qty"))}</TableCell>
-                        <TableCell align="right">{formatQty(sum(rows, "Bal_Qty"))}</TableCell>
+                        <TableCell align="right">
+                            {formatTotalQtyWithBag(sum(rows, "OB_Bal_Qty"), rows)}
+                        </TableCell>
+                        <TableCell align="right">
+                            {formatTotalQtyWithBag(sum(rows, "Pur_Qty"), rows)}
+                        </TableCell>
+                        <TableCell align="right">
+                            {formatTotalQtyWithBag(sum(rows, "Sal_Qty"), rows)}
+                        </TableCell>
+                        <TableCell align="right">
+                            {formatTotalQtyWithBag(sum(rows, "Bal_Qty"), rows)}
+                        </TableCell>
                     </TableRow>
                 </TableBody>
             </Table>
@@ -427,67 +567,113 @@ const StockInHandReport: React.FC = () => {
 
             <AppLayout fullWidth>
                 {/* LEVEL 2 CHIPS */}
-                {level2Options.length > 0 && (
-                    <Box sx={{ px: 2, py: 1, display: "flex", gap: 1, flexWrap: "wrap", }}>
-                        <Box
-                            onClick={() => {
-                                setSelectedLevel2([]);
-                                setExpanded({});
-                                setPage(1);
-                            }}
-                            sx={{
-                                px: 1.5,
-                                py: 0.5,
-                                borderRadius: "16px",
-                                cursor: "pointer",
-                                fontSize: "0.75rem",
-                                fontWeight: 600,
-                                background:
-                                    selectedLevel2.length === 0 ? "#1E3A8A" : "#E5E7EB",
-                                color:
-                                    selectedLevel2.length === 0 ? "#fff" : "#111",
-                            }}
-                        >
-                            ALL
-                        </Box>
+                {/* ================= LEVEL 2 FILTERS (SCROLLABLE) ================= */}
+                <Box
+                    sx={{
+                        maxHeight: 180,
+                        overflowY: "auto",
+                        px: 1,
+                        py: 1,
+                        borderBottom: "1px solid #E5E7EB",
+                        background: "#F8FAFC",
+                    }}
+                >
+                    {level2TypeOrder.map((type, idx) => {
+                        const meta = level2Meta.find(m => m.type === type);
+                        if (!meta) return null;
 
-                        {level2Options.map((opt) => {
-                            const active = selectedLevel2.includes(opt.label);
+                        let parent;
+                        if (idx > 0) {
+                            const parentType = level2TypeOrder[idx - 1];
+                            const parentValue = selectedLevel2ByType[parentType];
+                            if (!parentValue) return null;
 
-                            return (
+                            const parentMeta = level2Meta.find(m => m.type === parentType);
+                            if (parentMeta) {
+                                parent = {
+                                    column: parentMeta.columnName,
+                                    value: parentValue,
+                                };
+                            }
+                        }
+
+                        const values = computeLevel2Values(meta.columnName, parent);
+                        if (!values.length) return null;
+
+                        const selected = selectedLevel2ByType[type];
+
+                        return (
+                            <Box
+                                key={type}
+                                sx={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    gap: 1,
+                                    mb: 1,
+                                }}
+                            >
+                                {/* ALL */}
                                 <Box
-                                    key={opt.value}
                                     onClick={() => {
-                                        setExpanded({});
-                                        setPage(1);
-                                        setSelectedLevel2(p =>
-                                            active ? p.filter(v => v !== opt.label) : [...p, opt.label]
-                                        );
+                                        setSelectedLevel2ByType(prev => {
+                                            const copy = { ...prev };
+                                            delete copy[type];
+                                            level2TypeOrder.forEach(t => t > type && delete copy[t]);
+                                            return copy;
+                                        });
                                     }}
                                     sx={{
                                         px: 1.5,
                                         py: 0.5,
-                                        borderRadius: "16px",
+                                        borderRadius: "12px",
                                         cursor: "pointer",
                                         fontSize: "0.75rem",
                                         fontWeight: 600,
-                                        background: active ? "#1E3A8A" : "#E5E7EB",
-                                        color: active ? "#fff" : "#111",
+                                        background: !selected ? "#1E3A8A" : "#E5E7EB",
+                                        color: !selected ? "#fff" : "#111",
                                     }}
                                 >
-                                    {opt.label}
+                                    ALL
                                 </Box>
-                            );
-                        })}
-                    </Box>
-                )}
+
+                                {values.map(v => (
+                                    <Box
+                                        key={v.value}
+                                        onClick={() => {
+                                            setSelectedLevel2ByType(prev => {
+                                                const copy = { ...prev, [type]: v.value };
+                                                level2TypeOrder.forEach(t => t > type && delete copy[t]);
+                                                return copy;
+                                            });
+                                        }}
+                                        sx={{
+                                            px: 1.5,
+                                            py: 0.5,
+                                            borderRadius: "16px",
+                                            cursor: "pointer",
+                                            fontSize: "0.75rem",
+                                            fontWeight: 600,
+                                            background:
+                                                selected === v.value ? "#1E3A8A" : "#E5E7EB",
+                                            color:
+                                                selected === v.value ? "#fff" : "#111",
+                                        }}
+                                    >
+                                        {v.value} ({formatQty(v.total)})
+                                    </Box>
+                                ))}
+                            </Box>
+                        );
+                    })}
+                </Box>
+
 
                 <Paper
                     sx={{
                         mx: 1,
                         display: "flex",
                         flexDirection: "column",
-                        height: "calc(100vh - 130px)",
+                        height: "calc(100vh - 140px)",
                     }}
                 >
                     <TableContainer
