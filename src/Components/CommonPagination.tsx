@@ -28,8 +28,8 @@ const CommonPagination: React.FC<CommonPaginationProps> = ({
       <Typography
         variant="body2"
         sx={{
-          fontWeight: 700,          
-          color: "#01050a",         
+          fontWeight: 700,
+          color: "#01050a",
           letterSpacing: 0.2,
         }}
       >

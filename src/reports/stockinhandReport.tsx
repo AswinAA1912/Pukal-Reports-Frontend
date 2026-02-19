@@ -13,7 +13,6 @@ import {
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import dayjs from "dayjs";
-
 import AppLayout, { useToggleMode } from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
 import CommonPagination from "../Components/CommonPagination";
@@ -47,7 +46,6 @@ const StockInHandReport: React.FC = () => {
     const today = dayjs().format("YYYY-MM-DD");
     const { toggleMode, setToggleMode } = useToggleMode();
     const isExpanded = toggleMode === "Expanded";
-
     const [rawData, setRawData] = useState<stockWiseReport[]>([]);
     const [groupConfig, setGroupConfig] = useState<StockGroupConfig[]>([]);
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -74,6 +72,22 @@ const StockInHandReport: React.FC = () => {
     const [selectedLevel2ByType, setSelectedLevel2ByType] =
         useState<Record<number, string>>({});
     /* ================= GROUP CONFIG ================= */
+
+    useEffect(() => {
+        const originalOverflow = document.body.style.overflow;
+        const originalHeight = document.body.style.height;
+
+        // ✅ Enable page scroll for this screen
+        document.body.style.overflow = "auto";
+        document.body.style.height = "auto";
+
+        return () => {
+            // 🔁 Restore when leaving the page
+            document.body.style.overflow = originalOverflow;
+            document.body.style.height = originalHeight;
+        };
+    }, []);
+
 
     useEffect(() => {
         const reportName = isExpanded
@@ -298,16 +312,22 @@ const StockInHandReport: React.FC = () => {
         }));
     }, [data, isExpanded, groupConfig]);
 
+    const hasGrouping = groupConfig.length > 0;
+
     const formatQty = (value: any) =>
         Number(value || 0).toFixed(2);
+
+
 
     const extractBagKg = (row: any): number | null => {
         if (!row?.Bag) return null;
 
-        // "1kg", "30KG", "50 Kg" → 1, 30, 50
         const kg = parseFloat(String(row.Bag).toLowerCase().replace("kg", "").trim());
         return isNaN(kg) || kg <= 0 ? null : kg;
     };
+
+    const formatBagCount = (value: number, decimals = 2) =>
+        Number(value).toFixed(decimals);
 
     const formatQtyWithBag = (qty: string | number, row: any) => {
         const q = Number(qty || 0);
@@ -317,41 +337,45 @@ const StockInHandReport: React.FC = () => {
             return q.toFixed(2);
         }
 
-        const bags = Math.round(q / bagKg);
+        const bags = q / bagKg;
+
+        return `${q.toFixed(2)} (${formatBagCount(bags)})`;
+    };
+
+    const getTotalBagCount = (rows: any[], qtyKey: keyof stockWiseReport) => {
+        let totalBags = 0;
+        let hasBag = false;
+
+        rows.forEach(r => {
+            const qty = Number(r[qtyKey] || 0);
+            const bagKg = extractBagKg(r);
+
+            if (bagKg && bagKg > 0) {
+                totalBags += qty / bagKg;
+                hasBag = true;
+            }
+        });
+
+        if (!hasBag) return null;
+
+        return Number(totalBags.toFixed(2));
+    };
+
+
+    const formatTotalQtyWithBag = (
+        qty: number,
+        rows: stockWiseReport[],
+        qtyKey: keyof stockWiseReport
+    ) => {
+        const q = Number(qty || 0);
+        const bags = getTotalBagCount(rows, qtyKey);
+
+        if (!bags) {
+            return q.toFixed(2);
+        }
 
         return `${q.toFixed(2)} (${bags})`;
     };
-
-
-    const getUniformBagKg = (rows: any[]): number | null => {
-        let bagKg: number | null = null;
-
-        for (const r of rows) {
-            const kg = extractBagKg(r);
-            if (!kg) return null;
-
-            if (bagKg === null) {
-                bagKg = kg;
-            } else if (bagKg !== kg) {
-                return null;
-            }
-        }
-
-        return bagKg;
-    };
-
-  const formatTotalQtyWithBag = (qty: number, rows: any[]) => {
-    const q = Number(qty || 0);
-    const bagKg = getUniformBagKg(rows);
-
-    if (!bagKg) {
-        return q.toFixed(2);
-    }
-
-    const bags = Math.round(q / bagKg); 
-
-    return `${q.toFixed(2)} (${bags})`;
-};
 
 
     const flattenGroupsForExport = (groups: any[], parentKeys: Record<string, string> = {}, isExpandedMode = isExpanded): any[] => {
@@ -434,23 +458,61 @@ const StockInHandReport: React.FC = () => {
     const renderItemTable = (rows: stockWiseReport[]) => {
         const pageRows = paginated(rows);
 
+        // ✅ TOTALS (full filtered rows, NOT paginated)
+        const totalOpening = sum(rows, "OB_Bal_Qty");
+        const totalIn = sum(rows, "Pur_Qty");
+        const totalOut = sum(rows, "Sal_Qty");
+        const totalClosing = sum(rows, "Bal_Qty");
+
         return (
             <Table size="small">
                 <TableHead sx={{ background: "#1E3A8A" }}>
                     <TableRow>
                         <TableCell sx={{ color: "#fff", fontWeight: 600 }}>S.No</TableCell>
                         <TableCell sx={{ color: "#fff", fontWeight: 600 }}>Item</TableCell>
-                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">Opening</TableCell>
-                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">In</TableCell>
-                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">Out</TableCell>
-                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">Closing</TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">
+                            Opening
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">
+                            In
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">
+                            Out
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">
+                            Closing
+                        </TableCell>
                     </TableRow>
                 </TableHead>
 
                 <TableBody>
+                    {/* ✅ TOTAL ROW — directly below header */}
+                    <TableRow sx={{ background: "#F1F5F9", fontWeight: 700 }}>
+                        <TableCell colSpan={2}>TOTAL</TableCell>
+
+                        <TableCell align="right">
+                            {formatTotalQtyWithBag(totalOpening, rows, "OB_Bal_Qty")}
+                        </TableCell>
+
+                        <TableCell align="right">
+                            {formatTotalQtyWithBag(totalIn, rows, "Pur_Qty")}
+                        </TableCell>
+
+                        <TableCell align="right">
+                            {formatTotalQtyWithBag(totalOut, rows, "Sal_Qty")}
+                        </TableCell>
+
+                        <TableCell align="right">
+                            {formatTotalQtyWithBag(totalClosing, rows, "Bal_Qty")}
+                        </TableCell>
+                    </TableRow>
+
+                    {/* ✅ ITEM ROWS */}
                     {pageRows.map((r, i) => (
                         <TableRow key={i}>
-                            <TableCell>{(page - 1) * ROWS_PER_PAGE + i + 1}</TableCell>
+                            <TableCell>
+                                {(page - 1) * ROWS_PER_PAGE + i + 1}
+                            </TableCell>
                             <TableCell>{r.stock_item_name}</TableCell>
                             <TableCell align="right">
                                 {formatQtyWithBag(r.OB_Bal_Qty, r)}
@@ -466,26 +528,11 @@ const StockInHandReport: React.FC = () => {
                             </TableCell>
                         </TableRow>
                     ))}
-
-                    <TableRow sx={{ background: "#F8FAFC", fontWeight: 700 }}>
-                        <TableCell colSpan={2}>TOTAL</TableCell>
-                        <TableCell align="right">
-                            {formatTotalQtyWithBag(sum(rows, "OB_Bal_Qty"), rows)}
-                        </TableCell>
-                        <TableCell align="right">
-                            {formatTotalQtyWithBag(sum(rows, "Pur_Qty"), rows)}
-                        </TableCell>
-                        <TableCell align="right">
-                            {formatTotalQtyWithBag(sum(rows, "Sal_Qty"), rows)}
-                        </TableCell>
-                        <TableCell align="right">
-                            {formatTotalQtyWithBag(sum(rows, "Bal_Qty"), rows)}
-                        </TableCell>
-                    </TableRow>
                 </TableBody>
             </Table>
         );
     };
+
 
     /* ================= GROUP ROWS ================= */
 
@@ -510,7 +557,13 @@ const StockInHandReport: React.FC = () => {
 
                         <TableCell sx={{ fontWeight: 600 }}>{g.key}</TableCell>
                         <TableCell align="right">{g.rows.length}</TableCell>
-                        <TableCell align="right">{formatQty(sum(g.rows, "Bal_Qty"))}</TableCell>
+                        <TableCell align="right">
+                            {formatTotalQtyWithBag(
+                                sum(g.rows, "Bal_Qty"),
+                                g.rows,
+                                "Bal_Qty"
+                            )}
+                        </TableCell>
                     </TableRow>
 
                     {open && (
@@ -567,7 +620,6 @@ const StockInHandReport: React.FC = () => {
 
             <AppLayout fullWidth>
                 {/* LEVEL 2 CHIPS */}
-                {/* ================= LEVEL 2 FILTERS (SCROLLABLE) ================= */}
                 <Box
                     sx={{
                         maxHeight: 180,
@@ -667,37 +719,41 @@ const StockInHandReport: React.FC = () => {
                     })}
                 </Box>
 
-
                 <Paper
                     sx={{
                         mx: 1,
                         display: "flex",
                         flexDirection: "column",
-                        height: "calc(100vh - 140px)",
+                        maxHeight: "calc(100vh - 130px)",
+                        overflow: "visible",
                     }}
                 >
-                    <TableContainer
-                        sx={{
-                            flex: 1,
-                            overflowY: "auto",
-                        }}
-                    >
-                        <Table size="small">
-                            <TableHead sx={{ background: "#1E3A8A" }}>
-                                <TableRow>
-                                    <TableCell />
-                                    <TableCell sx={{ color: "#fff" }}>Name</TableCell>
-                                    <TableCell sx={{ color: "#fff" }} align="right">
-                                        Items
-                                    </TableCell>
-                                    <TableCell sx={{ color: "#fff" }} align="right">
-                                        Balance
-                                    </TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>{renderGroups(finalGroups)}</TableBody>
-                        </Table>
+                    <TableContainer >
+                        {hasGrouping ? (
+                            /* ===== GROUPING MODE ===== */
+                            <Table size="small">
+                                <TableHead sx={{ background: "#1E3A8A" }}>
+                                    <TableRow>
+                                        <TableCell />
+                                        <TableCell sx={{ color: "#fff" }}>Name</TableCell>
+                                        <TableCell sx={{ color: "#fff" }} align="right">
+                                            Items
+                                        </TableCell>
+                                        <TableCell sx={{ color: "#fff" }} align="right">
+                                            Balance
+                                        </TableCell>
+                                    </TableRow>
+                                </TableHead>
+
+                                <TableBody>
+                                    {renderGroups(finalGroups)}
+                                </TableBody>
+                            </Table>
+                        ) : (
+                            renderItemTable(data)
+                        )}
                     </TableContainer>
+
                 </Paper>
 
                 <CommonPagination

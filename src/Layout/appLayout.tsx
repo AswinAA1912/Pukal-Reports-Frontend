@@ -47,7 +47,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
           sx={{
             flex: 1,
             minHeight: 0,
-            overflow: "hidden",
+            overflow: "auto",
           }}
         >
           <Box
