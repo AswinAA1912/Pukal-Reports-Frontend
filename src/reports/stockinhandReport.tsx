@@ -20,6 +20,7 @@ import ReportFilterDrawer from "../Components/ReportFilterDrawer";
 import { exportToPDF } from "../utils/exportToPDF";
 import { exportToExcel } from "../utils/exportToExcel";
 import { mapForExport } from "../utils/exportMapper";
+import { useNavigate } from "react-router-dom";
 import {
     itemwisestockreportservice,
     godownwisestockreportservice,
@@ -50,6 +51,7 @@ const StockInHandReport: React.FC = () => {
     const [groupConfig, setGroupConfig] = useState<StockGroupConfig[]>([]);
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [page, setPage] = useState(1);
+    const navigate = useNavigate();
 
     /* ===== FILTER STATES ===== */
 
@@ -223,6 +225,27 @@ const StockInHandReport: React.FC = () => {
         level2Meta,
         selectedLevel2ByType
     ]);
+
+    const handleTransactionClick = (
+        row: stockWiseReport,
+        mode: "ABSTRACT" | "EXPANDED"
+    ) => {
+        navigate(
+            mode === "EXPANDED"
+                ? "/reports/godown-item-transaction"
+                : "/reports/item-transaction",
+            {
+                state: {
+                    ProductId: Number(row.Product_Id),
+                    productName: row.stock_item_name,
+                    fromDate,
+                    toDate,
+                    Godown_Id: mode === "EXPANDED" ? row.Godown_Id : undefined,
+                    godownName: mode === "EXPANDED" ? row.Godown_Name : undefined,
+                }
+            }
+        );
+    };
 
 
     useEffect(() => {
@@ -448,6 +471,7 @@ const StockInHandReport: React.FC = () => {
         exportToExcel(`Stock in Hand (${toggleMode})`, headers, mappedData);
     };
 
+
     /* ================= ITEM TABLE ================= */
 
     const paginated = (rows: stockWiseReport[]) =>
@@ -455,7 +479,10 @@ const StockInHandReport: React.FC = () => {
 
     /* ================= ITEM TABLE ================= */
 
-    const renderItemTable = (rows: stockWiseReport[]) => {
+    const renderItemTable = (
+        rows: stockWiseReport[],
+        mode: "ABSTRACT" | "EXPANDED" = "ABSTRACT"
+    ) => {
         const pageRows = paginated(rows);
 
         // ✅ TOTALS (full filtered rows, NOT paginated)
@@ -513,7 +540,17 @@ const StockInHandReport: React.FC = () => {
                             <TableCell>
                                 {(page - 1) * ROWS_PER_PAGE + i + 1}
                             </TableCell>
-                            <TableCell>{r.stock_item_name}</TableCell>
+                            <TableCell
+                                sx={{
+                                    cursor: "pointer",
+                                    color: "#1D4ED8",
+                                    fontWeight: 600,
+                                    "&:hover": { textDecoration: "underline" },
+                                }}
+                                onClick={() => handleTransactionClick(r, mode)}
+                            >
+                                {r.stock_item_name}
+                            </TableCell>
                             <TableCell align="right">
                                 {formatQtyWithBag(r.OB_Bal_Qty, r)}
                             </TableCell>
@@ -576,7 +613,7 @@ const StockInHandReport: React.FC = () => {
                                             <TableBody>{renderGroups(g.children)}</TableBody>
                                         </Table>
                                     )
-                                    : renderItemTable(g.rows)}
+                                    : renderItemTable(g.rows, isExpanded ? "EXPANDED" : "ABSTRACT")}
                             </TableCell>
                         </TableRow>
                     )}

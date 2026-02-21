@@ -28,7 +28,7 @@ export interface stockWiseReport {
     Product_Rate: string;
     Stock_Item: string;
     Godown_Name: string;
-     [key: string]: string | number | undefined;
+    [key: string]: string | number | undefined;
 }
 
 /* ---------------- GROUP CONFIG ---------------- */
@@ -89,3 +89,31 @@ export const godownwisestockreportservice = {
             { params }
         ),
 };
+
+/* ---------------- TRANSACTION APIs ---------------- */
+
+export const itemTransactionService = {
+    getItemTransactions: (params: {
+        fromDate: string;
+        toDate: string;
+        Product_Id: number;
+    }) =>
+        axios.get<{ success: boolean; data: stockWiseReport[] }>(
+            `${getBaseURL()}api/reports/itemexpenseReport`,
+            { params }
+        ),
+};
+
+export const godownItemTransactionService = {
+    getGodownItemTransactions: (params: {
+        fromDate: string;
+        toDate: string;
+        Product_Id: number;
+        Godown_Id: number;
+    }) =>
+        axios.get<{ success: boolean; data: stockWiseReport[] }>(
+            `${getBaseURL()}api/reports/godownexpenseReport`,
+            { params }
+        ),
+};
+

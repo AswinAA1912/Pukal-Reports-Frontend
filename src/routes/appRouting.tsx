@@ -10,6 +10,8 @@ import SalesInvoiceReportPage from "../reports/salesinvoicereport";
 import OnlineSalesReportPage from "../reports/OnlineSalesReport";
 import UnitEconomicsReportPage from "../reports/unitEconomicsReport";
 import StockInHandReport from "../reports/stockinhandReport";
+import ItemWiseTransaction from "../reports/ItemTransactionList";
+import GodownItemWiseTransaction from "../reports/GodownItemTransactionList";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -130,6 +132,34 @@ const AppRouting: React.FC<AppRoutingProps> = ({
             </RequireAuth>
           }
         />
+
+        <Route
+          path="/reports/item-transaction"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <ItemWiseTransaction/>
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/reports/godown-item-transaction"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <GodownItemWiseTransaction/>
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+
 
         {/* FALLBACK */}
         <Route
