@@ -98,9 +98,11 @@ const UnitEconomicsReportPage: React.FC = () => {
   /* ================= DROPDOWNS ================= */
   const products = useMemo(
     () =>
-      [...new Set(data.map((d) => d.Product_Name))].filter(
-        (p) => p && p.toLowerCase().includes(searchText.toLowerCase())
-      ),
+      [...new Set(data.map((d) => d.Product_Name))]
+        .filter(Boolean)
+        .filter((p) =>
+          p.toLowerCase().includes(searchText.toLowerCase())
+        ),
     [data, searchText]
   );
 
@@ -158,6 +160,7 @@ const UnitEconomicsReportPage: React.FC = () => {
           { label: "Online Sales Report", path: "/salesreport" },
           { label: "Unit Economics", path: "/uniteconomics" },
           { label: "Stock in Hand", path: "/stockinhand" },
+          { label: "Online Sales Report LOL", path: "/salesreportLOL" },
         ]}
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
@@ -252,6 +255,19 @@ const UnitEconomicsReportPage: React.FC = () => {
                   onChange={(e) => setSearchText(e.target.value)}
                   sx={{ mb: 1 }}
                 />
+
+                {/* ✅ ALL – ALWAYS FIRST */}
+                <MenuItem
+                  sx={{ fontWeight: 600 }}
+                  onClick={() => {
+                    setFilters((f) => ({ ...f, Product: "" }));
+                    setFilterAnchor(null);
+                  }}
+                >
+                  All
+                </MenuItem>
+
+                {/* ✅ PRODUCT LIST BELOW ALL */}
                 {products.map((p) => (
                   <MenuItem
                     key={p}
@@ -263,14 +279,6 @@ const UnitEconomicsReportPage: React.FC = () => {
                     {p}
                   </MenuItem>
                 ))}
-                <MenuItem
-                  onClick={() => {
-                    setFilters((f) => ({ ...f, Product: "" }));
-                    setFilterAnchor(null);
-                  }}
-                >
-                  All
-                </MenuItem>
               </Box>
             )}
 

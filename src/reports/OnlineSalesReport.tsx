@@ -384,6 +384,11 @@ const OnlineSalesReportPage: React.FC = () => {
     </Box >
   );
 
+  const getHeaderOptions = (list: string[]) =>
+    list
+      .filter(Boolean)
+      .filter((v) => v.toLowerCase().includes(searchText.toLowerCase()));
+
   /* ================= RENDER ================= */
   return (
     <>
@@ -393,6 +398,7 @@ const OnlineSalesReportPage: React.FC = () => {
           { label: "Online Sales Report", path: "/salesreport" },
           { label: "Unit Economics", path: "/uniteconomics" },
           { label: "Stock in Hand", path: "/stockinhand" },
+          { label: "Online Sales Report LOL", path: "/salesreportLOL" }
 
         ]}
         toggleMode={toggleMode}
@@ -500,30 +506,9 @@ const OnlineSalesReportPage: React.FC = () => {
                     sx={{ mb: 1 }}
                   />
 
-                  {(activeHeader === "Customer"
-                    ? retailers
-                    : activeHeader === "Invoice"
-                      ? invoices
-                      : products
-                  )
-                    .filter((v) =>
-                      v.toLowerCase().includes(searchText.toLowerCase())
-                    )
-                    .map((v) => (
-                      <MenuItem
-                        key={v}
-                        onClick={() => {
-                          setFilters((p) => ({ ...p, [activeHeader]: v }));
-                          setPage(1);
-                          setExpandedPage(1);
-                          setFilterAnchor(null);
-                        }}
-                      >
-                        {v}
-                      </MenuItem>
-                    ))}
-
+                  {/* ✅ ALL — ALWAYS FIRST */}
                   <MenuItem
+                    sx={{ fontWeight: 600 }}
                     onClick={() => {
                       setFilters((p) => ({ ...p, [activeHeader]: "" }));
                       setPage(1);
@@ -533,9 +518,29 @@ const OnlineSalesReportPage: React.FC = () => {
                   >
                     All
                   </MenuItem>
+
+                  {/* ✅ VALUES BELOW ALL */}
+                  {getHeaderOptions(
+                    activeHeader === "Customer"
+                      ? retailers
+                      : activeHeader === "Invoice"
+                        ? invoices
+                        : products
+                  ).map((v) => (
+                    <MenuItem
+                      key={v}
+                      onClick={() => {
+                        setFilters((p) => ({ ...p, [activeHeader]: v }));
+                        setPage(1);
+                        setExpandedPage(1);
+                        setFilterAnchor(null);
+                      }}
+                    >
+                      {v}
+                    </MenuItem>
+                  ))}
                 </Box>
               )}
-
           </Menu>
         </Box>
         <CommonPagination

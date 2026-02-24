@@ -22,6 +22,7 @@ const Dashboard: React.FC = () => {
     { label: "Sales Report", path: "/salesreport" },
     { label: "Unit Economics", path: "/uniteconomics" },
     { label: "Stock in Hand", path: "/stockinhand"},
+    { label: "Sales Report LOL", path: "/salesreportLOL"}
   ];
 
   return (

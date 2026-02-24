@@ -17,7 +17,7 @@ export interface DropdownOption {
 
 interface ReportFilterDrawerProps {
     open: boolean;
-    onToggle: () => void;   // 🔥 single toggle handler
+    onToggle: () => void;
     onClose: () => void;
 
     fromDate: string;
@@ -25,10 +25,11 @@ interface ReportFilterDrawerProps {
     onFromDateChange: (value: string) => void;
     onToDateChange: (value: string) => void;
 
-    dropdownLabel: string;
-    dropdownValue: string | number;
-    dropdownOptions: DropdownOption[];
-    onDropdownChange: (value: string | number) => void;
+    // 👇 OPTIONAL
+    dropdownLabel?: string;
+    dropdownValue?: string | number;
+    dropdownOptions?: DropdownOption[];
+    onDropdownChange?: (value: string | number) => void;
 
     onApply: () => void;
 }
@@ -109,25 +110,29 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                         sx={{ mb: 2 }}
                     />
 
-                    <TextField
-                        select
-                        label={dropdownLabel}
-                        fullWidth
-                        value={dropdownValue}
-                        onChange={(e) => {
-                            const value = e.target.value;
-                            const option = dropdownOptions.find(opt => String(opt.value) === value);
-                            onDropdownChange(option ? option.value : "");
-                        }}
-                        sx={{ mb: 2 }}
-                    >
-                        <MenuItem value="">All</MenuItem>
-                        {dropdownOptions.map((opt) => (
-                            <MenuItem key={opt.value} value={String(opt.value)}>
-                                {opt.label}
-                            </MenuItem>
-                        ))}
-                    </TextField>
+                    {dropdownOptions && dropdownOptions.length > 0 && (
+                        <TextField
+                            select
+                            label={dropdownLabel}
+                            fullWidth
+                            value={dropdownValue ?? ""}
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                const option = dropdownOptions.find(
+                                    (opt) => String(opt.value) === value
+                                );
+                                onDropdownChange?.(option ? option.value : "");
+                            }}
+                            sx={{ mb: 2 }}
+                        >
+                            <MenuItem value="">All</MenuItem>
+                            {dropdownOptions.map((opt) => (
+                                <MenuItem key={opt.value} value={String(opt.value)}>
+                                    {opt.label}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    )}
 
                     <Button
                         fullWidth
@@ -138,8 +143,8 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                             "&:hover": { backgroundColor: "#162E6E" },
                         }}
                         onClick={() => {
-                            onApply(); 
-                            onClose(); 
+                            onApply();
+                            onClose();
                         }}
                     >
                         Apply Filter

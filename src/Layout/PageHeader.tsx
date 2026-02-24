@@ -13,7 +13,10 @@ import {
   Tooltip,
   Button,
   alpha,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
+import MenuIcon from "@mui/icons-material/Menu";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
@@ -37,9 +40,13 @@ interface PageHeaderProps {
   /** OPTIONAL EXPORT */
   onExportPDF?: () => void;
   onExportExcel?: () => void;
+
+  /** ✅ OPTIONAL SETTINGS SLOT */
+  settingsSlot?: React.ReactNode;
 }
 
 export const PAGE_HEADER_HEIGHT = 40;
+export const PAGE_HEADER_HEIGHT_MOBILE = 72;
 
 const PageHeader: React.FC<PageHeaderProps> = ({
   pages,
@@ -47,6 +54,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   onToggleChange,
   onExportPDF,
   onExportExcel,
+  settingsSlot,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -57,6 +65,8 @@ const PageHeader: React.FC<PageHeaderProps> = ({
 
   const [anchorElExport, setAnchorElExport] = useState<null | HTMLElement>(null);
   const openExportMenu = Boolean(anchorElExport);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   // Company name for display
   const companyName = useMemo(() => user?.Company_Name || "", [user]);
@@ -81,7 +91,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         elevation={1}
         sx={{
           background: "#1E3A8A",
-          height: PAGE_HEADER_HEIGHT,
+          height: isMobile ? PAGE_HEADER_HEIGHT_MOBILE : PAGE_HEADER_HEIGHT,
           top: 0,
           zIndex: (theme) => theme.zIndex.appBar,
         }}
@@ -89,16 +99,25 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         <Toolbar
           disableGutters
           sx={{
-            minHeight: `${PAGE_HEADER_HEIGHT}px !important`,
-            height: PAGE_HEADER_HEIGHT,
+            minHeight: isMobile
+              ? `${PAGE_HEADER_HEIGHT_MOBILE}px !important`
+              : `${PAGE_HEADER_HEIGHT}px !important`,
+            height: isMobile ? PAGE_HEADER_HEIGHT_MOBILE : PAGE_HEADER_HEIGHT,
             px: 1,
-            display: "grid",
-            gridTemplateColumns: "auto 1fr auto",
-            alignItems: "center",
+            display: "flex",
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "stretch" : "center",
+            justifyContent: "space-between",
+            gap: isMobile ? 0.5 : 0,
           }}
         >
           {/* LEFT: App title + pages */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            width: isMobile ? "100%" : "auto",
+          }}>
             <Typography
               variant="body2"
               onClick={() => navigate("/dashboard")}
@@ -109,15 +128,16 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                 whiteSpace: "nowrap",
               }}
             >
-              Pukal Reports
+              {isMobile ? "Reports" : "Pukal Reports"}
             </Typography>
 
             <Select
               size="small"
+              fullWidth={isMobile}
               value={location.pathname}
               onChange={(e) => navigate(e.target.value)}
               sx={{
-                minWidth: 180,
+                minWidth: isMobile ? "100%" : 180,
                 height: 24,
                 fontSize: "0.7rem",
                 backgroundColor: "#fff",
@@ -138,53 +158,60 @@ const PageHeader: React.FC<PageHeaderProps> = ({
           </Box>
 
           {/* CENTER: Company Switch */}
-          <Box sx={{ textAlign: "center" }}>
-            {user && companies && companies.length > 1 ? (
-              <>
-                <Button
-                  color="inherit"
-                  endIcon={<ArrowDropDownIcon />}
-                  onClick={handleCompanyClick}
-                  sx={{ color: "#fff", textTransform: "none", fontWeight: 700 }}
-                >
-                  {companyName || "Select Company"}
-                </Button>
-                <Menu
-                  anchorEl={anchorElCompany}
-                  open={openCompanyMenu}
-                  onClose={() => handleCompanyClose()}
-                  PaperProps={{ sx: { minWidth: 180 } }}
-                >
-                  {companies.map((company) => {
-                    const isSelected = company.id === user.companyId;
-                    return (
-                      <MenuItem
-                        key={company.id}
-                        onClick={() => handleCompanyClose(company)}
-                        sx={{
-                          backgroundColor: isSelected ? alpha("#fff", 0.15) : "inherit",
-                          fontWeight: isSelected ? "bold" : "normal",
-                        }}
-                      >
-                        {company.name}
-                      </MenuItem>
-                    );
-                  })}
-                </Menu>
-              </>
-            ) : (
-              <Typography
-                variant="body2"
-                sx={{ color: "#fff", fontWeight: 700 }}
-              >
-                {companyName}
-              </Typography>
-            )}
-          </Box>
-
-          {/* RIGHT: Toggle + Export + Logout */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, justifyContent: "flex-end" }}>
-            {toggleMode && onToggleChange && (
+          {/* CENTER: Company Switch (desktop only) */}
+          {!isMobile && (
+            <Box sx={{ textAlign: "center" }}>
+              {user && companies && companies.length > 1 ? (
+                <>
+                  <Button
+                    color="inherit"
+                    endIcon={<ArrowDropDownIcon />}
+                    onClick={handleCompanyClick}
+                    sx={{ color: "#fff", textTransform: "none", fontWeight: 700 }}
+                  >
+                    {companyName || "Select Company"}
+                  </Button>
+                  <Menu
+                    anchorEl={anchorElCompany}
+                    open={openCompanyMenu}
+                    onClose={() => handleCompanyClose()}
+                    PaperProps={{ sx: { minWidth: 180 } }}
+                  >
+                    {companies.map((company) => {
+                      const isSelected = company.id === user.companyId;
+                      return (
+                        <MenuItem
+                          key={company.id}
+                          onClick={() => handleCompanyClose(company)}
+                          sx={{
+                            backgroundColor: isSelected ? alpha("#fff", 0.15) : "inherit",
+                            fontWeight: isSelected ? "bold" : "normal",
+                          }}
+                        >
+                          {company.name}
+                        </MenuItem>
+                      );
+                    })}
+                  </Menu>
+                </>
+              ) : (
+                <Typography variant="body2" sx={{ color: "#fff", fontWeight: 700 }}>
+                  {companyName}
+                </Typography>
+              )}
+            </Box>
+          )}
+          {/* RIGHT: Toggle + Export + Settings + Logout */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 0.5,
+              justifyContent: "flex-end",
+              width: isMobile ? "100%" : "auto",
+            }}
+          >
+            {toggleMode && onToggleChange && !isMobile && (
               <ToggleButtonGroup
                 exclusive
                 size="small"
@@ -192,8 +219,12 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                 onChange={(_, val) => val && onToggleChange(val)}
                 sx={{ height: 24, background: "#fff", borderRadius: 0.5 }}
               >
-                <ToggleButton value="Abstract" sx={{ fontSize: "0.65rem" }}>Abstract</ToggleButton>
-                <ToggleButton value="Expanded" sx={{ fontSize: "0.65rem" }}>Expanded</ToggleButton>
+                <ToggleButton value="Abstract" sx={{ fontSize: "0.65rem" }}>
+                  Abstract
+                </ToggleButton>
+                <ToggleButton value="Expanded" sx={{ fontSize: "0.65rem" }}>
+                  Expanded
+                </ToggleButton>
               </ToggleButtonGroup>
             )}
 
@@ -209,7 +240,11 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                   </IconButton>
                 </Tooltip>
 
-                <Menu anchorEl={anchorElExport} open={openExportMenu} onClose={() => setAnchorElExport(null)}>
+                <Menu
+                  anchorEl={anchorElExport}
+                  open={openExportMenu}
+                  onClose={() => setAnchorElExport(null)}
+                >
                   {onExportPDF && (
                     <MenuItem
                       onClick={() => {
@@ -232,6 +267,19 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                   )}
                 </Menu>
               </>
+            )}
+
+            {/* ✅ SETTINGS SLOT (OPTIONAL) */}
+            {settingsSlot}
+
+            {isMobile && companies && companies.length > 1 && (
+              <IconButton
+                size="small"
+                onClick={handleCompanyClick}
+                sx={{ backgroundColor: "#fff" }}
+              >
+                <MenuIcon fontSize="small" />
+              </IconButton>
             )}
 
             {/* Logout */}
@@ -259,7 +307,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
       </AppBar>
 
       {/* Spacer */}
-      <Box sx={{ height: PAGE_HEADER_HEIGHT }} />
+      <Box sx={{ height: isMobile ? PAGE_HEADER_HEIGHT_MOBILE : PAGE_HEADER_HEIGHT }} />
     </>
   );
 };
