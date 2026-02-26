@@ -217,14 +217,35 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                 size="small"
                 value={toggleMode}
                 onChange={(_, val) => val && onToggleChange(val)}
-                sx={{ height: 24, background: "#fff", borderRadius: 0.5 }}
+                sx={{
+                  height: 26,
+                  backgroundColor: "#f5f5f5",
+                  borderRadius: 1,
+                  p: 0.25,
+
+                  "& .MuiToggleButton-root": {
+                    fontSize: "0.65rem",
+                    px: 1.2,
+                    py: 0,
+                    border: "none",
+                    color: "#444",
+                    textTransform: "uppercase",
+                  },
+
+                  "& .MuiToggleButton-root.Mui-selected": {
+                    backgroundColor: "#1e3a8a",
+                    color: "#fff",
+                    fontWeight: 700,
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+                  },
+
+                  "& .MuiToggleButton-root.Mui-selected:hover": {
+                    backgroundColor: "#1e40af",
+                  },
+                }}
               >
-                <ToggleButton value="Abstract" sx={{ fontSize: "0.65rem" }}>
-                  Abstract
-                </ToggleButton>
-                <ToggleButton value="Expanded" sx={{ fontSize: "0.65rem" }}>
-                  Expanded
-                </ToggleButton>
+                <ToggleButton value="Abstract">Abstract</ToggleButton>
+                <ToggleButton value="Expanded">Expanded</ToggleButton>
               </ToggleButtonGroup>
             )}
 

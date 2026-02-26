@@ -54,6 +54,7 @@ const UnitEconomicsReportPage: React.FC = () => {
   const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
   const [activeHeader, setActiveHeader] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [lastSyncDate, setLastSyncDate] = useState<string | null>(null);
 
   /* -------- SUMMARY -------- */
   const [summaryColumn, setSummaryColumn] = useState<keyof UnitEconomicsReport | null>(null);
@@ -76,12 +77,24 @@ const UnitEconomicsReportPage: React.FC = () => {
         Todate: filters.Date.to,
       });
 
-      let rows = res.data.data || [];
+      const responseData = res.data.data;
+
+      // ✅ correct access
+      let rows: UnitEconomicsReport[] = responseData.rows || [];
+
       if (filters.Product) {
-        rows = rows.filter((r) => r.Product_Name === filters.Product);
+        rows = rows.filter(
+          (r) => r.Product_Name === filters.Product
+        );
       }
 
       setData(rows);
+
+      // ✅ second dataset
+      setLastSyncDate(
+        responseData.lastStockValueDate?.Last_Stock_Value_Date ?? null
+      );
+
       setPage(1);
       setSummaryColumn(null);
     };
@@ -165,13 +178,62 @@ const UnitEconomicsReportPage: React.FC = () => {
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
       />
+
+      {lastSyncDate && (
+        <Box
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 0.25,
+            px: 0.5,
+            py: 0.35,
+            mt: 0.5,
+            ml: 1,
+            fontSize: "0.75rem",
+            backgroundColor: "#fee6c7",
+            border: "1px solid #F59E0B",
+            borderRadius: 1,
+            whiteSpace: "nowrap",
+            width: "fit-content",
+            alignSelf: "flex-start",
+          }}
+        >
+          {/* Icon */}
+          <Box
+            sx={{
+              width: 14,
+              height: 14,
+              borderRadius: "3px",
+              backgroundColor: "#F59E0B",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "0.6rem",
+              fontWeight: 600,
+              flexShrink: 0,
+            }}
+          >
+            ⟳
+          </Box>
+
+          {/* Text */}
+          <Box sx={{ fontSize: "0.65rem" }}>
+            Last Sync Date:
+            <Box component="span" sx={{ fontWeight: 600, ml: 0.25 }}>
+              {dayjs(lastSyncDate).format("DD/MM/YYYY")}
+            </Box>
+          </Box>
+        </Box>
+      )}
+
       <AppLayout fullWidth >
-        <Box sx={{ overflow: "auto", mt: 1 }}>
+        <Box sx={{ overflow: "auto", mt: 0.5 }}>
           <TableContainer
             component={Paper}
             sx={{
               position: 'relative',
-              maxHeight: "calc(100vh - 100px)",
+              maxHeight: "calc(100vh - 115px)",
               overflow: "auto"
             }}
           >

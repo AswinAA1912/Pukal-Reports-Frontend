@@ -26,7 +26,7 @@ import {
     useSensor,
     useSensors,
 } from "@dnd-kit/core";
-
+import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import {
     SortableContext,
     useSortable,
@@ -90,9 +90,10 @@ const EXPANDED_DEFAULT_KEYS = [
 type SortableColumnRowProps = {
     column: ColumnConfig;
     onToggle: (key: string) => void;
+    hasActiveFilter?: boolean;
 };
 
-const SortableColumnRow = ({ column, onToggle }: SortableColumnRowProps) => {
+const SortableColumnRow = ({ column, onToggle, hasActiveFilter, }: SortableColumnRowProps) => {
     const {
         attributes,
         listeners,
@@ -126,9 +127,17 @@ const SortableColumnRow = ({ column, onToggle }: SortableColumnRowProps) => {
             </IconButton>
 
             {/* LABEL */}
-            <Typography fontSize="0.75rem" sx={{ flex: 1 }}>
-                {column.label}
-            </Typography>
+            <Box display="flex" alignItems="center" gap={1} sx={{ flex: 1 }}>
+                <Typography fontSize="0.75rem">
+                    {column.label}
+                </Typography>
+
+                {hasActiveFilter && (
+                    <Tooltip title="Header filter enabled">
+                        <FilterAltIcon fontSize="small" color="action" />
+                    </Tooltip>
+                )}
+            </Box>
 
             {/* ENABLE / DISABLE */}
             <Switch
@@ -171,7 +180,7 @@ const buildColumnsFromApi = (
         label: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
         enabled: defaults.includes(key),
         isNumeric: NUMERIC_KEYS.includes(key),
-        order: index, // 👈 initial API order
+        order: index,
     }));
 };
 
@@ -202,7 +211,7 @@ const OnlineSalesReportLOL: React.FC = () => {
         useState<null | HTMLElement>(null);
     const [activeHeader, setActiveHeader] = useState<string | null>(null);
     const [searchText, setSearchText] = useState("");
-
+    const [defaultColumns, setDefaultColumns] = useState<ColumnConfig[]>([]);
     type FiltersMap = {
         Date: { from: string; to: string };
         columnFilters: Record<string, string[]>;
@@ -226,12 +235,42 @@ const OnlineSalesReportLOL: React.FC = () => {
             Fromdate: filters.Date.from,
             Todate: filters.Date.to,
         }).then((res: any) => {
-            const rows = res.data.data || [];
-            setRawRows(rows);
-            setColumns(buildColumnsFromApi(rows, toggleMode));
+            const apiRows = res.data.data || [];
+            const cols = buildColumnsFromApi(apiRows, toggleMode);
+
+            setRawRows(apiRows);
+            setColumns(cols);
+
+            // ✅ ONLY set defaults if empty OR mode changed
+            setDefaultColumns(prev =>
+                prev.length === 0 ? cols : prev
+            );
+
             setPage(1);
         });
     }, [toggleMode, filters.Date.from, filters.Date.to]);
+
+    const handleResetSettings = () => {
+        // Reset report drawer dates
+        setFromDate(today);
+        setToDate(today);
+
+        // Reset filters
+        setFilters({
+            Date: { from: today, to: today },
+            columnFilters: {},
+        });
+
+        // Reset columns to original defaults
+        setColumns(defaultColumns.map(c => ({ ...c })));
+
+        // Reset pagination
+        setPage(1);
+
+        // Close popups
+        setSettingsAnchor(null);
+        setFilterAnchor(null);
+    };
 
     /* ================= GROUPING (ABSTRACT ONLY) ================= */
 
@@ -437,102 +476,102 @@ const OnlineSalesReportLOL: React.FC = () => {
             />
 
             <AppLayout fullWidth>
-                 <Box sx={{ overflow: "auto", mt: 1 }}>
-                <TableContainer
-                    component={Paper}
-                    sx={{
-                        maxHeight: "calc(100vh - 100px)", "& th, & td": {
-                            fontSize: "0.75rem",
-                        },
-                    }}
-                >
-                    <Table size="small">
-                        <TableHead
-                            sx={{
-                                background: "#1E3A8A",
-                                position: "sticky",
-                                top: 0,
-                                zIndex: 3,
-                                height: HEADER_HEIGHT,
-                            }}
-                        >
-                            <TableRow>
-                                <TableCell sx={{ color: "#fff", fontSize: "0.75rem", fontWeight: 600, }}>
-                                    S.No
-                                </TableCell>
-                                {enabledColumns.map((c) => (
-                                    <TableCell
-                                        key={c.key}
-                                        sx={{
-                                            color: "#fff",
-                                            cursor: !c.isNumeric ? "pointer" : "default",
-                                        }}
-                                        onClick={(e) =>
-                                            !c.isNumeric && handleHeaderClick(e, c.key)
-                                        }
-                                    >
-                                        {c.label}
-                                    </TableCell>
-                                ))}
-                            </TableRow>
-                             <TableRow
+                <Box sx={{ overflow: "auto", mt: 1 }}>
+                    <TableContainer
+                        component={Paper}
+                        sx={{
+                            maxHeight: "calc(100vh - 100px)", "& th, & td": {
+                                fontSize: "0.75rem",
+                            },
+                        }}
+                    >
+                        <Table size="small">
+                            <TableHead
                                 sx={{
-                                    background: "#f3f4f6",
+                                    background: "#1E3A8A",
                                     position: "sticky",
-                                    top: "var(--mui-table-header-height, 36px)",
-                                    zIndex: 2,
+                                    top: 0,
+                                    zIndex: 3,
+                                    height: HEADER_HEIGHT,
                                 }}
                             >
-                                <TableCell>Total</TableCell>
-                                {enabledColumns.map((c) => (
-                                    <TableCell key={c.key}>
-                                        {c.isNumeric
-                                            ? CURRENCY_KEYS.includes(c.key)
-                                                ? formatINR(getTotal(c.key))
-                                                : getTotal(c.key)
-                                            : ""}
-                                    </TableCell>
-                                ))}
-                            </TableRow>
-                        </TableHead>
-
-                        <TableBody>
-                           
-                            {paginatedRows.map((row, i) => (
-                                <TableRow key={i}>
-                                    <TableCell>
-                                        {(page - 1) * ROWS_PER_PAGE + i + 1}
+                                <TableRow>
+                                    <TableCell sx={{ color: "#fff", fontSize: "0.75rem", fontWeight: 600, }}>
+                                        S.No
                                     </TableCell>
                                     {enabledColumns.map((c) => (
-                                        <TableCell key={c.key}>
-                                            {c.key === "Ledger_Date"
-                                                ? dayjs(
-                                                    row[c.key]
-                                                ).format("DD/MM/YYYY")
-                                                : CURRENCY_KEYS.includes(
-                                                    c.key
-                                                )
-                                                    ? formatINR(
-                                                        Number(row[c.key])
-                                                    )
-                                                    : c.key === "Item_Count" &&
-                                                        toggleMode === "Abstract" &&
-                                                        row.__invoiceCount
-                                                        ? `${row[c.key]} (${row.__invoiceCount})`
-                                                        : row[c.key]}
+                                        <TableCell
+                                            key={c.key}
+                                            sx={{
+                                                color: "#fff",
+                                                cursor: !c.isNumeric ? "pointer" : "default",
+                                            }}
+                                            onClick={(e) =>
+                                                !c.isNumeric && handleHeaderClick(e, c.key)
+                                            }
+                                        >
+                                            {c.label}
                                         </TableCell>
                                     ))}
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                                <TableRow
+                                    sx={{
+                                        background: "#f3f4f6",
+                                        position: "sticky",
+                                        top: "var(--mui-table-header-height, 36px)",
+                                        zIndex: 2,
+                                    }}
+                                >
+                                    <TableCell>Total</TableCell>
+                                    {enabledColumns.map((c) => (
+                                        <TableCell key={c.key}>
+                                            {c.isNumeric
+                                                ? CURRENCY_KEYS.includes(c.key)
+                                                    ? formatINR(getTotal(c.key))
+                                                    : getTotal(c.key)
+                                                : ""}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            </TableHead>
 
-                <CommonPagination
-                    totalRows={filteredRows.length}
-                    page={page}
-                    onPageChange={setPage}
-                />
+                            <TableBody>
+
+                                {paginatedRows.map((row, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell>
+                                            {(page - 1) * ROWS_PER_PAGE + i + 1}
+                                        </TableCell>
+                                        {enabledColumns.map((c) => (
+                                            <TableCell key={c.key}>
+                                                {c.key === "Ledger_Date"
+                                                    ? dayjs(
+                                                        row[c.key]
+                                                    ).format("DD/MM/YYYY")
+                                                    : CURRENCY_KEYS.includes(
+                                                        c.key
+                                                    )
+                                                        ? formatINR(
+                                                            Number(row[c.key])
+                                                        )
+                                                        : c.key === "Item_Count" &&
+                                                            toggleMode === "Abstract" &&
+                                                            row.__invoiceCount
+                                                            ? `${row[c.key]} (${row.__invoiceCount})`
+                                                            : row[c.key]}
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+
+                    <CommonPagination
+                        totalRows={filteredRows.length}
+                        page={page}
+                        onPageChange={setPage}
+                    />
                 </Box>
             </AppLayout>
 
@@ -674,9 +713,24 @@ const OnlineSalesReportLOL: React.FC = () => {
                 onClose={() => setSettingsAnchor(null)}
             >
                 <Box p={2} minWidth={300}>
-                    <Typography fontWeight={600} mb={1}>
-                        Column Settings
-                    </Typography>
+                    <Box
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        mb={1}
+                    >
+                        <Typography fontWeight={600}>
+                            Column Settings
+                        </Typography>
+
+                        <Button
+                            size="small"
+                            color="error"
+                            onClick={handleResetSettings}
+                        >
+                            Reset
+                        </Button>
+                    </Box>
 
                     <DndContext
                         sensors={sensors}
@@ -698,6 +752,11 @@ const OnlineSalesReportLOL: React.FC = () => {
                                     <SortableColumnRow
                                         key={c.key}
                                         column={c}
+                                        hasActiveFilter={
+                                            c.key === "Ledger_Date"
+                                                ? filters.Date.from !== today || filters.Date.to !== today
+                                                : (filters.columnFilters[c.key]?.length ?? 0) > 0
+                                        }
                                         onToggle={key =>
                                             setColumns(cols =>
                                                 cols.map(x =>
@@ -712,12 +771,7 @@ const OnlineSalesReportLOL: React.FC = () => {
                         </SortableContext>
 
                         {/* DISABLED */}
-                        <Typography
-                            fontSize="0.7rem"
-                            fontWeight={600}
-                            mt={1}
-                            mb={0.5}
-                        >
+                        <Typography fontSize="0.7rem" fontWeight={600} mt={1} mb={0.5}>
                             Disabled Columns
                         </Typography>
 
@@ -731,6 +785,11 @@ const OnlineSalesReportLOL: React.FC = () => {
                                     <SortableColumnRow
                                         key={c.key}
                                         column={c}
+                                        hasActiveFilter={
+                                            c.key === "Ledger_Date"
+                                                ? filters.Date.from !== today || filters.Date.to !== today
+                                                : (filters.columnFilters[c.key]?.length ?? 0) > 0
+                                        }
                                         onToggle={key =>
                                             setColumns(cols =>
                                                 cols.map(x =>
