@@ -197,8 +197,21 @@ const OnlineSalesReportLOL: React.FC = () => {
 
     const { toggleMode, setToggleMode } = useToggleMode();
 
-    const [rawRows, setRawRows] = useState<any[]>([]);
-    const [columns, setColumns] = useState<ColumnConfig[]>([]);
+    const [abstractRows, setAbstractRows] = useState<any[]>([]);
+    const [expandedRows, setExpandedRows] = useState<any[]>([]);
+    const rawRows =
+        toggleMode === "Expanded" ? expandedRows : abstractRows;
+    const [abstractColumns, setAbstractColumns] = useState<ColumnConfig[]>([]);
+    const [expandedColumns, setExpandedColumns] = useState<ColumnConfig[]>([]);
+    const columns =
+        toggleMode === "Expanded"
+            ? expandedColumns
+            : abstractColumns;
+
+    const setColumns =
+        toggleMode === "Expanded"
+            ? setExpandedColumns
+            : setAbstractColumns;
     const [page, setPage] = useState(1);
 
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -211,7 +224,8 @@ const OnlineSalesReportLOL: React.FC = () => {
         useState<null | HTMLElement>(null);
     const [activeHeader, setActiveHeader] = useState<string | null>(null);
     const [searchText, setSearchText] = useState("");
-    const [defaultColumns, setDefaultColumns] = useState<ColumnConfig[]>([]);
+    const [defaultAbstractColumns, setDefaultAbstractColumns] = useState<ColumnConfig[]>([]);
+    const [defaultExpandedColumns, setDefaultExpandedColumns] = useState<ColumnConfig[]>([]);
     type FiltersMap = {
         Date: { from: string; to: string };
         columnFilters: Record<string, string[]>;
@@ -221,11 +235,35 @@ const OnlineSalesReportLOL: React.FC = () => {
         Date: { from: today, to: today },
         columnFilters: {},
     });
+    const [abstractDateKey, setAbstractDateKey] = useState<string | null>(null);
+    const [expandedDateKey, setExpandedDateKey] = useState<string | null>(null);
+
+    const currentDateKey = `${filters.Date.from}_${filters.Date.to}`;
+
     const HEADER_HEIGHT = 36;
 
     /* ================= LOAD DATA ================= */
 
     useEffect(() => {
+        // 🔹 ABSTRACT MODE
+        // 🔹 ABSTRACT MODE CACHE CHECK
+        if (
+            toggleMode === "Abstract" &&
+            abstractRows.length > 0 &&
+            abstractDateKey === currentDateKey
+        ) {
+            return;
+        }
+
+        // 🔹 EXPANDED MODE CACHE CHECK
+        if (
+            toggleMode === "Expanded" &&
+            expandedRows.length > 0 &&
+            expandedDateKey === currentDateKey
+        ) {
+            return;
+        }
+
         const service =
             toggleMode === "Expanded"
                 ? onlineSalesReportItemLOLService.getReportsItemLOL
@@ -238,36 +276,43 @@ const OnlineSalesReportLOL: React.FC = () => {
             const apiRows = res.data.data || [];
             const cols = buildColumnsFromApi(apiRows, toggleMode);
 
-            setRawRows(apiRows);
-            setColumns(cols);
+            if (toggleMode === "Expanded") {
+                setExpandedRows(apiRows);
+                setExpandedDateKey(currentDateKey);
 
-            // ✅ ONLY set defaults if empty OR mode changed
-            setDefaultColumns(prev =>
-                prev.length === 0 ? cols : prev
-            );
+                setExpandedColumns(prev => prev.length === 0 ? cols : prev);
+                setDefaultExpandedColumns(prev => prev.length === 0 ? cols : prev);
+            } else {
+                setAbstractRows(apiRows);
+                setAbstractDateKey(currentDateKey);
+
+                setAbstractColumns(prev => prev.length === 0 ? cols : prev);
+                setDefaultAbstractColumns(prev => prev.length === 0 ? cols : prev);
+            }
 
             setPage(1);
         });
     }, [toggleMode, filters.Date.from, filters.Date.to]);
 
     const handleResetSettings = () => {
-        // Reset report drawer dates
         setFromDate(today);
         setToDate(today);
 
-        // Reset filters
         setFilters({
             Date: { from: today, to: today },
             columnFilters: {},
         });
 
-        // Reset columns to original defaults
-        setColumns(defaultColumns.map(c => ({ ...c })));
+        setAbstractRows([]);
+        setExpandedRows([]);
 
-        // Reset pagination
+        setAbstractDateKey(null);
+        setExpandedDateKey(null);
+
+        setAbstractColumns(defaultAbstractColumns.map(c => ({ ...c })));
+        setExpandedColumns(defaultExpandedColumns.map(c => ({ ...c })));
+
         setPage(1);
-
-        // Close popups
         setSettingsAnchor(null);
         setFilterAnchor(null);
     };
@@ -275,23 +320,36 @@ const OnlineSalesReportLOL: React.FC = () => {
     /* ================= GROUPING (ABSTRACT ONLY) ================= */
 
     const processedRows = useMemo(() => {
-        if (toggleMode === "Expanded") return rawRows;
+        const isExpanded = toggleMode === "Expanded";
 
         const invoiceEnabled = columns.find(
-            (c) => c.key === "invoice_no"
+            c => c.key === "invoice_no"
         )?.enabled;
 
+        // Grouping columns
         const groupByColumns = columns
-            .filter((c) => c.enabled && !c.isNumeric)
-            .map((c) => c.key);
+            .filter(c => c.enabled && !c.isNumeric)
+            .map(c => c.key)
+            .filter(key =>
+                isExpanded
+                    ? [
+                        "Ledger_Date", "Retailer_Name", "Product_Name",
+                        "Party_Group", "Godown_Name", "voucher_name",
+                        "Brand", "Group_ST", "Grade_Item_Group", "Item_Name_Modified",
+                        "POS_Item_Name", "Ref_Brokers", "Ledger_Alias",
+                        "Actual_Party_Name_with_Brokers", "Party_Name",
+                    ].includes(key)
+                    : true
+            );
 
+        // If invoice_no explicitly enabled → no grouping
         if (invoiceEnabled) return rawRows;
 
         const map = new Map<string, any>();
 
-        rawRows.forEach((row) => {
+        rawRows.forEach(row => {
             const key = groupByColumns
-                .map((col) =>
+                .map(col =>
                     col === "Ledger_Date"
                         ? dayjs(row[col]).format("YYYY-MM-DD")
                         : row[col]
@@ -300,28 +358,34 @@ const OnlineSalesReportLOL: React.FC = () => {
 
             if (!map.has(key)) {
                 const base: any = {};
-                groupByColumns.forEach((c) => (base[c] = row[c]));
+                groupByColumns.forEach(c => (base[c] = row[c]));
+
+                // numeric aggregation
                 columns
-                    .filter((c) => c.isNumeric)
-                    .forEach((c) => (base[c.key] = Number(row[c.key] || 0)));
+                    .filter(c => c.isNumeric)
+                    .forEach(c => (base[c.key] = Number(row[c.key] || 0)));
+
+                // invoice tracking
                 base.__invoiceSet = new Set(
                     row.invoice_no ? [row.invoice_no] : []
                 );
+
                 map.set(key, base);
             } else {
                 const existing = map.get(key);
+
                 columns
-                    .filter((c) => c.isNumeric)
+                    .filter(c => c.isNumeric)
                     .forEach(
-                        (c) =>
-                            (existing[c.key] += Number(row[c.key] || 0))
+                        c => (existing[c.key] += Number(row[c.key] || 0))
                     );
+
                 if (row.invoice_no)
                     existing.__invoiceSet.add(row.invoice_no);
             }
         });
 
-        return Array.from(map.values()).map((r) => ({
+        return Array.from(map.values()).map(r => ({
             ...r,
             __invoiceCount: r.__invoiceSet.size,
         }));
@@ -330,7 +394,7 @@ const OnlineSalesReportLOL: React.FC = () => {
     /* ================= FILTERING ================= */
 
     const filteredRows = useMemo(() => {
-        return processedRows.filter((row) => {
+        return processedRows.filter(row => {
             const rowDate = dayjs(row.Ledger_Date);
 
             if (
@@ -338,17 +402,25 @@ const OnlineSalesReportLOL: React.FC = () => {
                 rowDate.isBefore(dayjs(filters.Date.from), "day")
             )
                 return false;
+
             if (
                 filters.Date.to &&
                 rowDate.isAfter(dayjs(filters.Date.to), "day")
             )
                 return false;
 
-            for (const [key, values] of Object.entries(
-                filters.columnFilters
-            )) {
-                if (values.length === 0) continue;
-                if (!values.includes(String(row[key]))) return false;
+            for (const [key, values] of Object.entries(filters.columnFilters)) {
+                if (!values.length) continue;
+
+                const rowValue = String(row[key] ?? "")
+                    .trim()
+                    .toLowerCase();
+
+                const selectedValues = values.map(v =>
+                    v.trim().toLowerCase()
+                );
+
+                if (!selectedValues.includes(rowValue)) return false;
             }
 
             return true;
@@ -408,7 +480,11 @@ const OnlineSalesReportLOL: React.FC = () => {
     const enabledColumns = sortedColumns.filter(c => c.enabled);
 
     const getTotal = (key: string) =>
-        filteredRows.reduce((s, r) => s + Number(r[key] || 0), 0);
+        Number(
+            filteredRows
+                .reduce((s, r) => s + Number(r[key] || 0), 0)
+                .toFixed(2)
+        );
 
     const handleHeaderClick = (
         e: React.MouseEvent<HTMLElement>,
@@ -421,15 +497,16 @@ const OnlineSalesReportLOL: React.FC = () => {
 
     const filterOptions = useMemo(() => {
         if (!activeHeader) return [];
+
         return Array.from(
             new Set(
-                rawRows
-                    .map((r) => r[activeHeader])
-                    .filter((v) => v !== null && v !== undefined && v !== "")
-                    .map(String)
+                processedRows
+                    .map(r => r[activeHeader])
+                    .filter(v => v !== null && v !== undefined && v !== "")
+                    .map(v => String(v).trim())
             )
         );
-    }, [activeHeader, rawRows]);
+    }, [activeHeader, processedRows]);
 
     /* ================= RENDER ================= */
 
@@ -545,15 +622,12 @@ const OnlineSalesReportLOL: React.FC = () => {
                                         {enabledColumns.map((c) => (
                                             <TableCell key={c.key}>
                                                 {c.key === "Ledger_Date"
-                                                    ? dayjs(
-                                                        row[c.key]
-                                                    ).format("DD/MM/YYYY")
-                                                    : CURRENCY_KEYS.includes(
-                                                        c.key
-                                                    )
-                                                        ? formatINR(
-                                                            Number(row[c.key])
-                                                        )
+                                                    ? dayjs(row[c.key]).format("DD/MM/YYYY")
+                                                    : CURRENCY_KEYS.includes(c.key)
+                                                        ? formatINR(Number(row[c.key])) +
+                                                        (toggleMode === "Expanded" && row.__invoiceCount
+                                                            ? ` (${row.__invoiceCount})`
+                                                            : "")
                                                         : c.key === "Item_Count" &&
                                                             toggleMode === "Abstract" &&
                                                             row.__invoiceCount
@@ -725,7 +799,7 @@ const OnlineSalesReportLOL: React.FC = () => {
 
                         <Button
                             size="small"
-                            color="error"
+                            color="info"
                             onClick={handleResetSettings}
                         >
                             Reset
