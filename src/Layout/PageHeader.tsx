@@ -209,9 +209,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
               alignItems: "center",
               justifyContent: "flex-end",
               width: isMobile ? "100%" : "auto",
-              "& > *": {
-                ml: 1,
-              },
+              gap: 0.75,
             }}
           >
 

@@ -11,7 +11,7 @@ import LoadingScreen from "./Components/loadingScreen";
 /* MUI Theme */
 const theme = createTheme({
   palette: {
-    primary: { main: "#b9925f" },
+    primary: { main: "#2f6b94" },
     secondary: { main: "#6b7280" },
     background: { default: "#f5f5f5", paper: "#fff" },
   },
