@@ -632,6 +632,7 @@ const StockInHandReport: React.FC = () => {
                     { label: "Unit Economics", path: "/uniteconomics" },
                     { label: "Stock in Hand", path: "/stockinhand" },
                     { label: "Online Sales Report LOL", path: "/salesreportLOL" },
+                    { label: "Sales Analytics Report", path: "/salesreportlr" }
                 ]}
                 toggleMode={toggleMode}
                 onToggleChange={setToggleMode}

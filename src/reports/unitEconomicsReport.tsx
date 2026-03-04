@@ -169,63 +169,60 @@ const UnitEconomicsReportPage: React.FC = () => {
     <>
       <PageHeader
         pages={[
-          // { label: "Sales Invoice", path: "/salesinvoice" },
           { label: "Online Sales Report", path: "/salesreport" },
           { label: "Unit Economics", path: "/uniteconomics" },
           { label: "Stock in Hand", path: "/stockinhand" },
           { label: "Online Sales Report LOL", path: "/salesreportLOL" },
+          { label: "Sales Analytics Report", path: "/salesreportlr" },
         ]}
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
-      />
+        infoSlot={
+          lastSyncDate && (
+            <Box
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.25,
+                px: 0.5,
+                py: 0.35,
+                fontSize: "0.75rem",
+                backgroundColor: "#e2eef0",
+                border: "1px solid #0b78f5",
+                borderRadius: 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {/* Icon */}
+              <Box
+                sx={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: "3px",
+                  backgroundColor: "#0bdaf5",
+                  color: "#f1f5f5",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.6rem",
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
+              >
+                ⟳
+              </Box>
 
-      {lastSyncDate && (
-        <Box
-          sx={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 0.25,
-            px: 0.5,
-            py: 0.35,
-            mt: 0.5,
-            ml: 1,
-            fontSize: "0.75rem",
-            backgroundColor: "#fee6c7",
-            border: "1px solid #F59E0B",
-            borderRadius: 1,
-            whiteSpace: "nowrap",
-            width: "fit-content",
-            alignSelf: "flex-start",
-          }}
-        >
-          {/* Icon */}
-          <Box
-            sx={{
-              width: 14,
-              height: 14,
-              borderRadius: "3px",
-              backgroundColor: "#F59E0B",
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "0.6rem",
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
-          >
-            ⟳
-          </Box>
-
-          {/* Text */}
-          <Box sx={{ fontSize: "0.65rem" }}>
-            Last Sync Date:
-            <Box component="span" sx={{ fontWeight: 600, ml: 0.25 }}>
-              {dayjs(lastSyncDate).format("DD/MM/YYYY")}
+              {/* Text */}
+              <Box sx={{ fontSize: "0.65rem" }}>
+                Last Sync:
+                <Box component="span" sx={{ fontWeight: 600, ml: 0.25 }}>
+                  {dayjs(lastSyncDate).format("DD/MM/YYYY")}
+                </Box>
+              </Box>
             </Box>
-          </Box>
-        </Box>
-      )}
+          )
+        }
+      />
 
       <AppLayout fullWidth >
         <Box sx={{ overflow: "auto", mt: 0.5 }}>
@@ -233,7 +230,7 @@ const UnitEconomicsReportPage: React.FC = () => {
             component={Paper}
             sx={{
               position: 'relative',
-              maxHeight: "calc(100vh - 115px)",
+              maxHeight: "calc(100vh - 100px)",
               overflow: "auto"
             }}
           >

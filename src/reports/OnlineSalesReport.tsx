@@ -398,8 +398,8 @@ const OnlineSalesReportPage: React.FC = () => {
           { label: "Online Sales Report", path: "/salesreport" },
           { label: "Unit Economics", path: "/uniteconomics" },
           { label: "Stock in Hand", path: "/stockinhand" },
-          { label: "Online Sales Report LOL", path: "/salesreportLOL" }
-
+          { label: "Online Sales Report LOL", path: "/salesreportLOL" },
+          { label: "Sales Analytics Report", path: "/salesreportlr" }
         ]}
         toggleMode={toggleMode}
         onToggleChange={setToggleMode}

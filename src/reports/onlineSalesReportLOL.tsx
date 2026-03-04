@@ -33,15 +33,17 @@ import {
     verticalListSortingStrategy,
     arrayMove,
 } from "@dnd-kit/sortable";
-
+import ArrowDropUpIcon from "@mui/icons-material/ArrowDropUp";
+import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import { CSS } from "@dnd-kit/utilities";
-
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import AppLayout, { useToggleMode } from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
 import ReportFilterDrawer from "../Components/ReportFilterDrawer";
 import CommonPagination from "../Components/CommonPagination";
-
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as XLSX from "xlsx";
 import {
     onlineSalesReportLOLService,
     onlineSalesReportItemLOLService,
@@ -237,6 +239,15 @@ const OnlineSalesReportLOL: React.FC = () => {
     });
     const [abstractDateKey, setAbstractDateKey] = useState<string | null>(null);
     const [expandedDateKey, setExpandedDateKey] = useState<string | null>(null);
+    type SortOrder = "asc" | "desc";
+
+    const [sortConfig, setSortConfig] = useState<{
+        key: string | null;
+        order: SortOrder;
+    }>({
+        key: null,
+        order: "asc",
+    });
 
     const currentDateKey = `${filters.Date.from}_${filters.Date.to}`;
 
@@ -295,32 +306,32 @@ const OnlineSalesReportLOL: React.FC = () => {
     }, [toggleMode, filters.Date.from, filters.Date.to]);
 
     const handleResetSettings = () => {
-        setFromDate(today);
-        setToDate(today);
+        const todayDate = dayjs().format("YYYY-MM-DD");
+
+        setFromDate(todayDate);
+        setToDate(todayDate);
 
         setFilters({
-            Date: { from: today, to: today },
+            Date: { from: todayDate, to: todayDate },
             columnFilters: {},
         });
 
-        setAbstractRows([]);
-        setExpandedRows([]);
-
-        setAbstractDateKey(null);
-        setExpandedDateKey(null);
-
+        // 🔑 Reset columns ONLY
         setAbstractColumns(defaultAbstractColumns.map(c => ({ ...c })));
         setExpandedColumns(defaultExpandedColumns.map(c => ({ ...c })));
+
+        // 🔑 Reset sort
+        setSortConfig({ key: null, order: "asc" });
 
         setPage(1);
         setSettingsAnchor(null);
         setFilterAnchor(null);
+
     };
 
-    /* ================= GROUPING (ABSTRACT ONLY) ================= */
+    /* ================= GROUPING ================= */
 
     const processedRows = useMemo(() => {
-        const isExpanded = toggleMode === "Expanded";
 
         const invoiceEnabled = columns.find(
             c => c.key === "invoice_no"
@@ -329,18 +340,7 @@ const OnlineSalesReportLOL: React.FC = () => {
         // Grouping columns
         const groupByColumns = columns
             .filter(c => c.enabled && !c.isNumeric)
-            .map(c => c.key)
-            .filter(key =>
-                isExpanded
-                    ? [
-                        "Ledger_Date", "Retailer_Name", "Product_Name",
-                        "Party_Group", "Godown_Name", "voucher_name",
-                        "Brand", "Group_ST", "Grade_Item_Group", "Item_Name_Modified",
-                        "POS_Item_Name", "Ref_Brokers", "Ledger_Alias",
-                        "Actual_Party_Name_with_Brokers", "Party_Name",
-                    ].includes(key)
-                    : true
-            );
+            .map(c => c.key);
 
         // If invoice_no explicitly enabled → no grouping
         if (invoiceEnabled) return rawRows;
@@ -427,9 +427,40 @@ const OnlineSalesReportLOL: React.FC = () => {
         });
     }, [processedRows, filters]);
 
+    const sortedRows = useMemo(() => {
+        if (!sortConfig.key) return filteredRows;
+
+        return [...filteredRows].sort((a, b) => {
+            const aVal = a[sortConfig.key!];
+            const bVal = b[sortConfig.key!];
+
+            if (aVal == null) return 1;
+            if (bVal == null) return -1;
+
+            // Date handling
+            if (sortConfig.key === "Ledger_Date") {
+                return sortConfig.order === "asc"
+                    ? dayjs(aVal).valueOf() - dayjs(bVal).valueOf()
+                    : dayjs(bVal).valueOf() - dayjs(aVal).valueOf();
+            }
+
+            // Numeric
+            if (typeof aVal === "number" && typeof bVal === "number") {
+                return sortConfig.order === "asc"
+                    ? aVal - bVal
+                    : bVal - aVal;
+            }
+
+            // String
+            return sortConfig.order === "asc"
+                ? String(aVal).localeCompare(String(bVal))
+                : String(bVal).localeCompare(String(aVal));
+        });
+    }, [filteredRows, sortConfig]);
+
     /* ================= PAGINATION ================= */
 
-    const paginatedRows = filteredRows.slice(
+    const paginatedRows = sortedRows.slice(
         (page - 1) * ROWS_PER_PAGE,
         page * ROWS_PER_PAGE
     );
@@ -495,10 +526,65 @@ const OnlineSalesReportLOL: React.FC = () => {
         setFilterAnchor(e.currentTarget);
     };
 
+    useEffect(() => {
+        if (sortConfig.key) return;
+
+        const hasLedgerDate = enabledColumns.some(c => c.key === "Ledger_Date");
+        const hasInvoiceNo = enabledColumns.some(c => c.key === "invoice_no");
+
+        if (!hasLedgerDate && !hasInvoiceNo && enabledColumns.length > 0) {
+            setSortConfig({
+                key: enabledColumns[0].key,
+                order: "asc",
+            });
+        }
+    }, [enabledColumns, sortConfig.key]);
+
+    const handleSortClick = (
+        e: React.MouseEvent<HTMLElement>,
+        key: string
+    ) => {
+        e.stopPropagation();
+
+        setSortConfig(prev => ({
+            key,
+            order:
+                prev.key === key && prev.order === "asc"
+                    ? "desc"
+                    : "asc",
+        }));
+    };
+    const sortFilterValues = (
+        values: string[],
+        key: string,
+        order: "asc" | "desc"
+    ) => {
+        return [...values].sort((a, b) => {
+            // Date column
+            if (key === "Ledger_Date") {
+                return order === "asc"
+                    ? dayjs(a).valueOf() - dayjs(b).valueOf()
+                    : dayjs(b).valueOf() - dayjs(a).valueOf();
+            }
+
+            // Numeric column
+            if (!isNaN(Number(a)) && !isNaN(Number(b))) {
+                return order === "asc"
+                    ? Number(a) - Number(b)
+                    : Number(b) - Number(a);
+            }
+
+            // String column
+            return order === "asc"
+                ? a.localeCompare(b)
+                : b.localeCompare(a);
+        });
+    };
+
     const filterOptions = useMemo(() => {
         if (!activeHeader) return [];
 
-        return Array.from(
+        const uniqueValues = Array.from(
             new Set(
                 processedRows
                     .map(r => r[activeHeader])
@@ -506,7 +592,70 @@ const OnlineSalesReportLOL: React.FC = () => {
                     .map(v => String(v).trim())
             )
         );
-    }, [activeHeader, processedRows]);
+
+        return sortFilterValues(
+            uniqueValues,
+            activeHeader,
+            sortConfig.order   // 🔥 sync with header sort icon
+        );
+    }, [activeHeader, processedRows, sortConfig.order]);
+
+    const exportColumns = enabledColumns.map(c => ({
+        key: c.key,
+        label: c.label,
+    }));
+
+    const exportRows = sortedRows.map(row => {
+        const obj: any = {};
+        exportColumns.forEach(col => {
+            let value = row[col.key];
+
+            if (col.key === "Ledger_Date") {
+                value = dayjs(value).format("DD/MM/YYYY");
+            }
+
+            obj[col.label] = value ?? "";
+        });
+        return obj;
+    });
+
+    const handleExportExcel = () => {
+        const worksheet = XLSX.utils.json_to_sheet(exportRows);
+        const workbook = XLSX.utils.book_new();
+
+        XLSX.utils.book_append_sheet(
+            workbook,
+            worksheet,
+            toggleMode === "Expanded" ? "Expanded Report" : "Abstract Report"
+        );
+
+        XLSX.writeFile(
+            workbook,
+            `Online_Sales_Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.xlsx`
+        );
+    };
+
+    const handleExportPDF = () => {
+        const doc = new jsPDF("l", "mm", "a4");
+
+        doc.text(
+            `Online Sales Report (${toggleMode})`,
+            14,
+            10
+        );
+
+        autoTable(doc, {
+            startY: 15,
+            head: [exportColumns.map(c => c.label)],
+            body: exportRows.map(r => Object.values(r)),
+            styles: { fontSize: 7 },
+            headStyles: { fillColor: [30, 58, 138] },
+        });
+
+        doc.save(
+            `Online_Sales_Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.pdf`
+        );
+    };
 
     /* ================= RENDER ================= */
 
@@ -518,9 +667,12 @@ const OnlineSalesReportLOL: React.FC = () => {
                     { label: "Unit Economics", path: "/uniteconomics" },
                     { label: "Stock in Hand", path: "/stockinhand" },
                     { label: "Online Sales Report LOL", path: "/salesreportLOL" },
+                    { label: "Sales Analytics Report", path: "/salesreportlr" }
                 ]}
                 toggleMode={toggleMode}
                 onToggleChange={setToggleMode}
+                onExportPDF={handleExportPDF}
+                onExportExcel={handleExportExcel}
                 settingsSlot={
                     <Tooltip title="Table Settings">
                         <IconButton size="small"
@@ -587,7 +739,36 @@ const OnlineSalesReportLOL: React.FC = () => {
                                                 !c.isNumeric && handleHeaderClick(e, c.key)
                                             }
                                         >
-                                            {c.label}
+                                            <Box
+                                                display="flex"
+                                                alignItems="center"
+                                                justifyContent="space-between"
+                                            >
+                                                {/* HEADER LABEL (FILTER CLICK) */}
+                                                <Box sx={{ display: "flex", alignItems: "center" }}>
+                                                    {c.label}
+                                                </Box>
+
+                                                {/* SORT ICON (SORT CLICK) */}
+                                                <IconButton
+                                                    size="small"
+                                                    sx={{ color: "#fff", p: 0 }}
+                                                    onClick={(e) => handleSortClick(e, c.key)}
+                                                >
+                                                    {sortConfig.key === c.key ? (
+                                                        sortConfig.order === "asc" ? (
+                                                            <ArrowDropDownIcon fontSize="small" />
+                                                        ) : (
+                                                            <ArrowDropUpIcon fontSize="small" />
+                                                        )
+                                                    ) : (
+                                                        <ArrowDropDownIcon
+                                                            fontSize="small"
+                                                            sx={{ opacity: 0.3 }}
+                                                        />
+                                                    )}
+                                                </IconButton>
+                                            </Box>
                                         </TableCell>
                                     ))}
                                 </TableRow>

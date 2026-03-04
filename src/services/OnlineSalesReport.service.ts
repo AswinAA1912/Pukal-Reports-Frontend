@@ -86,7 +86,6 @@ export const onlineSalesReportItemLOLService = {
     getReportsItemLOL: (params?: {Fromdate?: string; Todate?: string; invoice_no?: string}) =>
         axios.get<{ success: boolean; data: OnlineSalesReport[]}>(
             `${getBaseURL()}api/reports/externalAPI/onlineSalesReportItemLOL`,
-            // `http://localhost:9001/api/reports/externalAPI/onlineSalesReportItemLOL`,
             { params }
         )
 }

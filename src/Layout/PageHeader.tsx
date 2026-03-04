@@ -43,6 +43,7 @@ interface PageHeaderProps {
 
   /** ✅ OPTIONAL SETTINGS SLOT */
   settingsSlot?: React.ReactNode;
+  infoSlot?: React.ReactNode;
 }
 
 export const PAGE_HEADER_HEIGHT = 40;
@@ -55,6 +56,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   onExportPDF,
   onExportExcel,
   settingsSlot,
+  infoSlot,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -157,7 +159,6 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             </Select>
           </Box>
 
-          {/* CENTER: Company Switch */}
           {/* CENTER: Company Switch (desktop only) */}
           {!isMobile && (
             <Box sx={{ textAlign: "center" }}>
@@ -206,11 +207,17 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             sx={{
               display: "flex",
               alignItems: "center",
-              gap: 0.5,
               justifyContent: "flex-end",
               width: isMobile ? "100%" : "auto",
+              "& > *": {
+                ml: 1,
+              },
             }}
           >
+
+            {/* ✅ INFO SLOT (Last Sync Date) */}
+            {infoSlot}
+
             {toggleMode && onToggleChange && !isMobile && (
               <ToggleButtonGroup
                 exclusive
@@ -291,6 +298,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             )}
 
             {/* ✅ SETTINGS SLOT (OPTIONAL) */}
+
             {settingsSlot}
 
             {isMobile && companies && companies.length > 1 && (

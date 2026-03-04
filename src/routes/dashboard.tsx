@@ -19,10 +19,11 @@ const Dashboard: React.FC = () => {
 
   const menuList = [
     // { label: "Sales Invoice", path: "/salesinvoice" },
-    { label: "Sales Report", path: "/salesreport" },
+    { label: "Online Sales Report", path: "/salesreport" },
     { label: "Unit Economics", path: "/uniteconomics" },
     { label: "Stock in Hand", path: "/stockinhand"},
-    { label: "Sales Report LOL", path: "/salesreportLOL"}
+    { label: "Sales Report LOL", path: "/salesreportLOL"},
+    { label: "Sales Analytics Report", path: "/salesreportlr" }
   ];
 
   return (

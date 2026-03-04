@@ -13,13 +13,14 @@ import StockInHandReport from "../reports/stockinhandReport";
 import ItemWiseTransaction from "../reports/ItemTransactionList";
 import GodownItemWiseTransaction from "../reports/GodownItemTransactionList";
 import OnlineSalesReportLOL from "../reports/onlineSalesReportLOL";
+import SalesReport from "../reports/SalesReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
   globalLoading: boolean;
   loadingOn: () => void;
   loadingOff: () => void;
-  activeCategory: string; 
+  activeCategory: string;
 }
 
 /* ---------------- URL Sync Handler ---------------- */
@@ -128,7 +129,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
               <AppLayout
                 fullWidth
               >
-                <StockInHandReport/>
+                <StockInHandReport />
               </AppLayout>
             </RequireAuth>
           }
@@ -141,7 +142,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
               <AppLayout
                 fullWidth
               >
-                <ItemWiseTransaction/>
+                <ItemWiseTransaction />
               </AppLayout>
             </RequireAuth>
           }
@@ -154,24 +155,38 @@ const AppRouting: React.FC<AppRoutingProps> = ({
               <AppLayout
                 fullWidth
               >
-                <GodownItemWiseTransaction/>
+                <GodownItemWiseTransaction />
               </AppLayout>
             </RequireAuth>
           }
         />
 
-         <Route
+        <Route
           path="/salesreportLOL"
           element={
             <RequireAuth>
               <AppLayout
                 fullWidth
               >
-                <OnlineSalesReportLOL/>
+                <OnlineSalesReportLOL />
               </AppLayout>
             </RequireAuth>
           }
         />
+
+        <Route
+          path="/salesreportlr"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <SalesReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
 
 
 
