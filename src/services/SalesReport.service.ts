@@ -47,6 +47,11 @@ export interface SalesReportItem {
     Total_Qty: number;
 }
 
+export interface RetailersList {
+    Retailer_Id: number;
+    Retailer_Name: string
+}
+
 /* =========================
    Services
 ========================= */
@@ -69,4 +74,24 @@ export const SalesReportItemService = {
             `${getBaseURL()}api/reports/salesReport/products`,
             { params }
         ),
+};
+
+export const ledgerwiseItemService = {
+    getLedgerItemTransactions: (params: {
+        Fromdate: string;
+        Todate: string;
+        Ledger_Id: number
+    }) =>
+        axios.get<{ success: boolean; data: SalesReportLedger[] }>(
+            `${getBaseURL()}api/reports/salesReport/ledger/itemDetails`,
+            // `http://192.168.1.92:9001/api/reports/salesReport/ledger/itemDetails`,
+            { params }
+        ),
+};
+
+export const retailers = {
+    getRetailers: () =>
+        axios.get<{ success: boolean; data: RetailersList[] }>(
+            `${getBaseURL()}api/masters/retailers/dropDown`
+        )
 };

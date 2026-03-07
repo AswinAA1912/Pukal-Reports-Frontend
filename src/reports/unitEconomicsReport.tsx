@@ -174,6 +174,7 @@ const UnitEconomicsReportPage: React.FC = () => {
           { label: "Stock in Hand", path: "/stockinhand" },
           { label: "Online Sales Report LOL", path: "/salesreportLOL" },
           { label: "Sales Analytics Report", path: "/salesreportlr" },
+          { label: "Ledger Wise Item", path: "/reports/ledger-item" },
         ]}
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
@@ -247,10 +248,10 @@ const UnitEconomicsReportPage: React.FC = () => {
                   <TableCell sx={headStyle}>S.No</TableCell>
                   <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Date")}>Date</TableCell>
                   <TableCell sx={headStyle} onClick={(e) => openFilter(e, "Product")}>Product</TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Bill_Qty")}> Quantity </TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Rate")}>Rate</TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "Amount")}>Amount</TableCell>
-                  <TableCell align="right" sx={headStyle} onClick={(e) => openFilter(e, "COGS")}>COGS</TableCell>
+                  <TableCell align="right" sx={headStyle} > Quantity </TableCell>
+                  <TableCell align="right" sx={headStyle} >Rate</TableCell>
+                  <TableCell align="right" sx={headStyle} >Amount</TableCell>
+                  <TableCell align="right" sx={headStyle} >COGS</TableCell>
                 </TableRow>
               </TableHead>
 

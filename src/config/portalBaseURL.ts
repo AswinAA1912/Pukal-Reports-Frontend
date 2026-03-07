@@ -8,6 +8,7 @@
 export const getHostAPI = (): string => {
   return `https://erpsmt.in/api/`;
   // return `http://localhost:9001/api/`;
+  // return `http://192.168.1.92:9001/api/`
   // return `http://192.168.1.91:9001/api/`;
   
 };
@@ -23,8 +24,6 @@ export const getCompanyAPI = (): string => {
 };
 
 /**
- * Default export:
- * - Used by normal services
  * - After login → COMPANY_API
  * - Before login → HOST API
  */

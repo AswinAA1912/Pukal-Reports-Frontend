@@ -20,6 +20,7 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
+    CircularProgress
 } from "@mui/material";
 import dayjs from "dayjs";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -165,12 +166,14 @@ const SalesReport: React.FC = () => {
 
     const [abstractExpandedKeys, setAbstractExpandedKeys] = useState<string[]>([]);
     const [expandedExpandedKeys, setExpandedExpandedKeys] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
 
     const HEADER_HEIGHT = 36;
 
     /* ================= LOAD DATA ================= */
 
     useEffect(() => {
+        setLoading(true);
         const service =
             toggleMode === "Expanded"
                 ? SalesReportItemService.getReports
@@ -179,20 +182,28 @@ const SalesReport: React.FC = () => {
         service({
             Fromdate: filters.Date.from,
             Todate: filters.Date.to,
-        }).then(res => {
-            const apiRows = res.data.data || [];
-            const cols = buildColumnsFromApi(apiRows, toggleMode);
+        })
+            .then(res => {
+                const apiRows = res.data.data || [];
+                const cols = buildColumnsFromApi(apiRows, toggleMode);
 
-            if (toggleMode === "Expanded") {
-                setExpandedRows(apiRows);
-                setExpandedColumns(prev => (prev.length ? prev : cols));
-            } else {
-                setAbstractRows(apiRows);
-                setAbstractColumns(prev => (prev.length ? prev : cols));
-            }
+                if (toggleMode === "Expanded") {
+                    setExpandedRows(apiRows);
+                    setExpandedColumns(prev => (prev.length ? prev : cols));
+                } else {
+                    setAbstractRows(apiRows);
+                    setAbstractColumns(prev => (prev.length ? prev : cols));
+                }
 
-            setPage(1);
-        });
+                setPage(1);
+            })
+            .catch(err => {
+                console.error("Sales Report API Error:", err);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
+
     }, [toggleMode, filters.Date.from, filters.Date.to]);
 
     const appliedGroupBy =
@@ -534,11 +545,43 @@ const SalesReport: React.FC = () => {
                         {++serialRef.current}
                     </TableCell>
 
-                    {enabledColumns.map(c => (
-                        <TableCell key={c.key}>
-                            {row[c.key]}
-                        </TableCell>
-                    ))}
+                    {enabledColumns.map(c => {
+                        if (c.key === "Ledger_Name" && toggleMode === "Abstract") {
+                            return (
+                                <TableCell
+                                    key={c.key}
+                                    sx={{
+                                        cursor: "pointer",
+                                        color: "#1E3A8A",
+                                        fontWeight: 500,
+                                        textDecoration: "underline"
+                                    }}
+                                    onClick={() => {
+
+                                        const params = new URLSearchParams({
+                                            ledgerId: String(row["Retailer_Id"]),
+                                            ledgerName: String(row["Ledger_Name"]),
+                                            from: filters.Date.from,
+                                            to: filters.Date.to
+                                        });
+
+                                        window.open(
+                                            `/reports/ledger-item?${params.toString()}`,
+                                            "ledgerItemTab"
+                                        );
+                                    }}
+                                >
+                                    {row[c.key]}
+                                </TableCell>
+                            );
+                        }
+
+                        return (
+                            <TableCell key={c.key}>
+                                {row[c.key]}
+                            </TableCell>
+                        );
+                    })}
                 </TableRow>
             );
         });
@@ -623,7 +666,8 @@ const SalesReport: React.FC = () => {
                     { label: "Unit Economics", path: "/uniteconomics" },
                     { label: "Stock in Hand", path: "/stockinhand" },
                     { label: "Online Sales Report LOL", path: "/salesreportLOL" },
-                    { label: "Sales Analytics Report", path: "/salesreportlr" }
+                    { label: "Sales Analytics Report", path: "/salesreportlr" },
+                    { label: "Ledger Wise Item", path: "/reports/ledger-item" },
                 ]}
                 toggleMode={toggleMode}
                 onToggleChange={setToggleMode}
@@ -738,12 +782,30 @@ const SalesReport: React.FC = () => {
                             </TableHead>
 
                             <TableBody>
-                                {(() => {
-                                    serialRef.current = appliedGroupBy.length
-                                        ? 0
-                                        : (page - 1) * ROWS_PER_PAGE;
-                                    return renderRows(finalRows);
-                                })()}
+
+                                {loading ? (
+
+                                    <TableRow>
+                                        <TableCell
+                                            colSpan={enabledColumns.length + 1}
+                                            align="center"
+                                            sx={{ py: 6 }}
+                                        >
+                                            <CircularProgress size={30} />
+                                        </TableCell>
+                                    </TableRow>
+
+                                ) : (
+
+                                    (() => {
+                                        serialRef.current = appliedGroupBy.length
+                                            ? 0
+                                            : (page - 1) * ROWS_PER_PAGE;
+                                        return renderRows(finalRows);
+                                    })()
+
+                                )}
+
                             </TableBody>
                         </Table>
                     </TableContainer>

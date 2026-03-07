@@ -3,9 +3,6 @@ import {
   Box,
   Typography,
   Divider,
-  List,
-  ListItemButton,
-  ListItemText,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authContext";
@@ -21,9 +18,12 @@ const Dashboard: React.FC = () => {
     // { label: "Sales Invoice", path: "/salesinvoice" },
     { label: "Online Sales Report", path: "/salesreport" },
     { label: "Unit Economics", path: "/uniteconomics" },
-    { label: "Stock in Hand", path: "/stockinhand"},
-    { label: "Sales Report LOL", path: "/salesreportLOL"},
-    { label: "Sales Analytics Report", path: "/salesreportlr" }
+    { label: "Stock in Hand", path: "/stockinhand" },
+    { label: "Sales Report LOL", path: "/salesreportLOL" },
+    { label: "Sales Analytics Report", path: "/salesreportlr" },
+    { label: "Ledger Wise Item", path: "/reports/ledger-item" },
+    
+    
   ];
 
   return (
@@ -80,34 +80,48 @@ const Dashboard: React.FC = () => {
         <Box
           sx={{
             flex: 1,
-            px: 5,
+            px: 6,
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
           }}
         >
-          <Typography fontSize={20} fontWeight={600} mb={1}>
-            Menu
+          <Typography fontSize={22} fontWeight={700} mb={2}>
+            MENU
           </Typography>
 
-          <Divider sx={{ mb: 2 }} />
+          <Divider sx={{ mb: 3 }} />
 
-          <List disablePadding>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              gap: 2,
+            }}
+          >
             {menuList.map((item) => (
-              <ListItemButton
+              <Box
                 key={item.path}
                 onClick={() => navigate(item.path)}
                 sx={{
-                  mb: 1,
-                  borderRadius: 1,
-                  width: "fit-content",
-                  px: 2,
+                  cursor: "pointer",
+                  p: 2,
+                  borderRadius: 2,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                  transition: "all 0.2s ease",
+                  "&:hover": {
+                    transform: "translateY(-3px)",
+                    boxShadow: "0 6px 16px rgba(0,0,0,0.15)",
+                    background: "#b1c6da",
+                  },
                 }}
               >
-                <ListItemText primary={item.label} />
-              </ListItemButton>
+                <Typography fontSize={16} fontWeight={600}>
+                  {item.label}
+                </Typography>
+              </Box>
             ))}
-          </List>
+          </Box>
         </Box>
       </Box>
     </>

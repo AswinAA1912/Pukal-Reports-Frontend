@@ -14,6 +14,7 @@ import ItemWiseTransaction from "../reports/ItemTransactionList";
 import GodownItemWiseTransaction from "../reports/GodownItemTransactionList";
 import OnlineSalesReportLOL from "../reports/onlineSalesReportLOL";
 import SalesReport from "../reports/SalesReport";
+import LedgerWiseItemDetails from "../reports/LedgerWiseItemDetails";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -182,6 +183,19 @@ const AppRouting: React.FC<AppRoutingProps> = ({
                 fullWidth
               >
                 <SalesReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+         <Route
+          path="/reports/ledger-item"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <LedgerWiseItemDetails />
               </AppLayout>
             </RequireAuth>
           }
