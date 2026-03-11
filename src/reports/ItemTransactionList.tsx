@@ -249,10 +249,6 @@ const ItemWiseTransaction = () => {
     return (
         <>
             <PageHeader
-                pages={[
-                    { label: "Stock In Hand", path: "/stockinhand" },
-                    { label: "Item Transactions", path: "/reports/item-transaction" },
-                ]}
                 onExportPDF={handleExportPDF}
                 onExportExcel={handleExportExcel}
             />

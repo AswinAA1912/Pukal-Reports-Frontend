@@ -3,10 +3,13 @@ import {
   Box,
   Typography,
   Divider,
+  CircularProgress,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authContext";
 import Header from "../Layout/Header";
+import { useQuery } from "@tanstack/react-query";
+import { MenuService } from "../services/menus.service";
 
 const HEADER_HEIGHT = 64;
 
@@ -14,24 +17,21 @@ const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const menuList = [
-    // { label: "Sales Invoice", path: "/salesinvoice" },
-    { label: "Online Sales Report", path: "/salesreport" },
-    { label: "Unit Economics", path: "/uniteconomics" },
-    { label: "Stock in Hand", path: "/stockinhand" },
-    { label: "Sales Report LOL", path: "/salesreportLOL" },
-    { label: "Sales Analytics Report", path: "/salesreportlr" },
-    { label: "Ledger Wise Item", path: "/reports/ledger-item" },
-    
-    
-  ];
+  const { data: menuList = [], isLoading } = useQuery({
+    queryKey: ["dashboard-menus"],
+    queryFn: async () => {
+      const res = await MenuService.getMenus();
+
+      return res.data.data
+        .filter((menu: any) => menu.is_active === 3)
+        .sort((a: any, b: any) => a.display_order - b.display_order);
+    },
+  });
 
   return (
     <>
-      {/* ===== HEADER ===== */}
       <Header headerColor="#1E3A8A" showSearch={false} />
 
-      {/* ===== DASHBOARD BODY (FULL FIXED LAYER) ===== */}
       <Box
         sx={{
           display: "flex",
@@ -41,7 +41,7 @@ const Dashboard: React.FC = () => {
           backgroundColor: "#cfe6ec",
         }}
       >
-        {/* ===== LEFT PANEL ===== */}
+        {/* LEFT PANEL */}
         <Box
           sx={{
             width: 360,
@@ -73,10 +73,9 @@ const Dashboard: React.FC = () => {
           </Typography>
         </Box>
 
-        {/* ===== CENTER DIVIDER ===== */}
         <Divider orientation="vertical" flexItem />
 
-        {/* ===== RIGHT MENU ===== */}
+        {/* RIGHT MENU */}
         <Box
           sx={{
             flex: 1,
@@ -92,36 +91,42 @@ const Dashboard: React.FC = () => {
 
           <Divider sx={{ mb: 3 }} />
 
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-              gap: 2,
-            }}
-          >
-            {menuList.map((item) => (
-              <Box
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                sx={{
-                  cursor: "pointer",
-                  p: 2,
-                  borderRadius: 2,
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                  transition: "all 0.2s ease",
-                  "&:hover": {
-                    transform: "translateY(-3px)",
-                    boxShadow: "0 6px 16px rgba(0,0,0,0.15)",
-                    background: "#b1c6da",
-                  },
-                }}
-              >
-                <Typography fontSize={16} fontWeight={600}>
-                  {item.label}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
+          {isLoading ? (
+            <Box textAlign="center">
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+                gap: 2,
+              }}
+            >
+              {menuList.map((item: any) => (
+                <Box
+                  key={item.id}
+                  onClick={() => navigate(item.rUrl)}
+                  sx={{
+                    cursor: "pointer",
+                    p: 2,
+                    borderRadius: 2,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      transform: "translateY(-3px)",
+                      boxShadow: "0 6px 16px rgba(0,0,0,0.15)",
+                      background: "#b1c6da",
+                    },
+                  }}
+                >
+                  <Typography fontSize={16} fontWeight={600}>
+                    {item.name}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          )}
         </Box>
       </Box>
     </>

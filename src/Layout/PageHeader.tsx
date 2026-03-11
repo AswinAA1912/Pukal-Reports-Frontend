@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   AppBar,
   Toolbar,
@@ -22,8 +22,16 @@ import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth, Company } from "../auth/authContext";
+import { MenuService } from "../services/menus.service";
 
 export type ToggleMode = "Abstract" | "Expanded";
+
+export type Menus = {
+  id: number;
+  name: string;
+  rUrl: string;
+  is_active: number;
+};
 
 export interface Page {
   label: string;
@@ -31,8 +39,6 @@ export interface Page {
 }
 
 interface PageHeaderProps {
-  pages: Page[];
-
   /** OPTIONAL TOGGLE */
   toggleMode?: ToggleMode;
   onToggleChange?: (mode: ToggleMode) => void;
@@ -50,7 +56,6 @@ export const PAGE_HEADER_HEIGHT = 40;
 export const PAGE_HEADER_HEIGHT_MOBILE = 72;
 
 const PageHeader: React.FC<PageHeaderProps> = ({
-  pages,
   toggleMode,
   onToggleChange,
   onExportPDF,
@@ -64,7 +69,8 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   const { user, companies, switchCompany, logout } = useAuth();
   const [anchorElCompany, setAnchorElCompany] = useState<null | HTMLElement>(null);
   const openCompanyMenu = Boolean(anchorElCompany);
-
+  const [pages, setPages] = useState<Page[]>([]);
+  const [routeMap, setRouteMap] = useState<Record<string, string>>({});
   const [anchorElExport, setAnchorElExport] = useState<null | HTMLElement>(null);
   const openExportMenu = Boolean(anchorElExport);
   const theme = useTheme();
@@ -72,6 +78,43 @@ const PageHeader: React.FC<PageHeaderProps> = ({
 
   // Company name for display
   const companyName = useMemo(() => user?.Company_Name || "", [user]);
+
+
+  useEffect(() => {
+    const fetchMenus = async () => {
+      try {
+        const res = await MenuService.getMenus();
+        const menus = res.data.data;
+
+        const parentPages: Page[] = [];
+        const subRouteMap: Record<string, string> = {};
+
+        menus.forEach((menu: any) => {
+          if (menu.is_active === 3 && menu.menu_type === 1) {
+            parentPages.push({
+              label: menu.name,
+              path: menu.rUrl,
+            });
+
+            if (menu.SubRoutes?.length) {
+              menu.SubRoutes.forEach((sub: any) => {
+                if (sub.is_active === 3) {
+                  subRouteMap[sub.rUrl] = menu.rUrl;
+                }
+              });
+            }
+          }
+        });
+
+        setPages(parentPages);
+        setRouteMap(subRouteMap);
+      } catch (err) {
+        console.error("Menu fetch error", err);
+      }
+    };
+
+    fetchMenus();
+  }, []);
 
   // Handle company menu
   const handleCompanyClick = (event: React.MouseEvent<HTMLElement>) => {
@@ -85,6 +128,8 @@ const PageHeader: React.FC<PageHeaderProps> = ({
       window.location.reload();
     }
   };
+
+  const selectedPath = routeMap[location.pathname] || location.pathname;
 
   return (
     <>
@@ -136,8 +181,8 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             <Select
               size="small"
               fullWidth={isMobile}
-              value={location.pathname}
-              onChange={(e) => navigate(e.target.value)}
+              value={selectedPath}
+              onChange={() => { }}
               sx={{
                 minWidth: isMobile ? "100%" : 180,
                 height: 24,
@@ -152,7 +197,12 @@ const PageHeader: React.FC<PageHeaderProps> = ({
               }}
             >
               {pages.map((p) => (
-                <MenuItem key={p.path} value={p.path} sx={{ fontSize: "0.7rem" }}>
+                <MenuItem
+                  key={p.path}
+                  value={p.path}
+                  sx={{ fontSize: "0.7rem" }}
+                  onClick={() => navigate(p.path)}
+                >
                   {p.label}
                 </MenuItem>
               ))}

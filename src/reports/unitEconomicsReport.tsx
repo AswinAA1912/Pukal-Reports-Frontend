@@ -168,14 +168,6 @@ const UnitEconomicsReportPage: React.FC = () => {
   return (
     <>
       <PageHeader
-        pages={[
-          { label: "Online Sales Report", path: "/salesreport" },
-          { label: "Unit Economics", path: "/uniteconomics" },
-          { label: "Stock in Hand", path: "/stockinhand" },
-          { label: "Online Sales Report LOL", path: "/salesreportLOL" },
-          { label: "Sales Analytics Report", path: "/salesreportlr" },
-          { label: "Ledger Wise Item", path: "/reports/ledger-item" },
-        ]}
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
         infoSlot={

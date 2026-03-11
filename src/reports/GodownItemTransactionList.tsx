@@ -246,10 +246,6 @@ const GodownItemWiseTransaction = () => {
     return (
         <>
             <PageHeader
-                pages={[
-                    { label: "Stock In Hand", path: "/stockinhand" },
-                    { label: "Godown Item Transactions", path: "/reports/godown-item-transaction" },
-                ]}
                 onExportPDF={handleExportPDF}
                 onExportExcel={handleExportExcel}
             />

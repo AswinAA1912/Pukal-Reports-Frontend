@@ -232,8 +232,8 @@ const StockInHandReport: React.FC = () => {
     ) => {
         navigate(
             mode === "EXPANDED"
-                // ? "/reports/godown-item-transaction"
-                ? "/reports/item-transaction"
+                ? "/reports/godown-item-transaction"
+                // ? "/reports/item-transaction"
                 : "/reports/item-transaction",
             {
                 state: {
@@ -241,13 +241,12 @@ const StockInHandReport: React.FC = () => {
                     productName: row.stock_item_name,
                     fromDate,
                     toDate,
-                    // Godown_Id: mode === "EXPANDED" ? row.Godown_Id : undefined,
-                    // godownName: mode === "EXPANDED" ? row.Godown_Name : undefined,
+                    Godown_Id: mode === "EXPANDED" ? row.Godown_Id : undefined,
+                    godownName: mode === "EXPANDED" ? row.Godown_Name : undefined,
                 }
             }
         );
     };
-
 
     useEffect(() => {
         setExpanded({});
@@ -627,14 +626,6 @@ const StockInHandReport: React.FC = () => {
     return (
         <>
             <PageHeader
-                pages={[
-                    { label: "Online Sales Report", path: "/salesreport" },
-                    { label: "Unit Economics", path: "/uniteconomics" },
-                    { label: "Stock in Hand", path: "/stockinhand" },
-                    { label: "Online Sales Report LOL", path: "/salesreportLOL" },
-                    { label: "Sales Analytics Report", path: "/salesreportlr" },
-                    { label: "Ledger Wise Item", path: "/reports/ledger-item" },
-                ]}
                 toggleMode={toggleMode}
                 onToggleChange={setToggleMode}
                 onExportPDF={handleExportPDF}
