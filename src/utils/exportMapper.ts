@@ -4,8 +4,7 @@ export const mapForExport = (
   columns: any[],
   rows: any[]
 ) => {
-  const headers = columns.map(c => c.label);
-
+  const headers = columns.map(c => c.header || c.label);
   const data = rows.map((row, index) =>
     columns.map(col => {
       if (col.key === "sno") return index + 1;

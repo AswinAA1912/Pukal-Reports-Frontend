@@ -66,7 +66,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { user, companies, switchCompany, logout } = useAuth();
+  const { user, companies, switchCompany, logout, isAutoLogin } = useAuth();
   const [anchorElCompany, setAnchorElCompany] = useState<null | HTMLElement>(null);
   const openCompanyMenu = Boolean(anchorElCompany);
   const [pages, setPages] = useState<Page[]>([]);
@@ -90,19 +90,26 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         const subRouteMap: Record<string, string> = {};
 
         menus.forEach((menu: any) => {
-          if (menu.is_active === 3 && menu.menu_type === 1) {
-            parentPages.push({
-              label: menu.name,
-              path: menu.rUrl,
+          if (menu.menu_type === 1 && menu.is_active === 3 && menu.SubMenu?.length) {
+
+            menu.SubMenu.forEach((sub: any) => {
+              if (sub.is_active === 3) {
+
+                parentPages.push({
+                  label: sub.name,
+                  path: sub.rUrl,
+                });
+
+                if (sub.SubRoutes?.length) {
+                  sub.SubRoutes.forEach((route: any) => {
+                    if (route.is_active === 3) {
+                      subRouteMap[route.rUrl] = sub.rUrl;
+                    }
+                  });
+                }
+              }
             });
 
-            if (menu.SubRoutes?.length) {
-              menu.SubRoutes.forEach((sub: any) => {
-                if (sub.is_active === 3) {
-                  subRouteMap[sub.rUrl] = menu.rUrl;
-                }
-              });
-            }
           }
         });
 
@@ -130,6 +137,10 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   };
 
   const selectedPath = routeMap[location.pathname] || location.pathname;
+
+  const currentPageLabel =
+    pages.find((p) => p.path === selectedPath)?.label ||
+    location.pathname.replace("/", "").replace(/-/g, " ").toUpperCase();
 
   return (
     <>
@@ -159,54 +170,77 @@ const PageHeader: React.FC<PageHeaderProps> = ({
           }}
         >
           {/* LEFT: App title + pages */}
-          <Box sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            width: isMobile ? "100%" : "auto",
-          }}>
-            <Typography
-              variant="body2"
-              onClick={() => navigate("/dashboard")}
-              sx={{
-                cursor: "pointer",
-                fontWeight: 600,
-                color: "#fff",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {isMobile ? "Reports" : "Pukal Reports"}
-            </Typography>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              width: isMobile ? "100%" : "auto",
+            }}
+          >
+            {!isAutoLogin && (
+              <Typography
+                variant="body2"
+                onClick={() => navigate("/dashboard")}
+                sx={{
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  color: "#fff",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {isMobile ? "Reports" : "Pukal Reports"}
+              </Typography>
+            )}
 
-            <Select
-              size="small"
-              fullWidth={isMobile}
-              value={selectedPath}
-              onChange={() => { }}
-              sx={{
-                minWidth: isMobile ? "100%" : 180,
-                height: 24,
-                fontSize: "0.7rem",
-                backgroundColor: "#fff",
-                borderRadius: 0.5,
-                "& .MuiSelect-select": {
-                  py: 0,
+            {isAutoLogin ? (
+              <Box
+                sx={{
+                  minWidth: isMobile ? "100%" : 180,
+                  height: 24,
+                  fontSize: "0.75rem",
+                  backgroundColor: "#fff",
+                  borderRadius: 0.5,
                   display: "flex",
                   alignItems: "center",
-                },
-              }}
-            >
-              {pages.map((p) => (
-                <MenuItem
-                  key={p.path}
-                  value={p.path}
-                  sx={{ fontSize: "0.7rem" }}
-                  onClick={() => navigate(p.path)}
-                >
-                  {p.label}
-                </MenuItem>
-              ))}
-            </Select>
+                  px: 1,
+                  fontWeight: 600,
+                  color: "#000",
+                }}
+              >
+                {currentPageLabel}
+              </Box>
+            ) : (
+              <Select
+                size="small"
+                fullWidth={isMobile}
+                value={selectedPath}
+                onChange={() => { }}
+                sx={{
+                  minWidth: isMobile ? "100%" : 180,
+                  height: 24,
+                  fontSize: "0.7rem",
+                  backgroundColor: "#fff",
+                  borderRadius: 0.5,
+                  "& .MuiSelect-select": {
+                    py: 0,
+                    display: "flex",
+                    alignItems: "center",
+                  },
+                }}
+              >
+                {pages.map((p) => (
+                  <MenuItem
+                    key={p.path}
+                    value={p.path}
+                    sx={{ fontSize: "0.7rem" }}
+                    onClick={() => navigate(p.path)}
+                  >
+                    {p.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            )}
           </Box>
 
           {/* CENTER: Company Switch (desktop only) */}

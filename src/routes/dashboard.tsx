@@ -23,7 +23,10 @@ const Dashboard: React.FC = () => {
       const res = await MenuService.getMenus();
 
       return res.data.data
-        .filter((menu: any) => menu.is_active === 3)
+        .filter((menu: any) => menu.menu_type === 1 && menu.is_active === 3)
+        .flatMap((menu: any) =>
+          (menu.SubMenu || []).filter((sub: any) => sub.is_active === 3)
+        )
         .sort((a: any, b: any) => a.display_order - b.display_order);
     },
   });

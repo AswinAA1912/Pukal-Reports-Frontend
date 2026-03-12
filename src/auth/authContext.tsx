@@ -38,6 +38,7 @@ export type AuthContextType = {
   logout: () => void;
   switchCompany: (company: Company) => Promise<void>;
   isInitializing: boolean;
+  isAutoLogin: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -49,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isAutoLogin, setIsAutoLogin] = useState(false);
 
   /**
    * AUTO LOGIN
@@ -70,6 +72,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
          * URL login (AutoLogin)
          */
         if (authFromUrl) {
+          setIsAutoLogin(true);
           setToken(authFromUrl);
           localStorage.setItem("AUTH_ID", authFromUrl);
 
@@ -118,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
          * Refresh login (restore session)
          */
         else if (storedAuth && storedUser) {
+          setIsAutoLogin(false);
           setToken(storedAuth);
           setUser(JSON.parse(storedUser));
 
@@ -209,6 +213,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       logout,
       switchCompany,
       isInitializing,
+      isAutoLogin,
     }),
     [user, token, companies, login, logout, switchCompany, isInitializing]
   );

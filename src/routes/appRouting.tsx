@@ -137,7 +137,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
         />
 
         <Route
-          path="/reports/item-transaction"
+          path="/stockinhand/item-transaction"
           element={
             <RequireAuth>
               <AppLayout
@@ -150,7 +150,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
         />
 
         <Route
-          path="/reports/godown-item-transaction"
+          path="/stockinhand/godown-item-transaction"
           element={
             <RequireAuth>
               <AppLayout

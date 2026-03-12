@@ -232,9 +232,9 @@ const StockInHandReport: React.FC = () => {
     ) => {
         navigate(
             mode === "EXPANDED"
-                ? "/reports/godown-item-transaction"
-                // ? "/reports/item-transaction"
-                : "/reports/item-transaction",
+                ? "/stockinhand/godown-item-transaction"
+                // ? "/stockinhand/item-transaction"
+                : "/stockinhand/item-transaction",
             {
                 state: {
                     ProductId: Number(row.Product_Id),
@@ -432,43 +432,55 @@ const StockInHandReport: React.FC = () => {
         return result;
     };
 
-    const ABSTRACT_COLUMNS = [
-        { header: "Group 1", key: "Group 1" },
-        { header: "Group 2", key: "Group 2" },
-        { header: "Group 3", key: "Group 3" },
-        { header: "Item", key: "Item" },
-        { header: "Opening", key: "Opening" },
-        { header: "In", key: "In" },
-        { header: "Out", key: "Out" },
-        { header: "Closing", key: "Closing" },
-    ];
+    const getExportColumns = () => {
+        const groupCols = groupConfig.map((_, i) => ({
+            header: `Group ${i + 1}`,
+            key: `Group ${i + 1}`,
+        }));
 
-    const EXPANDED_COLUMNS = [
-        { header: "Godown", key: "Godown" },
-        { header: "Group 1", key: "Group 1" },
-        { header: "Group 2", key: "Group 2" },
-        { header: "Group 3", key: "Group 3" },
-        { header: "Item", key: "Item" },
-        { header: "Opening", key: "Opening" },
-        { header: "In", key: "In" },
-        { header: "Out", key: "Out" },
-        { header: "Closing", key: "Closing" },
-    ];
+        const baseCols = [
+            { header: "Item", key: "Item" },
+            { header: "Opening", key: "Opening" },
+            { header: "In", key: "In" },
+            { header: "Out", key: "Out" },
+            { header: "Closing", key: "Closing" },
+        ];
+
+        if (isExpanded) {
+            return [
+                { header: "Godown", key: "Godown" },
+                ...groupCols,
+                ...baseCols,
+            ];
+        }
+
+        return [...groupCols, ...baseCols];
+    };
 
     const handleExportPDF = () => {
         const rows = flattenGroupsForExport(finalGroups);
-        const columns = isExpanded ? EXPANDED_COLUMNS : ABSTRACT_COLUMNS;
+        const columns = getExportColumns();
 
-        const { headers, data: mappedData } = mapForExport(columns, rows);
-        exportToPDF(`Stock in Hand (${toggleMode})`, headers, mappedData);
+        const { headers, data } = mapForExport(columns, rows);
+
+        exportToPDF(
+            `Stock in Hand (${toggleMode})`,
+            headers,
+            data
+        );
     };
 
     const handleExportExcel = () => {
         const rows = flattenGroupsForExport(finalGroups);
-        const columns = isExpanded ? EXPANDED_COLUMNS : ABSTRACT_COLUMNS;
+        const columns = getExportColumns();
 
-        const { headers, data: mappedData } = mapForExport(columns, rows);
-        exportToExcel(`Stock in Hand (${toggleMode})`, headers, mappedData);
+        const { headers, data } = mapForExport(columns, rows);
+
+        exportToExcel(
+            `Stock in Hand (${toggleMode})`,
+            headers,
+            data
+        );
     };
 
 
