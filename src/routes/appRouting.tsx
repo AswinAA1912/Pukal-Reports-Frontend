@@ -15,6 +15,7 @@ import GodownItemWiseTransaction from "../reports/GodownItemTransactionList";
 import OnlineSalesReportLOL from "../reports/onlineSalesReportLOL";
 import SalesReport from "../reports/SalesReport";
 import LedgerWiseItemDetails from "../reports/LedgerWiseItemDetails";
+import SalesAnalyticsReportPage from "../reports/GraphicalAnalyticsReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -201,8 +202,18 @@ const AppRouting: React.FC<AppRoutingProps> = ({
           }
         />
 
-
-
+         <Route
+          path="/graphanalysis"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <SalesAnalyticsReportPage/>
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
 
         {/* FALLBACK */}
         <Route

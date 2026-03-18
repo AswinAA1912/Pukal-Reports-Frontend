@@ -15,7 +15,7 @@ import {
     Button,
 } from "@mui/material";
 import dayjs from "dayjs";
-import { useLocation } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import AppLayout from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
 import { exportToPDF } from "../utils/exportToPDF";
@@ -63,8 +63,13 @@ const buildLedgerRows = (transactions: any[]) => {
 
 /* ================= COMPONENT ================= */
 const ItemWiseTransaction = () => {
-    const { state } = useLocation();
-    const { fromDate, toDate, ProductId, productName } = state || {};
+
+    const [searchParams] = useSearchParams();
+
+    const fromDate = searchParams.get("fromDate") || "";
+    const toDate = searchParams.get("toDate") || "";
+    const ProductId = searchParams.get("ProductId") || "";
+    const productName = searchParams.get("productName") || "";
 
     /* -------- DATA -------- */
     const [rows, setRows] = useState<any[]>([]);
@@ -107,7 +112,7 @@ const ItemWiseTransaction = () => {
             .getItemTransactions({
                 fromDate: filters.Date.from,
                 toDate: filters.Date.to,
-                Product_Id: ProductId,
+                Product_Id: Number(ProductId)
             })
             .then(res => setRows(res.data.data || []))
             .finally(() => setLoading(false));

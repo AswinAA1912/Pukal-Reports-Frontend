@@ -3,19 +3,23 @@ import {
   AppBar,
   Toolbar,
   Box,
-  Typography,
   IconButton,
   InputBase,
   alpha,
-  Button,
   Menu,
   MenuItem,
+  Avatar,
+  Typography,
+  Stack,
+  Tooltip,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import SearchIcon from "@mui/icons-material/Search";
-import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
+import BusinessIcon from "@mui/icons-material/Business";
+import LogoutIcon from "@mui/icons-material/Logout";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authContext";
+import logo from "../assets/logo.png";
 
 interface HeaderProps {
   headerColor?: string;
@@ -30,18 +34,30 @@ const Header: React.FC<HeaderProps> = ({
 }) => {
   const navigate = useNavigate();
   const { logout, token, user, companies, switchCompany } = useAuth();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
+
+  const [companyAnchor, setCompanyAnchor] = useState<null | HTMLElement>(null);
+  const [userAnchor, setUserAnchor] = useState<null | HTMLElement>(null);
+
+  const companyOpen = Boolean(companyAnchor);
+  const userOpen = Boolean(userAnchor);
 
   if (!token) return null;
 
   const handleCompanyClick = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
+    setCompanyAnchor(event.currentTarget);
   };
 
   const handleCompanyClose = async (company?: any) => {
-    setAnchorEl(null);
+    setCompanyAnchor(null);
     if (company) await switchCompany(company);
+  };
+
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setUserAnchor(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setUserAnchor(null);
   };
 
   return (
@@ -62,21 +78,28 @@ const Header: React.FC<HeaderProps> = ({
           <MenuIcon />
         </IconButton>
 
-        <Typography
-          variant="h6"
+        {/* Logo */}
+        <Box
           onClick={() => navigate("/")}
           sx={{
+            display: "flex",
+            alignItems: "center",
             cursor: "pointer",
-            fontWeight: 900,
-            color: "#FFFFFF",
-            fontFamily: `"Montserrat", sans-serif`,
           }}
         >
-          Pukal Reports
-        </Typography>
+          <img
+            src={logo}
+            alt="Pukal Reports"
+            style={{
+              height: 40,
+              objectFit: "contain",
+            }}
+          />
+        </Box>
 
         <Box sx={{ flexGrow: 1 }} />
 
+        {/* Search */}
         {showSearch && (
           <Box
             sx={{
@@ -92,56 +115,100 @@ const Header: React.FC<HeaderProps> = ({
           </Box>
         )}
 
-        {/* Switch Company */}
-        {user && companies && companies.length > 1 && (
-          <>
-            <Button
-              color="inherit"
-              endIcon={<ArrowDropDownIcon />}
-              onClick={handleCompanyClick}
-              sx={{
-                ml: 2,
-                color: "#fff", // ✅ make button text white
-                textTransform: "none", // keep company name as-is
-              }}
-            >
-              {user.Company_Name || "Select Company"}
-            </Button>
-            <Menu
-              anchorEl={anchorEl}
-              open={open}
-              onClose={() => handleCompanyClose()}
-              PaperProps={{
-                sx: { minWidth: 200 },
-              }}
-            >
-              {companies.map((company) => {
-                const isSelected = company.id === user.companyId;
-                return (
-                  <MenuItem
-                    key={company.id}
-                    onClick={() => handleCompanyClose(company)}
-                    sx={{
-                      backgroundColor: isSelected ? "rgba(0,0,0,0.08)" : "inherit", 
-                      fontWeight: isSelected ? "bold" : "normal",                   
-                    }}
-                  >
-                    {company.name}
-                  </MenuItem>
-                );
-              })}
-            </Menu>
-          </>
-        )}
+        {/* USER ICON */}
+        <Tooltip title="Account">
+          <IconButton onClick={handleUserMenuOpen} sx={{ ml: 2 }}>
+            <Avatar sx={{ bgcolor: "#fff", color: "#1E3A8A", fontWeight: 600 }}>
+              {user?.Name?.charAt(0) || "U"}
+            </Avatar>
+          </IconButton>
+        </Tooltip>
 
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={logout}
-          sx={{ ml: 2, color: "#fff", borderColor: "#fff" }}
+        {/* USER MENU */}
+        <Menu
+          anchorEl={userAnchor}
+          open={userOpen}
+          onClose={handleUserMenuClose}
+          PaperProps={{
+            sx: {
+              width: 220,
+              p: 2,
+              borderRadius: 2,
+            },
+          }}
         >
-          Logout
-        </Button>
+          {/* User Info */}
+          <Box sx={{ textAlign: "center", mb: 1 }}>
+            <Typography fontWeight={600}>
+              {user?.Name || "User"}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {user?.Company_Name}
+            </Typography>
+          </Box>
+
+          {/* Icons */}
+          <Stack direction="row" justifyContent="center" spacing={3} mt={1}>
+            {/* Switch Company */}
+            {companies && companies.length > 1 && (
+              <Tooltip title="Switch Company">
+                <IconButton
+                  onClick={(e) => {
+                    handleCompanyClick(e);
+                    handleUserMenuClose();
+                  }}
+                  sx={{
+                    bgcolor: "#EEF2FF",
+                    borderRadius: "50%",
+                  }}
+                >
+                  <BusinessIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+
+            {/* Logout */}
+            <Tooltip title="Logout">
+              <IconButton
+                onClick={logout}
+                sx={{
+                  bgcolor: "#FEE2E2",
+                  borderRadius: "50%",
+                }}
+              >
+                <LogoutIcon />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Menu>
+
+        {/* COMPANY MENU */}
+        <Menu
+          anchorEl={companyAnchor}
+          open={companyOpen}
+          onClose={() => handleCompanyClose()}
+          PaperProps={{
+            sx: { minWidth: 200 },
+          }}
+        >
+          {companies.map((company) => {
+            const isSelected = company.id === user?.companyId;
+            return (
+              <MenuItem
+                key={company.id}
+                onClick={() => handleCompanyClose(company)}
+                sx={{
+                  backgroundColor: isSelected
+                    ? "rgba(0,0,0,0.08)"
+                    : "inherit",
+                  fontWeight: isSelected ? "bold" : "normal",
+                }}
+              >
+                {company.name}
+              </MenuItem>
+            );
+          })}
+        </Menu>
       </Toolbar>
     </AppBar>
   );

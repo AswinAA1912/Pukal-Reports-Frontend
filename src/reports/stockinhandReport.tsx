@@ -9,6 +9,7 @@ import {
     TableHead,
     TableRow,
     Paper,
+    CircularProgress
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -20,7 +21,6 @@ import ReportFilterDrawer from "../Components/ReportFilterDrawer";
 import { exportToPDF } from "../utils/exportToPDF";
 import { exportToExcel } from "../utils/exportToExcel";
 import { mapForExport } from "../utils/exportMapper";
-import { useNavigate } from "react-router-dom";
 import {
     itemwisestockreportservice,
     godownwisestockreportservice,
@@ -51,7 +51,6 @@ const StockInHandReport: React.FC = () => {
     const [groupConfig, setGroupConfig] = useState<StockGroupConfig[]>([]);
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [page, setPage] = useState(1);
-    const navigate = useNavigate();
 
     /* ===== FILTER STATES ===== */
 
@@ -63,8 +62,7 @@ const StockInHandReport: React.FC = () => {
     >([]);
     const [level1Column, setLevel1Column] = useState<string>("");
     const [selectedLevel1, setSelectedLevel1] = useState<string | number>("");
-
-
+    const [loading, setLoading] = useState(false);
     const [selectedLevel2, setSelectedLevel2] = useState<string[]>([]);
 
     /* ===== LEVEL 2 META (FROM CONFIG) ===== */
@@ -73,6 +71,14 @@ const StockInHandReport: React.FC = () => {
     const [level2TypeOrder, setLevel2TypeOrder] = useState<number[]>([]);
     const [selectedLevel2ByType, setSelectedLevel2ByType] =
         useState<Record<number, string>>({});
+
+    const [modeState, setModeState] = useState<{
+        Abstract: any;
+        Expanded: any;
+    }>({
+        Abstract: {},
+        Expanded: {},
+    });
     /* ================= GROUP CONFIG ================= */
 
     useEffect(() => {
@@ -148,24 +154,46 @@ const StockInHandReport: React.FC = () => {
 
 
     useEffect(() => {
-        if (!level1Column) return;
+        setModeState(prev => ({
+            ...prev,
+            [toggleMode]: {
+                rawData,
+                expanded,
+                page,
+                selectedLevel1,
+                selectedLevel2ByType
+            }
+        }));
+    }, [rawData, expanded, page, selectedLevel1, selectedLevel2ByType, toggleMode]);
 
+    useEffect(() => {
+        const state = modeState[toggleMode];
+
+        if (state) {
+            setExpanded(state.expanded || {});
+            setPage(state.page || 1);
+            setSelectedLevel1(state.selectedLevel1 || "");
+            setSelectedLevel2ByType(state.selectedLevel2ByType || {});
+        }
+
+        // ✅ ALWAYS CALL API WHEN MODE CHANGES
         loadData();
-        setSelectedLevel2([]);
-        setExpanded({});
-        setPage(1);
-    }, [selectedLevel1]);
+
+    }, [toggleMode]);
 
 
     /* ================= LOAD DATA ================= */
 
-    const loadData = () => {
+    const loadData = React.useCallback(async () => {
+        setLoading(true);
+
         const api = isExpanded
             ? godownwisestockreportservice.getGodownwiseReports
             : itemwisestockreportservice.getItemwiseReports;
 
-        // Map selectedLevel1 (value/id) → label string
-        const level1Label = level1Options.find(opt => opt.value === selectedLevel1)?.label;
+        const level1Label = level1Options.find(
+            opt => opt.value === selectedLevel1
+        )?.label;
 
         const payload: any = {
             Fromdate: fromDate,
@@ -176,16 +204,47 @@ const StockInHandReport: React.FC = () => {
             payload[level1Column] = level1Label;
         }
 
-        api(payload).then(res => {
-            setRawData(res.data.data || []);
-            setExpanded({});
-            setPage(1);
-        });
-    };
+        try {
+            const res = await api(payload);
+            setRawData(res.data?.data || []);
+        } catch (err) {
+            console.error("Stock report load error:", err);
+            setRawData([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [isExpanded, selectedLevel1, fromDate, toDate, level1Column]);
 
     useEffect(() => {
+        if (!level1Column) return;
+
         loadData();
-    }, [toggleMode]);
+    }, [toggleMode, selectedLevel1, fromDate, toDate]);
+
+    useEffect(() => {
+        setSelectedLevel2([]);
+        setExpanded({});
+        setPage(1);
+    }, [selectedLevel1, toggleMode]);
+
+    useEffect(() => {
+        const saved = sessionStorage.getItem("stockInHandState");
+
+        if (!saved) return;
+        const state = JSON.parse(saved);
+
+        setRawData(state.rawData || []);
+        setExpanded(state.expanded || {});
+        setPage(state.page || 1);
+        setSelectedLevel1(state.selectedLevel1 || "");
+        setSelectedLevel2ByType(state.selectedLevel2ByType || {});
+        setToggleMode(state.toggleMode || "Abstract");
+        setFromDate(state.fromDate || today);
+        setToDate(state.toDate || today);
+
+        sessionStorage.removeItem("stockInHandState");
+
+    }, []);
 
     /* ================= LEVEL 2 FILTER ================= */
 
@@ -202,7 +261,7 @@ const StockInHandReport: React.FC = () => {
             );
         }
 
-        // LEVEL 2 FILTER (CASCADING)
+        // LEVEL 2 FILTER
         level2TypeOrder.forEach(type => {
             const selected = selectedLevel2ByType[type];
             if (!selected) return;
@@ -213,6 +272,16 @@ const StockInHandReport: React.FC = () => {
             filtered = filtered.filter(
                 r => String(r[meta.columnName]) === String(selected)
             );
+        });
+
+        // ✅ ✅ ADD THIS BLOCK (IMPORTANT)
+        filtered = filtered.filter((r) => {
+            const ob = Number(r.OB_Bal_Qty) || 0;
+            const input = Number(r.Pur_Qty) || 0;
+            const out = Number(r.Sal_Qty) || 0;
+            const cls = Number(r.Bal_Qty) || 0;
+
+            return ob !== 0 || input !== 0 || out !== 0 || cls !== 0;
         });
 
         return filtered;
@@ -230,22 +299,39 @@ const StockInHandReport: React.FC = () => {
         row: stockWiseReport,
         mode: "ABSTRACT" | "EXPANDED"
     ) => {
-        navigate(
+
+        const path =
             mode === "EXPANDED"
                 ? "/stockinhand/godown-item-transaction"
-                // ? "/stockinhand/item-transaction"
-                : "/stockinhand/item-transaction",
-            {
-                state: {
-                    ProductId: Number(row.Product_Id),
-                    productName: row.stock_item_name,
-                    fromDate,
-                    toDate,
-                    Godown_Id: mode === "EXPANDED" ? row.Godown_Id : undefined,
-                    godownName: mode === "EXPANDED" ? row.Godown_Name : undefined,
-                }
-            }
+                : "/stockinhand/item-transaction";
+
+        // ✅ Save report state
+        sessionStorage.setItem(
+            "stockInHandState",
+            JSON.stringify({
+                expanded,
+                page,
+                selectedLevel1,
+                selectedLevel2ByType,
+                toggleMode,
+                fromDate,
+                toDate
+            })
         );
+
+        const params = new URLSearchParams({
+            ProductId: String(row.Product_Id ?? ""),
+            productName: row.stock_item_name ?? "",
+            fromDate,
+            toDate,
+            Godown_Id: mode === "EXPANDED" ? String(row.Godown_Id ?? "") : "",
+            godownName: mode === "EXPANDED" ? String(row.Godown_Name ?? "") : ""
+        });
+
+        const url = `${window.location.origin}${path}?${params.toString()}`;
+
+        // ✅ open new tab
+        window.open(url, "_blank", "noopener,noreferrer");
     };
 
     useEffect(() => {
@@ -491,10 +577,7 @@ const StockInHandReport: React.FC = () => {
 
     /* ================= ITEM TABLE ================= */
 
-    const renderItemTable = (
-        rows: stockWiseReport[],
-        mode: "ABSTRACT" | "EXPANDED" = "ABSTRACT"
-    ) => {
+    const renderItemTable = (rows: stockWiseReport[]) => {
         const pageRows = paginated(rows);
 
         // ✅ TOTALS (full filtered rows, NOT paginated)
@@ -557,9 +640,15 @@ const StockInHandReport: React.FC = () => {
                                     cursor: "pointer",
                                     color: "#1D4ED8",
                                     fontWeight: 600,
-                                    "&:hover": { textDecoration: "underline" },
+                                    "&:hover": { textDecoration: "underline" }
                                 }}
-                                onClick={() => handleTransactionClick(r, mode)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTransactionClick(
+                                        r,
+                                        isExpanded ? "EXPANDED" : "ABSTRACT"
+                                    );
+                                }}
                             >
                                 {r.stock_item_name}
                             </TableCell>
@@ -587,7 +676,7 @@ const StockInHandReport: React.FC = () => {
 
     const renderGroups = (groups: any[]) =>
         groups.map((g) => {
-            const id = `${g.level}-${g.key}`;
+            const id = `${g.level}-${g.key}-${g.rows.length}`;
             const open = expanded[id];
 
             return (
@@ -625,7 +714,7 @@ const StockInHandReport: React.FC = () => {
                                             <TableBody>{renderGroups(g.children)}</TableBody>
                                         </Table>
                                     )
-                                    : renderItemTable(g.rows, isExpanded ? "EXPANDED" : "ABSTRACT")}
+                                    : renderItemTable(g.rows)}
                             </TableCell>
                         </TableRow>
                     )}
@@ -773,8 +862,20 @@ const StockInHandReport: React.FC = () => {
                     }}
                 >
                     <TableContainer >
-                        {hasGrouping ? (
-                            /* ===== GROUPING MODE ===== */
+                        {loading ? (
+                            <Box
+                                sx={{
+                                    height: 300,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    fontWeight: 600,
+                                    color: "#64748B"
+                                }}
+                            >
+                                <CircularProgress />
+                            </Box>
+                        ) : hasGrouping ? (
                             <Table size="small">
                                 <TableHead sx={{ background: "#1E3A8A" }}>
                                     <TableRow>

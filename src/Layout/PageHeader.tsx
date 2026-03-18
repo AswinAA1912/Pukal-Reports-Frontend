@@ -3,7 +3,6 @@ import {
   AppBar,
   Toolbar,
   Box,
-  Typography,
   Select,
   MenuItem,
   ToggleButton,
@@ -20,6 +19,7 @@ import MenuIcon from "@mui/icons-material/Menu";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
+import logo from "../assets/logo.png";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth, Company } from "../auth/authContext";
 import { MenuService } from "../services/menus.service";
@@ -50,6 +50,7 @@ interface PageHeaderProps {
   /** ✅ OPTIONAL SETTINGS SLOT */
   settingsSlot?: React.ReactNode;
   infoSlot?: React.ReactNode;
+  showPages?: boolean;
 }
 
 export const PAGE_HEADER_HEIGHT = 40;
@@ -62,6 +63,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   onExportExcel,
   settingsSlot,
   infoSlot,
+  showPages = true,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -79,7 +81,6 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   // Company name for display
   const companyName = useMemo(() => user?.Company_Name || "", [user]);
 
-
   useEffect(() => {
     const fetchMenus = async () => {
       try {
@@ -90,11 +91,13 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         const subRouteMap: Record<string, string> = {};
 
         menus.forEach((menu: any) => {
-          if (menu.menu_type === 1 && menu.is_active === 3 && menu.SubMenu?.length) {
-
+          if (
+            menu.menu_type === 1 &&
+            menu.is_active === 3 &&
+            menu.SubMenu?.length
+          ) {
             menu.SubMenu.forEach((sub: any) => {
               if (sub.is_active === 3) {
-
                 parentPages.push({
                   label: sub.name,
                   path: sub.rUrl,
@@ -109,7 +112,6 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                 }
               }
             });
-
           }
         });
 
@@ -157,150 +159,153 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         <Toolbar
           disableGutters
           sx={{
-            minHeight: isMobile
-              ? `${PAGE_HEADER_HEIGHT_MOBILE}px !important`
-              : `${PAGE_HEADER_HEIGHT}px !important`,
-            height: isMobile ? PAGE_HEADER_HEIGHT_MOBILE : PAGE_HEADER_HEIGHT,
+            minHeight: `${PAGE_HEADER_HEIGHT}px !important`,
+            height: PAGE_HEADER_HEIGHT,
             px: 1,
             display: "flex",
-            flexDirection: isMobile ? "column" : "row",
-            alignItems: isMobile ? "stretch" : "center",
+            alignItems: "center",
             justifyContent: "space-between",
-            gap: isMobile ? 0.5 : 0,
+            gap: 1,
+            overflowX: "auto",
+            whiteSpace: "nowrap",
           }}
         >
-          {/* LEFT: App title + pages */}
+
+          {/* LEFT SECTION */}
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
               gap: 1,
-              width: isMobile ? "100%" : "auto",
+              flexShrink: 0,
             }}
           >
             {!isAutoLogin && (
-              <Typography
-                variant="body2"
-                onClick={() => navigate("/dashboard")}
-                sx={{
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  color: "#fff",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {isMobile ? "Reports" : "Pukal Reports"}
-              </Typography>
-            )}
-
-            {isAutoLogin ? (
               <Box
+                onClick={() => navigate("/")}
                 sx={{
-                  minWidth: isMobile ? "100%" : 180,
-                  height: 24,
-                  fontSize: "0.75rem",
-                  backgroundColor: "#fff",
-                  borderRadius: 0.5,
                   display: "flex",
                   alignItems: "center",
-                  px: 1,
-                  fontWeight: 600,
-                  color: "#000",
+                  cursor: "pointer",
                 }}
               >
-                {currentPageLabel}
+                <img
+                  src={logo}
+                  alt="Pukal Reports"
+                  style={{
+                    height: 28,
+                    objectFit: "contain",
+                  }}
+                />
               </Box>
-            ) : (
-              <Select
-                size="small"
-                fullWidth={isMobile}
-                value={selectedPath}
-                onChange={() => { }}
-                sx={{
-                  minWidth: isMobile ? "100%" : 180,
-                  height: 24,
-                  fontSize: "0.7rem",
-                  backgroundColor: "#fff",
-                  borderRadius: 0.5,
-                  "& .MuiSelect-select": {
-                    py: 0,
+            )}
+
+            {showPages &&
+              (isAutoLogin ? (
+                <Box
+                  sx={{
+                    minWidth: 160,
+                    height: 24,
+                    fontSize: "0.75rem",
+                    backgroundColor: "#fff",
+                    borderRadius: 0.5,
                     display: "flex",
                     alignItems: "center",
-                  },
-                }}
-              >
-                {pages.map((p) => (
-                  <MenuItem
-                    key={p.path}
-                    value={p.path}
-                    sx={{ fontSize: "0.7rem" }}
-                    onClick={() => navigate(p.path)}
-                  >
-                    {p.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            )}
+                    px: 1,
+                    fontWeight: 600,
+                  }}
+                >
+                  {currentPageLabel}
+                </Box>
+              ) : (
+                <Select
+                  size="small"
+                  value={selectedPath}
+                  onChange={() => { }}
+                  sx={{
+                    minWidth: isMobile ? 140 : 180,
+                    height: 24,
+                    fontSize: "0.7rem",
+                    backgroundColor: "#fff",
+                    borderRadius: 0.5,
+                    "& .MuiSelect-select": {
+                      py: 0,
+                      display: "flex",
+                      alignItems: "center",
+                    },
+                  }}
+                >
+                  {pages.map((p) => (
+                    <MenuItem
+                      key={p.path}
+                      value={p.path}
+                      sx={{ fontSize: "0.7rem" }}
+                      onClick={() => navigate(p.path)}
+                    >
+                      {p.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              ))}
           </Box>
 
-          {/* CENTER: Company Switch (desktop only) */}
-          {!isMobile && (
-            <Box sx={{ textAlign: "center" }}>
-              {user && companies && companies.length > 1 ? (
-                <>
-                  <Button
-                    color="inherit"
-                    endIcon={<ArrowDropDownIcon />}
-                    onClick={handleCompanyClick}
-                    sx={{ color: "#fff", textTransform: "none", fontWeight: 700 }}
-                  >
-                    {companyName || "Select Company"}
-                  </Button>
-                  <Menu
-                    anchorEl={anchorElCompany}
-                    open={openCompanyMenu}
-                    onClose={() => handleCompanyClose()}
-                    PaperProps={{ sx: { minWidth: 180 } }}
-                  >
-                    {companies.map((company) => {
-                      const isSelected = company.id === user.companyId;
-                      return (
-                        <MenuItem
-                          key={company.id}
-                          onClick={() => handleCompanyClose(company)}
-                          sx={{
-                            backgroundColor: isSelected ? alpha("#fff", 0.15) : "inherit",
-                            fontWeight: isSelected ? "bold" : "normal",
-                          }}
-                        >
-                          {company.name}
-                        </MenuItem>
-                      );
-                    })}
-                  </Menu>
-                </>
-              ) : (
-                <Typography variant="body2" sx={{ color: "#fff", fontWeight: 700 }}>
-                  {companyName}
-                </Typography>
-              )}
+          {/* DESKTOP COMPANY SWITCH */}
+          {!isMobile && user && companies && companies.length > 1 && (
+            <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Button
+                color="inherit"
+                endIcon={<ArrowDropDownIcon />}
+                onClick={handleCompanyClick}
+                sx={{
+                  color: "#fff",
+                  textTransform: "none",
+                  fontWeight: 700,
+                }}
+              >
+                {companyName || "Select Company"}
+              </Button>
+
+              <Menu
+                anchorEl={anchorElCompany}
+                open={openCompanyMenu}
+                onClose={() => handleCompanyClose()}
+                PaperProps={{ sx: { minWidth: 200 } }}
+              >
+                {companies.map((company) => {
+                  const isSelected = company.id === user?.companyId;
+
+                  return (
+                    <MenuItem
+                      key={company.id}
+                      onClick={() => handleCompanyClose(company)}
+                      sx={{
+                        fontSize: "0.85rem",
+                        fontWeight: isSelected ? 700 : 500,
+                        backgroundColor: isSelected
+                          ? alpha("#1E3A8A", 0.1)
+                          : "inherit",
+                      }}
+                    >
+                      {company.name}
+                    </MenuItem>
+                  );
+                })}
+              </Menu>
             </Box>
           )}
-          {/* RIGHT: Toggle + Export + Settings + Logout */}
+
+          {/* RIGHT SECTION */}
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
-              justifyContent: "flex-end",
-              width: isMobile ? "100%" : "auto",
               gap: 0.75,
+              flexShrink: 0,
             }}
           >
-
-            {/* ✅ INFO SLOT (Last Sync Date) */}
             {infoSlot}
 
-            {toggleMode && onToggleChange && !isMobile && (
+            {toggleMode && onToggleChange && (
               <ToggleButtonGroup
                 exclusive
                 size="small"
@@ -313,8 +318,8 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                   p: 0.25,
 
                   "& .MuiToggleButton-root": {
-                    fontSize: "0.65rem",
-                    px: 1.2,
+                    fontSize: "0.6rem",
+                    px: isMobile ? 0.8 : 1.2,
                     py: 0,
                     border: "none",
                     color: "#444",
@@ -325,7 +330,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                     backgroundColor: "#1e3a8a",
                     color: "#fff",
                     fontWeight: 700,
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.25)",
                   },
 
                   "& .MuiToggleButton-root.Mui-selected:hover": {
@@ -344,7 +349,12 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                   <IconButton
                     size="small"
                     onClick={(e) => setAnchorElExport(e.currentTarget)}
-                    sx={{ height: 24, width: 24, backgroundColor: "#fff", borderRadius: 0.5 }}
+                    sx={{
+                      height: 24,
+                      width: 24,
+                      backgroundColor: "#fff",
+                      borderRadius: 0.5,
+                    }}
                   >
                     <FileDownloadIcon fontSize="small" />
                   </IconButton>
@@ -365,6 +375,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                       Export as PDF
                     </MenuItem>
                   )}
+
                   {onExportExcel && (
                     <MenuItem
                       onClick={() => {
@@ -379,48 +390,70 @@ const PageHeader: React.FC<PageHeaderProps> = ({
               </>
             )}
 
-            {/* ✅ SETTINGS SLOT (OPTIONAL) */}
-
             {settingsSlot}
 
-            {isMobile && companies && companies.length > 1 && (
-              <IconButton
-                size="small"
-                onClick={handleCompanyClick}
-                sx={{ backgroundColor: "#fff" }}
-              >
-                <MenuIcon fontSize="small" />
-              </IconButton>
+            {/* MOBILE COMPANY SWITCH */}
+            {isMobile && user && companies && companies.length > 1 && (
+              <>
+                <IconButton
+                  size="small"
+                  onClick={handleCompanyClick}
+                  sx={{ backgroundColor: "#fff" }}
+                >
+                  <MenuIcon fontSize="small" />
+                </IconButton>
+
+                <Menu
+                  anchorEl={anchorElCompany}
+                  open={openCompanyMenu}
+                  onClose={() => handleCompanyClose()}
+                  PaperProps={{ sx: { minWidth: 200 } }}
+                >
+                  {companies.map((company) => {
+                    const isSelected = company.id === user?.companyId;
+
+                    return (
+                      <MenuItem
+                        key={company.id}
+                        onClick={() => handleCompanyClose(company)}
+                        sx={{
+                          fontSize: "0.85rem",
+                          fontWeight: isSelected ? 700 : 500,
+                        }}
+                      >
+                        {company.name}
+                      </MenuItem>
+                    );
+                  })}
+                </Menu>
+              </>
             )}
 
-            {/* Logout */}
+            {/* LOGOUT */}
             <Tooltip title="Logout">
               <IconButton
                 size="small"
                 onClick={logout}
                 sx={{
-                  ml: 1,
+                  ml: 0.5,
                   backgroundColor: "#c02222",
                   color: "#fff",
-                  borderRadius: "50%",
                   width: 28,
                   height: 28,
-                  "&:hover": {
-                    backgroundColor: "#a61c1c",
-                  },
+                  "&:hover": { backgroundColor: "#a61c1c" },
                 }}
               >
                 <PowerSettingsNewIcon fontSize="small" />
               </IconButton>
             </Tooltip>
           </Box>
+
         </Toolbar>
       </AppBar>
 
-      {/* Spacer */}
       <Box sx={{ height: isMobile ? PAGE_HEADER_HEIGHT_MOBILE : PAGE_HEADER_HEIGHT }} />
     </>
-  );
+  )
 };
 
 export default PageHeader;

@@ -15,7 +15,7 @@ import {
     Button,
 } from "@mui/material";
 import dayjs from "dayjs";
-import { useLocation } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import AppLayout from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
 import { exportToPDF } from "../utils/exportToPDF";
@@ -55,15 +55,14 @@ const buildLedgerRows = (transactions: any[]) => {
 
 /* ================= COMPONENT ================= */
 const GodownItemWiseTransaction = () => {
-    const { state } = useLocation();
-    const {
-        fromDate,
-        toDate,
-        ProductId,
-        Godown_Id,
-        productName,
-        godownName,
-    } = state || {};
+    const [searchParams] = useSearchParams();
+
+    const fromDate = searchParams.get("fromDate") || "";
+    const toDate = searchParams.get("toDate") || "";
+    const ProductId = searchParams.get("ProductId") || "";
+    const Godown_Id = searchParams.get("Godown_Id") || "";
+    const productName = searchParams.get("productName") || "";
+    const godownName = searchParams.get("godownName") || "";
 
     /* -------- DATA -------- */
     const [rows, setRows] = useState<any[]>([]);
@@ -107,8 +106,8 @@ const GodownItemWiseTransaction = () => {
             .getGodownItemTransactions({
                 fromDate: filters.Date.from,
                 toDate: filters.Date.to,
-                Product_Id: ProductId,
-                Godown_Id,
+                Product_Id: Number(ProductId),
+                Godown_Id: Number(Godown_Id),
             })
             .then(res => setRows(res.data.data || []))
             .finally(() => setLoading(false));

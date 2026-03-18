@@ -3,9 +3,9 @@ import { getBaseURL } from "../config/portalBaseURL";
 
 export interface Menus {
     name: string;
-    is_active:number;
-    actionType:string;
-    rUrl:string;
+    is_active: number;
+    actionType: string;
+    rUrl: string;
 }
 
 export const MenuService = {
@@ -15,3 +15,4 @@ export const MenuService = {
             `${getBaseURL()}api/authorization/menuMaster`,
         ),
 };
+
