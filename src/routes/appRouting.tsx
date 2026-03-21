@@ -16,6 +16,7 @@ import OnlineSalesReportLOL from "../reports/onlineSalesReportLOL";
 import SalesReport from "../reports/SalesReport";
 import LedgerWiseItemDetails from "../reports/LedgerWiseItemDetails";
 import SalesAnalyticsReportPage from "../reports/GraphicalAnalyticsReport";
+import OnlinePurchaseReportPage from "../reports/onlinePurchaseReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -210,6 +211,19 @@ const AppRouting: React.FC<AppRoutingProps> = ({
                 fullWidth
               >
                 <SalesAnalyticsReportPage/>
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/purchasereport"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <OnlinePurchaseReportPage/>
               </AppLayout>
             </RequireAuth>
           }

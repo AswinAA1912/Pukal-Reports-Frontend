@@ -50,8 +50,6 @@ import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 
-const ROWS_PER_PAGE = 25;
-
 const NUMERIC_KEYS = [
     "Total_Qty",
     "M1_Avg_Qty",
@@ -91,6 +89,7 @@ const LedgerItemWiseDetails: React.FC = () => {
         return saved ? JSON.parse(saved) : [];
     });
     const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(100);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const today = dayjs().format("YYYY-MM-DD");
     const [filters, setFilters] = useState(() => {
@@ -338,9 +337,11 @@ const LedgerItemWiseDetails: React.FC = () => {
 
     const pagedRows = useMemo(() => {
         if (groupBy.length) return groupedRows;
-        const start = (page - 1) * ROWS_PER_PAGE;
-        return groupedRows.slice(start, start + ROWS_PER_PAGE);
-    }, [groupedRows, page, groupBy]);
+
+        const start = (page - 1) * rowsPerPage;
+        return groupedRows.slice(start, start + rowsPerPage);
+
+    }, [groupedRows, page, rowsPerPage, groupBy]);
 
     /* ================= EXPORT ================= */
 
@@ -440,7 +441,7 @@ const LedgerItemWiseDetails: React.FC = () => {
 
                 {/* SWITCH */}
                 <Switch
-                    size="small"
+                    size="medium"
                     checked={column.enabled}
                     onChange={() => toggle(column.key)}
                 />
@@ -644,7 +645,7 @@ const LedgerItemWiseDetails: React.FC = () => {
                                 ) : (
 
                                     (() => {
-                                        let serial = (page - 1) * ROWS_PER_PAGE;
+                                        let serial = (page - 1) * rowsPerPage;
                                         return pagedRows.map((row, i) => {
                                             if (row.__group) {
                                                 const expanded = expandedGroups.includes(row.key);
@@ -743,7 +744,9 @@ const LedgerItemWiseDetails: React.FC = () => {
                     <CommonPagination
                         totalRows={filteredRows.length}
                         page={page}
+                        rowsPerPage={rowsPerPage}
                         onPageChange={setPage}
+                        onRowsPerPageChange={setRowsPerPage}
                     />
                 </Box>
             </AppLayout>
@@ -904,7 +907,7 @@ const LedgerItemWiseDetails: React.FC = () => {
                                     <Typography fontSize={12}>{col.label}</Typography>
 
                                     <Switch
-                                        size="small"
+                                        size="medium"
                                         onChange={() =>
                                             setColumns(prev =>
                                                 prev.map(c =>

@@ -28,7 +28,7 @@ import dayjs from "dayjs";
 import AppLayout from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
 import ReportFilterDrawer from "../Components/ReportFilterDrawer";
-import { DashBoardGraph } from "../services/graphAnalysis.services";
+import { DashBoardSalesGraph } from "../services/graphAnalysis.services";
 import {
   ResponsiveContainer,
   LineChart,
@@ -110,7 +110,7 @@ const AnalyticsReportPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const res = await DashBoardGraph.getDashboardGraph({
+      const res = await DashBoardSalesGraph.getDashboardGraph({
         Fromdate: filters.Date.from,
         Todate: filters.Date.to,
       });
@@ -196,6 +196,16 @@ const AnalyticsReportPage: React.FC = () => {
     const source = viewType === "day" ? formattedDayData : formattedWeekData;
     return source.reduce((sum, r) => sum + Number(r.tonnage || 0), 0);
   }, [formattedDayData, formattedWeekData, viewType]);
+
+  const activeCount = useMemo(() => {
+    return graphData.length || 1;
+  }, [graphData]);
+
+  const avgValue = useMemo(() => totalValue / activeCount, [totalValue, activeCount]);
+
+  const avgInvoices = useMemo(() => totalInvoices / activeCount, [totalInvoices, activeCount]);
+
+  const avgTonnage = useMemo(() => totalTonnage / activeCount, [totalTonnage, activeCount]);
 
 
   /* ================= UI ================= */
@@ -319,36 +329,41 @@ const AnalyticsReportPage: React.FC = () => {
                 }}
               >
                 {/* KPI CARDS */}
-
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: isMobile
-                      ? "1fr"
-                      : "repeat(3, 1fr)",
+                    gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
                     gap: 1,
                   }}
                 >
-                  <KpiCard
-                    title="Total Value"
-                    value={totalValue}
+                  <DualKpiCard
+                    totalLabel="Total Value"
+                    totalValue={totalValue}
+                    avgLabel={`Avg Value (${activeCount} Days)`}
+                    avgValue={avgValue}
                     isCurrency
                   />
-                  <KpiCard
-                    title="Invoice Count"
-                    value={totalInvoices}
+
+                  <DualKpiCard
+                    totalLabel="Invoice Count"
+                    totalValue={totalInvoices}
+                    avgLabel={`Avg Invoice (${activeCount} Days)`}
+                    avgValue={avgInvoices}
                     isCurrency={false}
                   />
-                  <KpiCard
-                    title="Total Tonnage"
-                    value={totalTonnage}
+
+                  <DualKpiCard
+                    totalLabel="Total Tonnage"
+                    totalValue={totalTonnage}
+                    avgLabel={`Avg Tonnage (${activeCount} Days)`}
+                    avgValue={avgTonnage}
                     isCurrency={false}
                   />
                 </Box>
 
                 {/* GRAPH */}
 
-                <Box sx={{ height: isMobile ? 250 : 320 }}>
+                <Box sx={{ height: isMobile ? 250 : 350 }}>
                   {loading ? (
                     <Box
                       display="flex"
@@ -444,7 +459,7 @@ const AnalyticsReportPage: React.FC = () => {
                 <TableContainer
                   component={Paper}
                   sx={{
-                    height: isMobile ? 250 : 400,
+                    height: isMobile ? 250 : 430,
                     overflow: "auto",
                     border: "1px solid #e5e7eb",
                     "&::-webkit-scrollbar": {
@@ -486,7 +501,7 @@ const AnalyticsReportPage: React.FC = () => {
                               whiteSpace: "nowrap",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
-                              maxWidth: 100 
+                              maxWidth: 100
                             }}
                           >
                             {row.label}
@@ -579,22 +594,62 @@ const formatINR = (value: number) => {
   return new Intl.NumberFormat("en-IN").format(value || 0);
 };
 
-const KpiCard = ({
-  title,
-  value,
+const DualKpiCard = ({
+  totalLabel,
+  totalValue,
+  avgLabel,
+  avgValue,
   isCurrency = true,
 }: {
-  title: string;
-  value: number;
+  totalLabel: string;
+  totalValue: number;
+  avgLabel: string;
+  avgValue: number;
   isCurrency?: boolean;
 }) => (
-  <Card sx={{ flex: 1 }}>
-    <CardContent sx={{ p: 1 }}>
-      <Typography fontSize={14}>{title}</Typography>
+  <Card sx={{ height: 60 }}>
+    <CardContent sx={{ p: "8px !important" }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        {/* TOTAL */}
+        <Box sx={{ flex: 1 }}>
+          <Typography fontSize={12} color="text.secondary">
+            {totalLabel}
+          </Typography>
+          <Typography fontWeight={700} fontSize={14}>
+            {isCurrency
+              ? `₹${formatINR(totalValue)}`
+              : formatINR(totalValue)}
+          </Typography>
+        </Box>
 
-      <Typography fontWeight={700} fontSize={16}>
-        {isCurrency ? `₹${formatINR(value)}` : formatINR(value)}
-      </Typography>
+        {/* DIVIDER */}
+        <Box
+          sx={{
+            width: "1px",
+            height: 30,
+            background: "#e5e7eb",
+            mx: 1,
+          }}
+        />
+
+        {/* AVG */}
+        <Box sx={{ flex: 1 }}>
+          <Typography fontSize={12} color="text.secondary">
+            {avgLabel}
+          </Typography>
+          <Typography fontWeight={600} fontSize={13}>
+            {isCurrency
+              ? `₹${formatINR(avgValue)}`
+              : avgValue.toFixed(2)}
+          </Typography>
+        </Box>
+      </Box>
     </CardContent>
   </Card>
 );

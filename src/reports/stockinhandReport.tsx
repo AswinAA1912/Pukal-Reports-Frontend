@@ -29,7 +29,6 @@ import {
     stockWiseReport,
 } from "../services/stockWiseReport.service";
 
-const ROWS_PER_PAGE = 25;
 
 /* ================= UTIL ================= */
 
@@ -51,6 +50,7 @@ const StockInHandReport: React.FC = () => {
     const [groupConfig, setGroupConfig] = useState<StockGroupConfig[]>([]);
     const [expanded, setExpanded] = useState<Record<string, boolean>>({});
     const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(100);
 
     /* ===== FILTER STATES ===== */
 
@@ -573,7 +573,7 @@ const StockInHandReport: React.FC = () => {
     /* ================= ITEM TABLE ================= */
 
     const paginated = (rows: stockWiseReport[]) =>
-        rows.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE);
+        rows.slice((page - 1) * rowsPerPage , page * rowsPerPage );
 
     /* ================= ITEM TABLE ================= */
 
@@ -633,7 +633,7 @@ const StockInHandReport: React.FC = () => {
                     {pageRows.map((r, i) => (
                         <TableRow key={i}>
                             <TableCell>
-                                {(page - 1) * ROWS_PER_PAGE + i + 1}
+                                {(page - 1) * rowsPerPage  + i + 1}
                             </TableCell>
                             <TableCell
                                 sx={{
@@ -904,7 +904,9 @@ const StockInHandReport: React.FC = () => {
                 <CommonPagination
                     totalRows={data.length}
                     page={page}
+                    rowsPerPage={rowsPerPage}
                     onPageChange={setPage}
+                    onRowsPerPageChange={setRowsPerPage}
                 />
             </AppLayout>
         </>

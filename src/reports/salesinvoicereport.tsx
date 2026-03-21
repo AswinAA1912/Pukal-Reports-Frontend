@@ -26,9 +26,6 @@ import {
   SalesInvoiceReportService,
 } from "../services/salesinvoicereports.service";
 
-/* ================= CONSTANTS ================= */
-const ROWS_PER_PAGE = 25;
-
 /* ================= STYLES ================= */
 const headStyle = {
   color: "#fff",
@@ -43,6 +40,7 @@ const SalesInvoiceReportPage: React.FC = () => {
   /* -------- RAW DATA -------- */
   const [rawData, setRawData] = useState<SalesInvoiceReport[]>([]);
   const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
 
   /* -------- FILTERS -------- */
   const [filters, setFilters] = useState({
@@ -130,8 +128,8 @@ const SalesInvoiceReportPage: React.FC = () => {
 
   /* ================= PAGINATION ================= */
   const paginatedData = data.slice(
-    (page - 1) * ROWS_PER_PAGE,
-    page * ROWS_PER_PAGE
+    (page - 1) * rowsPerPage ,
+    page * rowsPerPage 
   );
 
   /* ================= SUMMARY ================= */
@@ -201,7 +199,7 @@ const SalesInvoiceReportPage: React.FC = () => {
               <TableBody>
                 {paginatedData.map((row, i) => (
                   <TableRow key={row.Do_Id}>
-                    <TableCell sx={{ fontSize: "0.75rem" }}>{(page - 1) * ROWS_PER_PAGE + i + 1}</TableCell>
+                    <TableCell sx={{ fontSize: "0.75rem" }}>{(page - 1) * rowsPerPage  + i + 1}</TableCell>
                     <TableCell sx={{ fontSize: "0.75rem" }}>{dayjs(row.Created_on).format("DD/MM/YYYY")}</TableCell>
                     <TableCell sx={{ fontSize: "0.75rem" }}>{row.Do_Inv_No}</TableCell>
                     <TableCell sx={{ fontSize: "0.75rem" }}>{row.Retailer_Name}</TableCell>
@@ -231,7 +229,9 @@ const SalesInvoiceReportPage: React.FC = () => {
           <CommonPagination
             totalRows={data.length}
             page={page}
+            rowsPerPage={rowsPerPage}
             onPageChange={setPage}
+            onRowsPerPageChange={setRowsPerPage}
           />
 
           {/* ===== FILTER MENU ===== */}

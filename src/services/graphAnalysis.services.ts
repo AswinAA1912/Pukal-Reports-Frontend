@@ -31,11 +31,20 @@ export interface DashboardGraphResponse {
   WeekWiseTonnage:WeekWiseTonnage[];
 }
 
-export const DashBoardGraph = {
+export const DashBoardSalesGraph = {
   getDashboardGraph: (params?: { Fromdate?: string; Todate?: string;  Company_Id?: number; }) =>
     axios.get<{ success: boolean; data: DashboardGraphResponse }>(
       // `http://192.168.1.92:9001/api/reports/externalAPI/SalesGraph`,
       `${getBaseURL()}api/reports/externalAPI/SalesGraph`,
+      { params }
+    )
+}
+
+export const DashBoardPurchaseGraph = {
+  getDashboardGraph: (params?: { Fromdate?: string; Todate?: string;  Company_Id?: number; }) =>
+    axios.get<{ success: boolean; data: DashboardGraphResponse }>(
+      // `http://192.168.1.92:9001/api/reports/externalAPI/PurchaseGraph`,
+      `${getBaseURL()}api/reports/externalAPI/PurchaseGraph`,
       { params }
     )
 }

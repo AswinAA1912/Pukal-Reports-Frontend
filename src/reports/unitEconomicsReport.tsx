@@ -25,8 +25,6 @@ import {
   UnitEconomicsReportService,
 } from "../services/unitEconomicsReport.service";
 
-/* ================= CONSTANTS ================= */
-const ROWS_PER_PAGE = 25;
 
 /* ================= STYLES ================= */
 const headStyle = {
@@ -41,6 +39,7 @@ const UnitEconomicsReportPage: React.FC = () => {
 
   const [data, setData] = useState<UnitEconomicsReport[]>([]);
   const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
 
   /* -------- FILTERS -------- */
   const [filters, setFilters] = useState({
@@ -104,8 +103,8 @@ const UnitEconomicsReportPage: React.FC = () => {
 
   /* ================= PAGINATION ================= */
   const paginatedData = data.slice(
-    (page - 1) * ROWS_PER_PAGE,
-    page * ROWS_PER_PAGE
+    (page - 1) * rowsPerPage,
+    page * rowsPerPage
   );
 
   /* ================= DROPDOWNS ================= */
@@ -276,7 +275,7 @@ const UnitEconomicsReportPage: React.FC = () => {
                 {paginatedData.map((row, i) => (
                   <TableRow key={`${row.Product_Id}-${i}`}>
                     <TableCell sx={{ fontSize: "0.75rem" }}>
-                      {(page - 1) * ROWS_PER_PAGE + i + 1}
+                      {(page - 1) * rowsPerPage  + i + 1}
                     </TableCell>
                     <TableCell sx={{ fontSize: "0.75rem" }}>
                       {dayjs(row.Trans_Date).format("DD/MM/YYYY")}
@@ -372,7 +371,9 @@ const UnitEconomicsReportPage: React.FC = () => {
         <CommonPagination
           totalRows={data.length}
           page={page}
+          rowsPerPage={rowsPerPage}
           onPageChange={setPage}
+          onRowsPerPageChange={setRowsPerPage}
         />
       </AppLayout>
     </>

@@ -12,8 +12,16 @@ import {
   Button,
   MenuItem,
   TextField,
+  Tooltip,
+  IconButton,
+  Typography,
+  Switch,
+
 } from "@mui/material";
 import dayjs from "dayjs";
+import SettingsIcon from "@mui/icons-material/Settings";
+import FilterAltIcon from "@mui/icons-material/FilterAlt";
+import ReportFilterDrawer from "../Components/ReportFilterDrawer";
 import AppLayout, { useToggleMode } from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
 import CommonPagination from "../Components/CommonPagination";
@@ -21,73 +29,108 @@ import {
   OnlineSalesReportService,
   OnlineSalesReportItemService,
 } from "../services/OnlineSalesReport.service";
+import { DndContext, closestCenter, } from "@dnd-kit/core";
+import {
+  SortableContext, useSortable,
+  verticalListSortingStrategy, arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { exportToPDF } from "../utils/exportToPDF";
 import { exportToExcel } from "../utils/exportToExcel";
-import { mapForExport } from "../utils/exportMapper";
 
-
-const ROWS_PER_PAGE = 25;
-
-const NUMERIC_HEADERS = ["Count", "Amount", "Rate", "Quantity"];
-
-type HeaderFilters = {
-  Date: { from: string; to: string };
-  Customer: string;
-  Invoice: string;
-  Product: string;
+type ColumnConfig = {
+  key: string;
+  label: string;
+  enabled: boolean;
+  order: number;
+  type?: "date" | "number" | "text";
 };
 
 const OnlineSalesReportPage: React.FC = () => {
-  const today = dayjs().format("YYYY-MM-DD");
   const { toggleMode, setToggleMode } = useToggleMode();
 
   const [rawAbstract, setRawAbstract] = useState<any[]>([]);
   const [rawExpanded, setRawExpanded] = useState<any[]>([]);
 
   const [page, setPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(100);
   const [expandedPage, setExpandedPage] = useState(1);
-
-  const [retailers, setRetailers] = useState<string[]>([]);
-  const [invoices, setInvoices] = useState<string[]>([]);
-  const [products, setProducts] = useState<string[]>([]);
 
   const [filterAnchor, setFilterAnchor] = useState<null | HTMLElement>(null);
   const [activeHeader, setActiveHeader] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
+  const [settingsAnchor, setSettingsAnchor] =
+    useState<null | HTMLElement>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const [filters, setFilters] = useState<HeaderFilters>({
-    Date: { from: today, to: today },
-    Customer: "",
-    Invoice: "",
-    Product: "",
-  });
+  const [columnFilters, setColumnFilters] = useState<Record<string, any>>({});
 
-  const ABSTRACT_COLUMNS = [
-    { label: "S.No", key: "sno" },
-    { label: "Date", key: "Ledger_Date", type: "date" },
-    { label: "Invoice", key: "invoice_no" },
-    { label: "Customer", key: "Retailer_Name" },
-    { label: "Count", key: "Item_Count", type: "number" },
-    { label: "Amount", key: "Total_Invoice_value", altKey: "Amount", type: "number" },
+  const ABSTRACT_INITIAL_COLUMNS: ColumnConfig[] = [
+    { key: "sno", label: "S.No", enabled: true, order: 0 },
+    { key: "Ledger_Date", label: "Date", enabled: true, order: 1, type: "date" },
+    { key: "invoice_no", label: "Invoice", enabled: true, order: 2 },
+    { key: "Retailer_Name", label: "Customer", enabled: true, order: 3 },
+    { key: "Item_Count", label: "Count", enabled: true, order: 4, type: "number" },
+    { key: "Total_Invoice_value", label: "Amount", enabled: true, order: 5, type: "number" },
   ];
 
-  const EXPANDED_COLUMNS = [
-    { label: "S.No", key: "sno" },
-    { label: "Date", key: "Ledger_Date", type: "date" },
-    { label: "Invoice", key: "invoice_no" },
-    { label: "Customer", key: "Retailer_Name" },
-    { label: "Product", key: "Product_Name" },
-    { label: "Quantity", key: "Bill_Qty", type: "number" },
-    { label: "Rate", key: "Rate", type: "number" },
-    { label: "Amount", key: "Total_Invoice_value", altKey: "Amount", type: "number" },
+  const EXPANDED_INITIAL_COLUMNS: ColumnConfig[] = [
+    { key: "sno", label: "S.No", enabled: true, order: 0 },
+    { key: "Ledger_Date", label: "Date", enabled: true, order: 1, type: "date" },
+    { key: "invoice_no", label: "Invoice", enabled: true, order: 2 },
+    { key: "Retailer_Name", label: "Customer", enabled: true, order: 3 },
+    { key: "Product_Name", label: "Product", enabled: true, order: 4 },
+    { key: "Bill_Qty", label: "Quantity", enabled: true, order: 5, type: "number" },
+    { key: "Rate", label: "Rate", enabled: true, order: 6, type: "number" },
+    { key: "Total_Invoice_value", label: "Amount", enabled: true, order: 7, type: "number" },
   ];
+
+  const [abstractColumns, setAbstractColumns] = useState<ColumnConfig[]>(ABSTRACT_INITIAL_COLUMNS);
+  const [expandedColumns, setExpandedColumns] = useState<ColumnConfig[]>(EXPANDED_INITIAL_COLUMNS);
+
+  const columns =
+    toggleMode === "Abstract"
+      ? abstractColumns
+      : expandedColumns;
+
+  const activeCol = columns.find(c => c.key === activeHeader);
+
+  const setColumns =
+    toggleMode === "Abstract"
+      ? setAbstractColumns
+      : setExpandedColumns;
+
+  const enabledColumns = useMemo(
+    () =>
+      columns
+        .filter(c => c.enabled)
+        .sort((a, b) => a.order - b.order),
+    [columns]
+  );
 
   const handleExportPDF = () => {
-    const isAbstract = toggleMode === "Abstract";
-    const rows = isAbstract ? filteredAbstract : filteredExpanded;
-    const columns = isAbstract ? ABSTRACT_COLUMNS : EXPANDED_COLUMNS;
+    const rows =
+      toggleMode === "Abstract"
+        ? filteredAbstract
+        : filteredExpanded;
 
-    const { headers, data } = mapForExport(columns, rows);
+    const headers = enabledColumns.map(c => c.label);
+
+    const data = rows.map(row =>
+      enabledColumns.map(c => {
+        switch (c.key) {
+          case "Ledger_Date":
+            return dayjs(row.Ledger_Date).format("DD/MM/YYYY");
+          case "Total_Invoice_value":
+            return toggleMode === "Abstract"
+              ? row.Total_Invoice_value
+              : row.Amount;
+          default:
+            return row[c.key] ?? "";
+        }
+      })
+    );
 
     exportToPDF(
       `Online Sales Report (${toggleMode})`,
@@ -97,11 +140,27 @@ const OnlineSalesReportPage: React.FC = () => {
   };
 
   const handleExportExcel = () => {
-    const isAbstract = toggleMode === "Abstract";
-    const rows = isAbstract ? filteredAbstract : filteredExpanded;
-    const columns = isAbstract ? ABSTRACT_COLUMNS : EXPANDED_COLUMNS;
+    const rows =
+      toggleMode === "Abstract"
+        ? filteredAbstract
+        : filteredExpanded;
 
-    const { headers, data } = mapForExport(columns, rows);
+    const headers = enabledColumns.map(c => c.label);
+
+    const data = rows.map(row =>
+      enabledColumns.map(c => {
+        switch (c.key) {
+          case "Ledger_Date":
+            return dayjs(row.Ledger_Date).format("DD/MM/YYYY");
+          case "Total_Invoice_value":
+            return toggleMode === "Abstract"
+              ? row.Total_Invoice_value
+              : row.Amount;
+          default:
+            return row[c.key] ?? "";
+        }
+      })
+    );
 
     exportToExcel(
       `Online Sales Report (${toggleMode})`,
@@ -120,125 +179,120 @@ const OnlineSalesReportPage: React.FC = () => {
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
+    const dateFilter = columnFilters["Ledger_Date"] || {};
+
+    const fromDate = dateFilter.from || dayjs().format("YYYY-MM-DD");
+    const toDate = dateFilter.to || dayjs().format("YYYY-MM-DD");
+
     if (toggleMode === "Abstract") {
       OnlineSalesReportService.getReports({
-        Fromdate: filters.Date.from,
-        Todate: filters.Date.to,
+        Fromdate: fromDate,
+        Todate: toDate,
       }).then((res) => {
         const rows = res.data.data || [];
         setRawAbstract(rows);
-        setRetailers([...new Set(rows.map((r: any) => r.Retailer_Name))]);
-        setInvoices([...new Set(rows.map((r: any) => r.invoice_no))]);
+
+        setAbstractColumns(
+          generateColumns(rows, ABSTRACT_INITIAL_COLUMNS)
+        );
       });
     } else {
       OnlineSalesReportItemService.getReportsitem({
-        Fromdate: filters.Date.from,
-        Todate: filters.Date.to,
+        Fromdate: fromDate,
+        Todate: toDate,
       }).then((res) => {
         const rows = res.data.data || [];
         setRawExpanded(rows);
-        setRetailers([...new Set(rows.map((r: any) => r.Retailer_Name))]);
-        setInvoices([...new Set(rows.map((r: any) => r.invoice_no))]);
-        setProducts([...new Set(rows.map((r: any) => r.Product_Name))]);
+
+        setExpandedColumns(
+          generateColumns(rows, EXPANDED_INITIAL_COLUMNS)
+        );
       });
     }
-  }, [toggleMode, filters.Date]);
+  }, [toggleMode]);
 
   /* ================= APPLY FILTERS ================= */
-  const filteredAbstract = useMemo(() => {
-    return rawAbstract.filter((r) => {
-      const rowDate = dayjs(r.Ledger_Date);
 
-      if (
-        filters.Date.from &&
-        rowDate.isBefore(dayjs(filters.Date.from), "day")
-      )
-        return false;
+  const applyFilters = (rows: any[]) => {
+    return rows.filter((row) => {
+      return Object.entries(columnFilters).every(([key, value]) => {
 
-      if (
-        filters.Date.to &&
-        rowDate.isAfter(dayjs(filters.Date.to), "day")
-      )
-        return false;
+        if (value === "" || value === null || value === undefined) return true;
 
-      if (filters.Customer && r.Retailer_Name !== filters.Customer) return false;
-      if (filters.Invoice && r.invoice_no !== filters.Invoice) return false;
+        // ✅ DATE RANGE
+        if (key === "Ledger_Date" && typeof value === "object") {
+          const rowDate = dayjs(row[key]);
 
-      return true;
+          if (value.from && rowDate.isBefore(dayjs(value.from), "day")) return false;
+          if (value.to && rowDate.isAfter(dayjs(value.to), "day")) return false;
+
+          return true;
+        }
+
+        // ✅ GENERIC TEXT / NUMBER MATCH
+        return String(row[key] ?? "")
+          .toLowerCase()
+          .includes(String(value).toLowerCase());
+      });
     });
-  }, [rawAbstract, filters]);
+  };
 
+  const filteredAbstract = useMemo(
+    () => applyFilters(rawAbstract),
+    [rawAbstract, columnFilters]
+  );
 
-  const filteredExpanded = useMemo(() => {
-    return rawExpanded.filter((r) => {
-      const rowDate = dayjs(r.Ledger_Date);
-
-      if (
-        filters.Date.from &&
-        rowDate.isBefore(dayjs(filters.Date.from), "day")
-      )
-        return false;
-
-      if (
-        filters.Date.to &&
-        rowDate.isAfter(dayjs(filters.Date.to), "day")
-      )
-        return false;
-
-      if (filters.Customer && r.Retailer_Name !== filters.Customer) return false;
-      if (filters.Invoice && r.invoice_no !== filters.Invoice) return false;
-      if (filters.Product && r.Product_Name !== filters.Product) return false;
-
-      return true;
-    });
-  }, [rawExpanded, filters]);
+  const filteredExpanded = useMemo(
+    () => applyFilters(rawExpanded),
+    [rawExpanded, columnFilters]
+  );
 
 
   /* ================= PAGINATION ================= */
   const paginatedAbstract = filteredAbstract.slice(
-    (page - 1) * ROWS_PER_PAGE,
-    page * ROWS_PER_PAGE
+    (page - 1) * rowsPerPage,
+    page * rowsPerPage
   );
 
   const paginatedExpanded = filteredExpanded.slice(
-    (expandedPage - 1) * ROWS_PER_PAGE,
-    expandedPage * ROWS_PER_PAGE
+    (expandedPage - 1) * rowsPerPage,
+    expandedPage * rowsPerPage
   );
 
   /* ================= SUMMARY ================= */
-  const getTotal = (rows: any[], column: string) => {
-    const values = rows.map((r) => {
-      switch (column) {
-        case "Count":
-          return Number(r.Item_Count || 0);
-        case "Amount":
-          return Number(
+  const getTotal = (rows: any[], key: string) => {
+    return rows.reduce((sum, r) => {
+      switch (key) {
+        case "Item_Count":
+          return sum + Number(r.Item_Count || 0);
+
+        case "Total_Invoice_value":
+          return sum + Number(
             toggleMode === "Abstract"
               ? r.Total_Invoice_value
               : r.Amount
-          ) || 0;
-        case "Rate":
-          return Number(r.Rate || 0);
-        case "Quantity":
-          return Number(r.Bill_Qty || 0);
-        default:
-          return 0;
-      }
-    });
+          );
 
-    return values.reduce((a, b) => a + b, 0);
+        case "Rate":
+          return sum + Number(r.Rate || 0);
+
+        case "Bill_Qty":
+          return sum + Number(r.Bill_Qty || 0);
+
+        default:
+          return sum;
+      }
+    }, 0);
   };
 
 
   /* ================= HEADER CLICK ================= */
   const handleHeaderClick = (
     e: React.MouseEvent<HTMLElement>,
-    column: string
+    columnKey: string
   ) => {
-    setActiveHeader(column);
+    setActiveHeader(columnKey);
     setSearchText("");
-
-    // ✅ NON-NUMERIC → OPEN FILTER MENU
     setFilterAnchor(e.currentTarget);
   };
 
@@ -246,9 +300,7 @@ const OnlineSalesReportPage: React.FC = () => {
   const renderTable = (
     rows: any[],
     paginated: any[],
-    columns: string[],
-    pageNo: number,
-    isAbstract: boolean
+    pageNo: number
   ) => (
     <Box
       sx={{
@@ -267,36 +319,27 @@ const OnlineSalesReportPage: React.FC = () => {
       >
         <Table size="small">
           {/* ===== FIXED HEADER ===== */}
-          <TableHead sx={{
-            background: "#1E3A8A",
-            position: "sticky",
-            top: 0,
-            zIndex: 2
-          }}>
+          <TableHead
+            sx={{
+              background: "#1E3A8A",
+              position: "sticky",
+              top: 0,
+              zIndex: 2
+            }}
+          >
             <TableRow>
-              {columns.map((h) => (
+              {enabledColumns.map((col) => (
                 <TableCell
-                  key={h}
+                  key={col.key}
                   sx={{
                     color: "#fff",
                     fontSize: "0.75rem",
                     fontWeight: 600,
-                    cursor:
-                      ["Date", "Customer", "Invoice", "Product", ...NUMERIC_HEADERS].includes(
-                        h
-                      )
-                        ? "pointer"
-                        : "default",
+                    cursor: "pointer",
                   }}
-                  onClick={(e) =>
-                    ["Date", "Customer", "Invoice", "Product", ...NUMERIC_HEADERS].includes(
-                      h
-                    )
-                      ? handleHeaderClick(e, h)
-                      : undefined
-                  }
+                  onClick={(e) => handleHeaderClick(e, col.key)}
                 >
-                  {h}
+                  {col.label}
                 </TableCell>
               ))}
             </TableRow>
@@ -317,18 +360,18 @@ const OnlineSalesReportPage: React.FC = () => {
             >
               <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
 
-              {columns.slice(1).map((c) => {
-                if (NUMERIC_HEADERS.includes(c)) {
-                  const value = getTotal(rows, c);
+              {enabledColumns.slice(1).map(col => {
+                if (col.type === "number") {
+                  const value = getTotal(rows, col.key);
                   return (
-                    <TableCell key={c} sx={{ fontWeight: 700 }}>
-                      {c === "Amount" || c === "Rate"
+                    <TableCell key={col.key}>
+                      {col.label === "Amount" || col.label === "Rate"
                         ? formatINR(value)
                         : value.toFixed(2)}
                     </TableCell>
                   );
                 }
-                return <TableCell key={c} />;
+                return <TableCell key={col.key} />;
               })}
             </TableRow>
           </TableBody>
@@ -338,34 +381,46 @@ const OnlineSalesReportPage: React.FC = () => {
           <TableBody>
             {paginated.map((row, i) => (
               <TableRow key={i}>
-                <TableCell sx={{ fontSize: "0.75rem" }}>
-                  {(pageNo - 1) * ROWS_PER_PAGE + i + 1}
-                </TableCell>
-                {columns.slice(1).map((c) => {
-                  switch (c) {
-                    case "Date":
+                {enabledColumns.map((col) => {
+                  switch (col.key) {
+
+                    case "sno":
                       return (
-                        <TableCell sx={{ fontSize: "0.75rem" }} key={c}>
+                        <TableCell key={col.key}>
+                          {(pageNo - 1) * rowsPerPage + i + 1}
+                        </TableCell>
+                      );
+
+                    case "Ledger_Date":
+                      return (
+                        <TableCell key={col.key}>
                           {dayjs(row.Ledger_Date).format("DD/MM/YYYY")}
                         </TableCell>
                       );
-                    case "Invoice":
-                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.invoice_no}</TableCell>;
-                    case "Customer":
-                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Retailer_Name}</TableCell>;
-                    case "Product":
-                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Product_Name}</TableCell>;
-                    case "Count":
-                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Item_Count}</TableCell>;
-                    case "Quantity":
-                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{row.Bill_Qty}</TableCell>;
+
+                    case "invoice_no":
+                      return <TableCell key={col.key}>{row.invoice_no}</TableCell>;
+
+                    case "Retailer_Name":
+                      return <TableCell key={col.key}>{row.Retailer_Name}</TableCell>;
+
+                    case "Product_Name":
+                      return <TableCell key={col.key}>{row.Product_Name}</TableCell>;
+
+                    case "Item_Count":
+                      return <TableCell key={col.key}>{row.Item_Count}</TableCell>;
+
+                    case "Bill_Qty":
+                      return <TableCell key={col.key}>{row.Bill_Qty}</TableCell>;
+
                     case "Rate":
-                      return <TableCell sx={{ fontSize: "0.75rem" }} key={c}>{formatINR(row.Rate)}</TableCell>;
-                    case "Amount":
+                      return <TableCell key={col.key}>{formatINR(row.Rate)}</TableCell>;
+
+                    case "Total_Invoice_value":
                       return (
-                        <TableCell sx={{ fontSize: "0.75rem" }} key={c}>
+                        <TableCell key={col.key}>
                           {formatINR(
-                            isAbstract
+                            toggleMode === "Abstract"
                               ? row.Total_Invoice_value
                               : row.Amount
                           )}
@@ -373,7 +428,7 @@ const OnlineSalesReportPage: React.FC = () => {
                       );
 
                     default:
-                      return <TableCell key={c} />;
+                      return <TableCell key={col.key}>{row[col.key]}</TableCell>;
                   }
                 })}
               </TableRow>
@@ -384,10 +439,99 @@ const OnlineSalesReportPage: React.FC = () => {
     </Box >
   );
 
-  const getHeaderOptions = (list: string[]) =>
-    list
-      .filter(Boolean)
-      .filter((v) => v.toLowerCase().includes(searchText.toLowerCase()));
+
+  const SortableColumnItem: React.FC<{
+    column: ColumnConfig;
+    showFilter: boolean;
+    onToggle: (key: string) => void;
+  }> = ({ column, showFilter, onToggle }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+    } = useSortable({ id: column.key });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+    };
+
+    return (
+      <Box
+        ref={setNodeRef}
+        style={style}
+        display="flex"
+        alignItems="center"
+        gap={1}
+        mb={1}
+      >
+        {/* DRAG HANDLE */}
+        <IconButton
+          size="small"
+          {...listeners}
+          {...attributes}
+          sx={{ cursor: "grab" }}
+        >
+          <DragIndicatorIcon fontSize="small" />
+        </IconButton>
+
+        {/* LABEL + FILTER ICON */}
+        <Box display="flex" alignItems="center" gap={1} sx={{ flex: 1 }}>
+          <Typography fontSize="0.75rem">
+            {column.label}
+          </Typography>
+
+          {showFilter && (
+            <Tooltip title="Header filter enabled">
+              <FilterAltIcon fontSize="small" color="action" />
+            </Tooltip>
+          )}
+        </Box>
+
+        {/* ENABLE / DISABLE SWITCH */}
+        <Switch
+          size="medium"
+          checked={column.enabled}
+          onChange={() => onToggle(column.key)}
+          sx={{
+            "& .MuiSwitch-switchBase.Mui-checked": {
+              color: "#1E3A8A",
+            },
+            "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+              backgroundColor: "#b5b9c4",
+            },
+            "& .MuiSwitch-track": {
+              backgroundColor: "#CBD5E1",
+            },
+          }}
+        />
+      </Box>
+    );
+  };
+
+  const generateColumns = (
+    data: any[],
+    baseColumns: ColumnConfig[]
+  ): ColumnConfig[] => {
+    if (!data.length) return baseColumns;
+
+    const existingKeys = baseColumns.map(c => c.key);
+
+    const dynamicCols: ColumnConfig[] = Object.keys(data[0])
+      .filter(key => !existingKeys.includes(key))
+      .map((key, index) => ({
+        key,
+        label: key
+          .replace(/_/g, " ")
+          .replace(/\b\w/g, c => c.toUpperCase()),
+        enabled: false,
+        order: baseColumns.length + index,
+      }));
+
+    return [...baseColumns, ...dynamicCols];
+  };
 
   /* ================= RENDER ================= */
   return (
@@ -397,6 +541,51 @@ const OnlineSalesReportPage: React.FC = () => {
         onToggleChange={setToggleMode}
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
+        settingsSlot={
+          <Box display="flex" gap={1}>
+            <Tooltip title="Column Settings">
+              <IconButton
+                size="small"
+                onClick={e => setSettingsAnchor(e.currentTarget)}
+                sx={{
+                  height: 24,
+                  width: 24,
+                  backgroundColor: "#fff",
+                  borderRadius: 0.5,
+                }}
+              >
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        }
+      />
+      <ReportFilterDrawer
+        open={drawerOpen}
+        onToggle={() => setDrawerOpen(p => !p)}
+        onClose={() => setDrawerOpen(false)}
+        fromDate={columnFilters["Ledger_Date"]?.from || ""}
+        toDate={columnFilters["Ledger_Date"]?.to || ""}
+        onFromDateChange={(v) =>
+          setColumnFilters((prev) => ({
+            ...prev,
+            Ledger_Date: {
+              ...prev["Ledger_Date"],
+              from: v,
+            },
+          }))
+        }
+
+        onToDateChange={(v) =>
+          setColumnFilters((prev) => ({
+            ...prev,
+            Ledger_Date: {
+              ...prev["Ledger_Date"],
+              to: v,
+            },
+          }))
+        }
+        onApply={() => setDrawerOpen(false)}
       />
       <AppLayout fullWidth >
 
@@ -406,14 +595,14 @@ const OnlineSalesReportPage: React.FC = () => {
               {renderTable(
                 filteredAbstract,
                 paginatedAbstract,
-                ["S.No", "Date", "Invoice", "Customer", "Count", "Amount"],
-                page,
-                true
+                page
               )}
               <CommonPagination
                 totalRows={filteredAbstract.length}
                 page={page}
+                rowsPerPage={rowsPerPage}
                 onPageChange={setPage}
+                onRowsPerPageChange={setRowsPerPage}
               />
             </>
           ) : (
@@ -421,18 +610,16 @@ const OnlineSalesReportPage: React.FC = () => {
               {renderTable(
                 filteredExpanded,
                 paginatedExpanded,
-                [
-                  "S.No",
-                  "Date",
-                  "Invoice",
-                  "Customer",
-                  "Product",
-                  "Quantity",
-                  "Rate",
-                  "Amount",
-                ],
-                expandedPage,
-                false
+                expandedPage
+              )}
+              {toggleMode == "Expanded" && (
+                <CommonPagination
+                  totalRows={filteredExpanded.length}
+                  page={expandedPage}
+                  rowsPerPage={rowsPerPage}
+                  onPageChange={setExpandedPage}
+                  onRowsPerPageChange={setRowsPerPage}
+                />
               )}
             </>
           )}
@@ -443,104 +630,241 @@ const OnlineSalesReportPage: React.FC = () => {
             open={
               Boolean(filterAnchor) &&
               Boolean(activeHeader) &&
-              !NUMERIC_HEADERS.includes(activeHeader!)
+              activeCol?.type !== "number"
             }
             onClose={() => setFilterAnchor(null)}
           >
 
             {/* ===== DATE FILTER ===== */}
-            {activeHeader === "Date" && (
-              <Box p={2} display="flex" flexDirection="column" gap={1}>
-                <TextField
-                  type="date"
-                  value={filters.Date.from}
-                  onChange={(e) =>
-                    setFilters((p) => ({
-                      ...p,
-                      Date: { ...p.Date, from: e.target.value },
-                    }))
-                  }
-                />
-                <TextField
-                  type="date"
-                  value={filters.Date.to}
-                  onChange={(e) =>
-                    setFilters((p) => ({
-                      ...p,
-                      Date: { ...p.Date, to: e.target.value },
-                    }))
-                  }
-                />
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={() => setFilterAnchor(null)}
-                  sx={{
-                    backgroundColor: "#1E3A8A",
-                    fontWeight: 600,
-                  }}
-                >
-                  Apply
-                </Button>
-              </Box>
-            )}
+            {activeHeader && (
+              <Box p={2} sx={{ minWidth: 220 }}>
 
-            {/* ===== TEXT FILTERS ===== */}
-            {activeHeader &&
-              ["Customer", "Invoice", "Product"].includes(activeHeader) && (
-                <Box p={2} sx={{ minWidth: 220 }}>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    placeholder={`Search ${activeHeader}`}
-                    value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
-                    sx={{ mb: 1 }}
-                  />
+                {/* ✅ DATE FILTER */}
+                {activeHeader === "Ledger_Date" ? (
+                  <>
+                    <TextField
+                      type="date"
+                      size="small"
+                      fullWidth
+                      sx={{ mb: 1 }}
+                      onChange={(e) =>
+                        setColumnFilters((prev) => ({
+                          ...prev,
+                          [activeHeader]: {
+                            ...prev[activeHeader],
+                            from: e.target.value,
+                          },
+                        }))
+                      }
+                    />
 
-                  {/* ✅ ALL — ALWAYS FIRST */}
-                  <MenuItem
-                    sx={{ fontWeight: 600 }}
-                    onClick={() => {
-                      setFilters((p) => ({ ...p, [activeHeader]: "" }));
-                      setPage(1);
-                      setExpandedPage(1);
-                      setFilterAnchor(null);
-                    }}
-                  >
-                    All
-                  </MenuItem>
+                    <TextField
+                      type="date"
+                      size="small"
+                      fullWidth
+                      sx={{ mb: 1 }}
+                      onChange={(e) =>
+                        setColumnFilters((prev) => ({
+                          ...prev,
+                          [activeHeader]: {
+                            ...prev[activeHeader],
+                            to: e.target.value,
+                          },
+                        }))
+                      }
+                    />
 
-                  {/* ✅ VALUES BELOW ALL */}
-                  {getHeaderOptions(
-                    activeHeader === "Customer"
-                      ? retailers
-                      : activeHeader === "Invoice"
-                        ? invoices
-                        : products
-                  ).map((v) => (
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      onClick={() => setFilterAnchor(null)}
+                    >
+                      Apply
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {/* ✅ SEARCH */}
+                    <TextField
+                      size="small"
+                      fullWidth
+                      placeholder="Search"
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                      sx={{ mb: 1 }}
+                    />
+
+                    {/* ✅ CLEAR FILTER */}
                     <MenuItem
-                      key={v}
+                      sx={{ fontWeight: 600 }}
                       onClick={() => {
-                        setFilters((p) => ({ ...p, [activeHeader]: v }));
-                        setPage(1);
-                        setExpandedPage(1);
+                        setColumnFilters((prev) => ({
+                          ...prev,
+                          [activeHeader]: "",
+                        }));
                         setFilterAnchor(null);
                       }}
                     >
-                      {v}
+                      All
                     </MenuItem>
-                  ))}
-                </Box>
-              )}
+
+                    {/* ✅ VALUES */}
+                    {[...new Set(
+                      (toggleMode === "Abstract"
+                        ? rawAbstract
+                        : rawExpanded
+                      ).map((r) => r[activeHeader])
+                    )]
+                      .filter(Boolean)
+                      .filter((v) =>
+                        String(v).toLowerCase().includes(searchText.toLowerCase())
+                      )
+                      .map((v) => (
+                        <MenuItem
+                          key={v}
+                          onClick={() => {
+                            setColumnFilters((prev) => ({
+                              ...prev,
+                              [activeHeader]: v,
+                            }));
+                            setFilterAnchor(null);
+                          }}
+                        >
+                          {v}
+                        </MenuItem>
+                      ))}
+                  </>
+                )}
+              </Box>
+            )}
+
           </Menu>
         </Box>
-        <CommonPagination
-          totalRows={filteredExpanded.length}
-          page={expandedPage}
-          onPageChange={setExpandedPage}
-        />
       </AppLayout>
+
+      {/* ===== COLUMN SETTINGS MENU ===== */}
+      <Menu
+        anchorEl={settingsAnchor}
+        open={Boolean(settingsAnchor)}
+        onClose={() => setSettingsAnchor(null)}
+        PaperProps={{
+          sx: {
+            width: 280,
+            maxHeight: 420,
+          },
+        }}
+      >
+        <Box px={2} py={1}>
+          <Typography fontWeight={600} fontSize={13}>
+            Enabled Columns
+          </Typography>
+        </Box>
+
+        <DndContext
+          collisionDetection={closestCenter}
+          onDragEnd={({ active, over }) => {
+            if (!over || active.id === over.id) return;
+
+            setColumns(prev => {
+              const enabledCols = prev
+                .filter(c => c.enabled)
+                .sort((a, b) => a.order - b.order);
+
+              const oldIndex = enabledCols.findIndex(c => c.key === active.id);
+              const newIndex = enabledCols.findIndex(c => c.key === over.id);
+
+              const reordered = arrayMove(enabledCols, oldIndex, newIndex);
+
+              return prev.map(col => {
+                const idx = reordered.findIndex(r => r.key === col.key);
+                return idx !== -1 ? { ...col, order: idx } : col;
+              });
+            });
+          }}
+        >
+          <SortableContext
+            items={columns.filter(c => c.enabled).map(c => c.key)}
+            strategy={verticalListSortingStrategy}
+          >
+            {columns
+              .filter(c => c.enabled)
+              .sort((a, b) => a.order - b.order)
+              .map(col => (
+                <SortableColumnItem
+                  column={col}
+                  showFilter={
+                    col.key === "Ledger_Date"
+                      ? !!columnFilters[col.key]?.from || !!columnFilters[col.key]?.to
+                      : !!columnFilters[col.key]
+                  }
+                  onToggle={() =>
+                    setColumns(prev =>
+                      prev.map(c =>
+                        c.key === col.key
+                          ? { ...c, enabled: false }
+                          : c
+                      )
+                    )
+                  }
+                />
+              ))}
+          </SortableContext>
+        </DndContext>
+
+        <Box px={2} py={1} mt={1}>
+          <Typography fontWeight={600} fontSize={13}>
+            Disabled Columns
+          </Typography>
+        </Box>
+
+        {columns
+          .filter(c => !c.enabled)
+          .sort((a, b) => a.order - b.order)
+          .map(col => (
+            <Box
+              key={col.key}
+              display="flex"
+              alignItems="center"
+              gap={1}
+              px={1}
+              py={0.5}
+              mb={1}
+            >
+              {/* LABEL */}
+              <Box sx={{ flex: 1 }}>
+                <Typography fontSize="0.75rem">
+                  {col.label}
+                </Typography>
+              </Box>
+
+              {/* ENABLE SWITCH */}
+              <Switch
+                size="medium"
+                checked={false}
+                onChange={() =>
+                  setColumns(prev =>
+                    prev.map(c =>
+                      c.key === col.key
+                        ? { ...c, enabled: true }
+                        : c
+                    )
+                  )
+                }
+                sx={{
+                  "& .MuiSwitch-switchBase.Mui-checked": {
+                    color: "#1E3A8A",
+                  },
+                  "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                    backgroundColor: "#b5b9c4",
+                  },
+                  "& .MuiSwitch-track": {
+                    backgroundColor: "#CBD5E1",
+                  },
+                }}
+              />
+            </Box>
+          ))}
+      </Menu>
     </>
   );
 };

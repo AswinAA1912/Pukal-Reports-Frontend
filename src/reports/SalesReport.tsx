@@ -44,10 +44,6 @@ import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { SalesReportLedgerService, SalesReportItemService, } from "../services/SalesReport.service";
 
-/* ================= CONSTANTS ================= */
-
-const ROWS_PER_PAGE = 25;
-
 const ABSTRACT_DEFAULT_KEYS = [
     "Y1",
     "M6",
@@ -143,6 +139,7 @@ const SalesReport: React.FC = () => {
 
     /* ===== UI STATE ===== */
     const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(100);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [settingsAnchor, setSettingsAnchor] =
         useState<null | HTMLElement>(null);
@@ -316,16 +313,23 @@ const SalesReport: React.FC = () => {
         return result;
     };
 
+    const totalRowsForPagination = useMemo(() => {
+        return appliedGroupBy.length
+            ? flattenRows(groupedRows).length
+            : filteredRows.length;
+    }, [groupedRows, filteredRows, appliedGroupBy, expandedKeys]);
+
     const finalRows = useMemo(() => {
         const rows = appliedGroupBy.length
             ? flattenRows(groupedRows)
             : filteredRows;
 
         return rows.slice(
-            (page - 1) * ROWS_PER_PAGE,
-            page * ROWS_PER_PAGE
+            (page - 1) * rowsPerPage,
+            page * rowsPerPage
         );
-    }, [groupedRows, filteredRows, page, appliedGroupBy, expandedKeys]);
+
+    }, [groupedRows, filteredRows, page, rowsPerPage, appliedGroupBy, expandedKeys]);
 
     const enabledColumns = useMemo(
         () =>
@@ -337,75 +341,48 @@ const SalesReport: React.FC = () => {
 
     /* ================= EXPORTS ================= */
 
-    const buildExportRows = (): any[] => {
-        const result: any[] = [];
+    const exportRows = useMemo(() => {
+        return appliedGroupBy.length
+            ? flattenRows(groupedRows) // ✅ EXACT UI structure
+            : filteredRows;
+    }, [groupedRows, filteredRows, appliedGroupBy, expandedKeys]);
 
-        const walk = (list: any[]) => {
-            for (const r of list) {
-                // GROUP HEADER ROW
-                if (r.__group) {
-                    const row: any = {};
-                    enabledColumns.forEach(c => {
-                        if (c.key === appliedGroupBy[r.__level]) {
-                            row[c.label] = r.__value;
-                        } else if (c.isNumeric) {
-                            row[c.label] = getGroupTotal(r.__rows, c.key);
-                        } else {
-                            row[c.label] = "";
-                        }
-                    });
+    const handleExportExcel = () => {
+        const rows = exportRows.map(row => {
+            const obj: any = {};
 
-                    result.push(row);
+            enabledColumns.forEach(c => {
 
-                    // CHILD ROWS
-                    walk(
-                        buildGroupedData(
-                            r.__rows,
-                            r.__level + 1,
-                            `${r.__key} > `
-                        )
-                    );
+                // GROUP ROW
+                if (row.__group) {
+                    if (c.key === appliedGroupBy[row.__level]) {
+                        obj[c.label] = row.__value;
+                    } else if (c.isNumeric) {
+                        obj[c.label] = getGroupTotal(row.__rows, c.key);
+                    } else {
+                        obj[c.label] = "";
+                    }
                 }
                 // NORMAL ROW
                 else {
-                    const row: any = {};
-                    enabledColumns.forEach(c => {
-                        row[c.label] = r[c.key] ?? "";
-                    });
-                    result.push(row);
+                    obj[c.label] = row[c.key] ?? "";
                 }
-            }
-        };
-
-        if (appliedGroupBy.length) {
-            walk(groupedRows);
-        } else {
-            filteredRows.forEach(r => {
-                const row: any = {};
-                enabledColumns.forEach(c => {
-                    row[c.label] = r[c.key] ?? "";
-                });
-                result.push(row);
             });
-        }
 
-        return result;
-    };
+            return obj;
+        });
 
-    const handleExportExcel = () => {
-        const rows = buildExportRows();
-
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
 
         XLSX.utils.book_append_sheet(
-            workbook,
-            worksheet,
-            toggleMode === "Expanded" ? "Expanded Report" : "Abstract Report"
+            wb,
+            ws,
+            `${toggleMode} Report`
         );
 
         XLSX.writeFile(
-            workbook,
+            wb,
             `Sales_Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.xlsx`
         );
     };
@@ -413,20 +390,30 @@ const SalesReport: React.FC = () => {
     const handleExportPDF = () => {
         const doc = new jsPDF("l", "mm", "a4");
 
-        doc.text(
-            `Sales Report (${toggleMode})`,
-            14,
-            10
+        const rows = exportRows.map(row =>
+            enabledColumns.map(c => {
+
+                if (row.__group) {
+                    if (c.key === appliedGroupBy[row.__level]) {
+                        return row.__value;
+                    } else if (c.isNumeric) {
+                        return getGroupTotal(row.__rows, c.key);
+                    } else {
+                        return "";
+                    }
+                }
+
+                return row[c.key] ?? "";
+            })
         );
 
-        const rows = buildExportRows();
+        doc.text(`Sales Report (${toggleMode})`, 14, 10);
 
         autoTable(doc, {
             startY: 15,
             head: [enabledColumns.map(c => c.label)],
-            body: rows.map(r => Object.values(r)),
+            body: rows,
             styles: { fontSize: 7 },
-            headStyles: { fillColor: [30, 58, 138] },
         });
 
         doc.save(
@@ -474,11 +461,10 @@ const SalesReport: React.FC = () => {
             : "0.00";
     };
 
-    const renderRows = (rows: any[], level = 0) =>
+    const renderRows = (rows: any[]) =>
         rows.map((row: any, rowIndex: number) => {
             if (row.__group) {
                 const expanded = expandedKeys.includes(row.__key);
-                const groupKey = appliedGroupBy[level];
 
                 return (
                     <React.Fragment key={row.__key}>
@@ -504,15 +490,18 @@ const SalesReport: React.FC = () => {
                             </TableCell>
 
                             {enabledColumns.map(c => {
-                                // GROUP COLUMN → show label
-                                if (c.key === groupKey) {
+                                const currentGroupKey = appliedGroupBy[row.__level];
+
+                                // ✅ Show value ONLY for current level column
+                                if (c.key === currentGroupKey) {
                                     return (
                                         <TableCell key={c.key} sx={{ fontWeight: 700 }}>
                                             {row.__value}
                                         </TableCell>
                                     );
                                 }
-                                // NUMERIC COLUMNS → show group totals
+
+                                // ✅ Show totals for numeric columns
                                 if (c.isNumeric) {
                                     return (
                                         <TableCell key={c.key} sx={{ fontWeight: 600 }}>
@@ -520,21 +509,11 @@ const SalesReport: React.FC = () => {
                                         </TableCell>
                                     );
                                 }
-                                // OTHER COLUMNS → empty
+
+                                // ✅ ALL OTHER COLUMNS EMPTY (important)
                                 return <TableCell key={c.key} />;
                             })}
                         </TableRow>
-
-                        {/* ===== CHILD ROWS ===== */}
-                        {expanded &&
-                            renderRows(
-                                buildGroupedData(
-                                    row.__rows,
-                                    row.__level + 1,
-                                    `${row.__key} > `
-                                ),
-                                row.__level + 1
-                            )}
                     </React.Fragment>
                 );
             }
@@ -638,7 +617,7 @@ const SalesReport: React.FC = () => {
 
                 {/* ENABLE / DISABLE SWITCH */}
                 <Switch
-                    size="small"
+                    size="medium"
                     checked={column.enabled}
                     onChange={() => onToggle(column.key)}
                     sx={{
@@ -792,7 +771,7 @@ const SalesReport: React.FC = () => {
                                     (() => {
                                         serialRef.current = appliedGroupBy.length
                                             ? 0
-                                            : (page - 1) * ROWS_PER_PAGE;
+                                            : (page - 1) * rowsPerPage;
                                         return renderRows(finalRows);
                                     })()
 
@@ -803,9 +782,14 @@ const SalesReport: React.FC = () => {
                     </TableContainer>
 
                     <CommonPagination
-                        totalRows={filteredRows.length}
+                        totalRows={totalRowsForPagination}
                         page={page}
+                        rowsPerPage={rowsPerPage}
                         onPageChange={setPage}
+                        onRowsPerPageChange={(rows) => {
+                            setRowsPerPage(rows);
+                            setPage(1);
+                        }}
                     />
                 </Box>
             </AppLayout>
@@ -972,7 +956,7 @@ const SalesReport: React.FC = () => {
 
                             {/* ENABLE SWITCH */}
                             <Switch
-                                size="small"
+                                size="medium"
                                 checked={false}
                                 onChange={() =>
                                     setColumns(prev =>

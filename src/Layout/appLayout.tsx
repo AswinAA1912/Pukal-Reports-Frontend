@@ -10,7 +10,7 @@ interface ToggleContextType {
 
 const ToggleContext = createContext<ToggleContextType>({
   toggleMode: "Abstract",
-  setToggleMode: () => {},
+  setToggleMode: () => { },
 });
 
 export const useToggleMode = () => useContext(ToggleContext);
@@ -35,7 +35,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
       <Box
         sx={{
           height: "100vh",
-          display: "flex",
+          display: "block",
           flexDirection: "column",
           background: fullWidth
             ? "#F1F5F9"
@@ -50,13 +50,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({
             overflow: "auto",
           }}
         >
-          <Box
-            sx={{
-              minHeight: "100%",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
+          <Box>
             {children ?? <Outlet />}
           </Box>
         </Box>

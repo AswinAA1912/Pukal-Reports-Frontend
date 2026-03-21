@@ -49,8 +49,6 @@ import {
     onlineSalesReportItemLOLService,
 } from "../services/OnlineSalesReport.service";
 
-const ROWS_PER_PAGE = 25;
-
 /* ================= TYPES ================= */
 
 type ColumnConfig = {
@@ -143,7 +141,7 @@ const SortableColumnRow = ({ column, onToggle, hasActiveFilter, }: SortableColum
 
             {/* ENABLE / DISABLE */}
             <Switch
-                size="small"
+                size="medium"
                 checked={column.enabled}
                 onChange={() => onToggle(column.key)}
                 sx={{
@@ -215,6 +213,7 @@ const OnlineSalesReportLOL: React.FC = () => {
             ? setExpandedColumns
             : setAbstractColumns;
     const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(100);
 
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [fromDate, setFromDate] = useState(today);
@@ -461,8 +460,8 @@ const OnlineSalesReportLOL: React.FC = () => {
     /* ================= PAGINATION ================= */
 
     const paginatedRows = sortedRows.slice(
-        (page - 1) * ROWS_PER_PAGE,
-        page * ROWS_PER_PAGE
+        (page - 1) * rowsPerPage ,
+        page * rowsPerPage 
     );
 
     const sensors = useSensors(
@@ -791,7 +790,7 @@ const OnlineSalesReportLOL: React.FC = () => {
                                 {paginatedRows.map((row, i) => (
                                     <TableRow key={i}>
                                         <TableCell>
-                                            {(page - 1) * ROWS_PER_PAGE + i + 1}
+                                            {(page - 1) * rowsPerPage  + i + 1}
                                         </TableCell>
                                         {enabledColumns.map((c) => (
                                             <TableCell key={c.key}>
@@ -818,7 +817,9 @@ const OnlineSalesReportLOL: React.FC = () => {
                     <CommonPagination
                         totalRows={filteredRows.length}
                         page={page}
+                        rowsPerPage={rowsPerPage}
                         onPageChange={setPage}
+                        onRowsPerPageChange={setRowsPerPage}
                     />
                 </Box>
             </AppLayout>

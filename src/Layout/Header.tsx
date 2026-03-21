@@ -15,7 +15,6 @@ import {
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import SearchIcon from "@mui/icons-material/Search";
-import BusinessIcon from "@mui/icons-material/Business";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/authContext";
@@ -97,6 +96,28 @@ const Header: React.FC<HeaderProps> = ({
           />
         </Box>
 
+        {/* CENTER COMPANY SWITCH */}
+        {companies && companies.length > 0 && (
+          <Box
+            onClick={handleCompanyClick}
+            sx={{
+              position: "absolute",
+              left: "50%",
+              transform: "translateX(-50%)",
+              display: "flex",
+              alignItems: "center",
+              cursor: "pointer",
+              color: "#fff",
+              gap: 0.5,
+            }}
+          >
+            <Typography fontWeight={600}>
+              {user?.Company_Name || "Select Company"}
+            </Typography>
+           
+          </Box>
+        )}
+
         <Box sx={{ flexGrow: 1 }} />
 
         {/* Search */}
@@ -149,23 +170,6 @@ const Header: React.FC<HeaderProps> = ({
 
           {/* Icons */}
           <Stack direction="row" justifyContent="center" spacing={3} mt={1}>
-            {/* Switch Company */}
-            {companies && companies.length > 1 && (
-              <Tooltip title="Switch Company">
-                <IconButton
-                  onClick={(e) => {
-                    handleCompanyClick(e);
-                    handleUserMenuClose();
-                  }}
-                  sx={{
-                    bgcolor: "#EEF2FF",
-                    borderRadius: "50%",
-                  }}
-                >
-                  <BusinessIcon />
-                </IconButton>
-              </Tooltip>
-            )}
 
             {/* Logout */}
             <Tooltip title="Logout">

@@ -21,7 +21,7 @@ import { useAuth } from "../auth/authContext";
 import Header from "../Layout/Header";
 import { useQuery } from "@tanstack/react-query";
 import { MenuService } from "../services/menus.service";
-import { DashBoardGraph } from "../services/graphAnalysis.services";
+import { DashBoardSalesGraph } from "../services/graphAnalysis.services";
 
 const HEADER_HEIGHT = 64;
 
@@ -59,7 +59,7 @@ const Dashboard: React.FC = () => {
   const { data: graphData, isLoading: graphLoading } = useQuery({
     queryKey: ["dashboard-graph", user?.companyId, fromDate, toDate],
     queryFn: async () => {
-      const res = await DashBoardGraph.getDashboardGraph({
+      const res = await DashBoardSalesGraph.getDashboardGraph({
         Fromdate: fromDate,
         Todate: toDate,
         Company_Id: companyId,
@@ -85,7 +85,7 @@ const Dashboard: React.FC = () => {
 
   const monthData =
     graphData?.DayWise?.filter((d: any) => {
-      const dateStr = d.Invoice_Date.split("T")[0]; // YYYY-MM-DD
+      const dateStr = d.Invoice_Date.split("T")[0]; 
       const [year, month, day] = dateStr.split("-").map(Number);
 
       return (
