@@ -63,8 +63,13 @@ const OnlineSalesReportPage: React.FC = () => {
   const [settingsAnchor, setSettingsAnchor] =
     useState<null | HTMLElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const [columnFilters, setColumnFilters] = useState<Record<string, any>>({});
+  const today = dayjs().format("YYYY-MM-DD");
+  const [columnFilters, setColumnFilters] = useState<Record<string, any>>({
+    Ledger_Date: {
+      from: today,
+      to: today,
+    },
+  });
 
   const ABSTRACT_INITIAL_COLUMNS: ColumnConfig[] = [
     { key: "sno", label: "S.No", enabled: true, order: 0 },
@@ -179,10 +184,11 @@ const OnlineSalesReportPage: React.FC = () => {
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
-    const dateFilter = columnFilters["Ledger_Date"] || {};
+    const fromDate =
+      columnFilters?.Ledger_Date?.from || dayjs().format("YYYY-MM-DD");
 
-    const fromDate = dateFilter.from || dayjs().format("YYYY-MM-DD");
-    const toDate = dateFilter.to || dayjs().format("YYYY-MM-DD");
+    const toDate =
+      columnFilters?.Ledger_Date?.to || dayjs().format("YYYY-MM-DD");
 
     if (toggleMode === "Abstract") {
       OnlineSalesReportService.getReports({
@@ -209,7 +215,7 @@ const OnlineSalesReportPage: React.FC = () => {
         );
       });
     }
-  }, [toggleMode]);
+  }, [toggleMode, columnFilters["Ledger_Date"]]);
 
   /* ================= APPLY FILTERS ================= */
 
@@ -220,16 +226,25 @@ const OnlineSalesReportPage: React.FC = () => {
         if (value === "" || value === null || value === undefined) return true;
 
         // ✅ DATE RANGE
-        if (key === "Ledger_Date" && typeof value === "object") {
-          const rowDate = dayjs(row[key]);
+        if (key === "Ledger_Date" && value) {
+          const rowDate = dayjs(row[key]).startOf("day");
 
-          if (value.from && rowDate.isBefore(dayjs(value.from), "day")) return false;
-          if (value.to && rowDate.isAfter(dayjs(value.to), "day")) return false;
+          const from = value?.from ? dayjs(value.from).startOf("day") : null;
+          const to = value?.to ? dayjs(value.to).endOf("day") : null;
+
+          if (from && rowDate.isBefore(from)) return false;
+          if (to && rowDate.isAfter(to)) return false;
 
           return true;
         }
 
-        // ✅ GENERIC TEXT / NUMBER MATCH
+        // ✅ MULTI SELECT SUPPORT
+        if (Array.isArray(value)) {
+          if (value.length === 0) return true;
+          return value.includes(row[key]);
+        }
+
+        // ✅ SINGLE VALUE (fallback)
         return String(row[key] ?? "")
           .toLowerCase()
           .includes(String(value).toLowerCase());
@@ -352,7 +367,7 @@ const OnlineSalesReportPage: React.FC = () => {
             <TableRow
               sx={{
                 background: "#f3f4f6",
-                fontWeight: 700,
+                fontWeight: 600,
                 position: "sticky",
                 top: 37,
                 zIndex: 2,
@@ -378,7 +393,14 @@ const OnlineSalesReportPage: React.FC = () => {
 
 
           {/* ===== TABLE BODY ===== */}
-          <TableBody>
+          <TableBody
+            sx={{
+              "& .MuiTableCell-root": {
+                fontSize: "12px",
+                padding: "6px 8px"
+              }
+            }}
+          >
             {paginated.map((row, i) => (
               <TableRow key={i}>
                 {enabledColumns.map((col) => {
@@ -646,6 +668,7 @@ const OnlineSalesReportPage: React.FC = () => {
                       type="date"
                       size="small"
                       fullWidth
+                      value={columnFilters[activeHeader]?.from || ""}
                       sx={{ mb: 1 }}
                       onChange={(e) =>
                         setColumnFilters((prev) => ({
@@ -662,6 +685,7 @@ const OnlineSalesReportPage: React.FC = () => {
                       type="date"
                       size="small"
                       fullWidth
+                      value={columnFilters[activeHeader]?.to || ""}
                       sx={{ mb: 1 }}
                       onChange={(e) =>
                         setColumnFilters((prev) => ({
@@ -700,7 +724,7 @@ const OnlineSalesReportPage: React.FC = () => {
                       onClick={() => {
                         setColumnFilters((prev) => ({
                           ...prev,
-                          [activeHeader]: "",
+                          [activeHeader]: [],
                         }));
                         setFilterAnchor(null);
                       }}
@@ -710,29 +734,44 @@ const OnlineSalesReportPage: React.FC = () => {
 
                     {/* ✅ VALUES */}
                     {[...new Set(
-                      (toggleMode === "Abstract"
-                        ? rawAbstract
-                        : rawExpanded
-                      ).map((r) => r[activeHeader])
+                      (toggleMode === "Abstract" ? rawAbstract : rawExpanded)
+                        .map((r) => r[activeHeader])
                     )]
                       .filter(Boolean)
                       .filter((v) =>
                         String(v).toLowerCase().includes(searchText.toLowerCase())
                       )
-                      .map((v) => (
-                        <MenuItem
-                          key={v}
-                          onClick={() => {
-                            setColumnFilters((prev) => ({
-                              ...prev,
-                              [activeHeader]: v,
-                            }));
-                            setFilterAnchor(null);
-                          }}
-                        >
-                          {v}
-                        </MenuItem>
-                      ))}
+                      .map((v) => {
+                        const selectedValues = columnFilters[activeHeader] || [];
+
+                        const isSelected = selectedValues.includes(v);
+
+                        return (
+                          <MenuItem
+                            key={v}
+                            onClick={() => {
+                              setColumnFilters((prev) => {
+                                const prevValues = prev[activeHeader] || [];
+
+                                const newValues = prevValues.includes(v)
+                                  ? prevValues.filter((x: any) => x !== v) // remove
+                                  : [...prevValues, v]; // add
+
+                                return {
+                                  ...prev,
+                                  [activeHeader]: newValues,
+                                };
+                              });
+                            }}
+                            sx={{
+                              backgroundColor: isSelected ? "#e0e7ff" : "transparent",
+                              fontWeight: isSelected ? 600 : 400,
+                            }}
+                          >
+                            {v}
+                          </MenuItem>
+                        );
+                      })}
                   </>
                 )}
               </Box>

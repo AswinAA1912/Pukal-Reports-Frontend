@@ -164,6 +164,7 @@ const SalesReport: React.FC = () => {
     const [abstractExpandedKeys, setAbstractExpandedKeys] = useState<string[]>([]);
     const [expandedExpandedKeys, setExpandedExpandedKeys] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
+    const [stockFilter, setStockFilter] = useState<"hasValues" | "zero" | "all">("hasValues");
 
     const HEADER_HEIGHT = 36;
 
@@ -237,13 +238,32 @@ const SalesReport: React.FC = () => {
 
     const filteredRows = useMemo(() => {
         return rawRows.filter(row => {
+            // ✅ COLUMN FILTERS
             for (const [key, values] of Object.entries(filters.columnFilters)) {
                 if (!values.length) continue;
                 if (!values.includes(String(row[key] ?? ""))) return false;
             }
+
+            // ✅ STOCK FILTER (NEW)
+            const y1 = Number(row.Y1) || 0;
+            const m6 = Number(row.M6) || 0;
+            const m2 = Number(row.M2) || 0;
+            const m3 = Number(row.M3) || 0;
+            const m9 = Number(row.M9) || 0;
+            const total = Number(row.Total_Qty) || 0;
+
+            const hasValue =
+                y1 !== 0 || m6 !== 0 || m2 !== 0 || m3 !== 0 || m9 !== 0 || total !== 0;
+
+            const isZero =
+                y1 === 0 && m6 === 0 && m2 === 0 && m3 === 0 && m9 === 0 && total === 0;
+
+            if (stockFilter === "hasValues" && !hasValue) return false;
+            if (stockFilter === "zero" && !isZero) return false;
+
             return true;
         });
-    }, [rawRows, filters]);
+    }, [rawRows, filters, stockFilter]);
 
     /* ================= TOTALS ================= */
 
@@ -695,6 +715,8 @@ const SalesReport: React.FC = () => {
                 onToDateChange={v =>
                     setFilters(p => ({ ...p, Date: { ...p.Date, to: v } }))
                 }
+                stockFilter={stockFilter}
+                onStockFilterChange={setStockFilter}
                 onApply={() => setDrawerOpen(false)}
             />
 

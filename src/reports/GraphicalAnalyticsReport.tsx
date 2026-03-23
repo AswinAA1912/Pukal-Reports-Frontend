@@ -28,7 +28,7 @@ import dayjs from "dayjs";
 import AppLayout from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
 import ReportFilterDrawer from "../Components/ReportFilterDrawer";
-import { DashBoardSalesGraph } from "../services/graphAnalysis.services";
+import { DashBoardSalesGraph, DashBoardPurchaseGraph } from "../services/graphAnalysis.services";
 import {
   ResponsiveContainer,
   LineChart,
@@ -110,10 +110,22 @@ const AnalyticsReportPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const res = await DashBoardSalesGraph.getDashboardGraph({
-        Fromdate: filters.Date.from,
-        Todate: filters.Date.to,
-      });
+      let res;
+
+      if (reportType === "sales") {
+        res = await DashBoardSalesGraph.getDashboardGraph({
+          Fromdate: filters.Date.from,
+          Todate: filters.Date.to,
+        });
+      } else if (reportType === "purchase") {
+        res = await DashBoardPurchaseGraph.getDashboardGraph({
+          Fromdate: filters.Date.from,
+          Todate: filters.Date.to,
+        });
+      } else {
+        setLoading(false);
+        return;
+      }
 
       const data = res.data.data;
 
@@ -129,7 +141,9 @@ const AnalyticsReportPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (reportType === "sales") loadGraph();
+    if (reportType === "sales" || reportType === "purchase") {
+      loadGraph();
+    }
   }, [filters, reportType]);
 
   /* ================= KPI VALUES ================= */

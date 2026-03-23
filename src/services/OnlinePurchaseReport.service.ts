@@ -1,5 +1,5 @@
 import axios from "axios";
-// import { getBaseURL } from "../config/portalBaseURL";
+import { getBaseURL } from "../config/portalBaseURL";
 
 /* =========================
    Types
@@ -51,8 +51,8 @@ export interface SalesGroupConfig {
 export const OnlinePurchaseReportService = {
     getReports: (params?: { Fromdate?: string; Todate?: string; invoice_no?: string }) =>
         axios.get<{ success: boolean; data: OnlinePurchaseReport[] }>(
-            // `${getBaseURL()}api/reports/externalAPI/onlinePurchaseReport`,
-            `http://192.168.1.92:9001/api/reports/externalAPI/onlinePurchaseReport`,
+            `${getBaseURL()}api/reports/externalAPI/onlinePurchaseReport`,
+            // `http://192.168.1.92:9001/api/reports/externalAPI/onlinePurchaseReport`,
             { params }
         ),
 };
@@ -60,8 +60,8 @@ export const OnlinePurchaseReportService = {
 export const OnlinePurchaseReportItemService = {
     getReportsitem: (params?: { Fromdate?: string; Todate?: string; invoice_no?: string }) =>
         axios.get<{ success: boolean; data: OnlinePurchaseReport[] }>(
-            // `${getBaseURL()}api/reports/externalAPI/onlinePurchaseReportItem`,
-             `http://192.168.1.92:9001/api/reports/externalAPI/onlinePurchaseReportItem`,
+            `${getBaseURL()}api/reports/externalAPI/onlinePurchaseReportItem`,
+            //  `http://192.168.1.92:9001/api/reports/externalAPI/onlinePurchaseReportItem`,
             { params }
         ),
 };

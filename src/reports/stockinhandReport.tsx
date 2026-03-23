@@ -71,6 +71,7 @@ const StockInHandReport: React.FC = () => {
     const [level2TypeOrder, setLevel2TypeOrder] = useState<number[]>([]);
     const [selectedLevel2ByType, setSelectedLevel2ByType] =
         useState<Record<number, string>>({});
+    const [stockFilter, setStockFilter] = useState<"hasValues" | "zero" | "all">("hasValues");
 
     const [modeState, setModeState] = useState<{
         Abstract: any;
@@ -281,7 +282,13 @@ const StockInHandReport: React.FC = () => {
             const out = Number(r.Sal_Qty) || 0;
             const cls = Number(r.Bal_Qty) || 0;
 
-            return ob !== 0 || input !== 0 || out !== 0 || cls !== 0;
+            const hasValue = ob !== 0 || input !== 0 || out !== 0 || cls !== 0;
+            const isZero = ob === 0 && input === 0 && out === 0 && cls === 0;
+
+            if (stockFilter === "hasValues") return hasValue;
+            if (stockFilter === "zero") return isZero;
+
+            return true; // "all"
         });
 
         return filtered;
@@ -292,7 +299,8 @@ const StockInHandReport: React.FC = () => {
         level1Options,
         level2TypeOrder,
         level2Meta,
-        selectedLevel2ByType
+        selectedLevel2ByType,
+        stockFilter
     ]);
 
     const handleTransactionClick = (
@@ -573,7 +581,7 @@ const StockInHandReport: React.FC = () => {
     /* ================= ITEM TABLE ================= */
 
     const paginated = (rows: stockWiseReport[]) =>
-        rows.slice((page - 1) * rowsPerPage , page * rowsPerPage );
+        rows.slice((page - 1) * rowsPerPage, page * rowsPerPage);
 
     /* ================= ITEM TABLE ================= */
 
@@ -633,7 +641,7 @@ const StockInHandReport: React.FC = () => {
                     {pageRows.map((r, i) => (
                         <TableRow key={i}>
                             <TableCell>
-                                {(page - 1) * rowsPerPage  + i + 1}
+                                {(page - 1) * rowsPerPage + i + 1}
                             </TableCell>
                             <TableCell
                                 sx={{
@@ -745,6 +753,8 @@ const StockInHandReport: React.FC = () => {
                 dropdownValue={selectedLevel1}
                 dropdownOptions={level1Options}
                 onDropdownChange={setSelectedLevel1}
+                stockFilter={stockFilter}
+                onStockFilterChange={setStockFilter}
                 onApply={() => {
                     loadData();
                     setDrawerOpen(false);

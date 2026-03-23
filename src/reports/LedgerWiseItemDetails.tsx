@@ -136,6 +136,7 @@ const LedgerItemWiseDetails: React.FC = () => {
     const [selectedLedger, setSelectedLedger] = useState<number | string>(
         Ledger_Id || ""
     );
+    const [stockFilter, setStockFilter] = useState<"hasValues" | "zero" | "all">("hasValues");
 
     /* ================= LOAD RETAILER ================= */
 
@@ -250,13 +251,32 @@ const LedgerItemWiseDetails: React.FC = () => {
 
     const filteredRows = useMemo(() => {
         return rows.filter(row => {
+            // ✅ COLUMN FILTERS
             for (const [key, values] of Object.entries(filters.columnFilters) as [string, string[]][]) {
                 if (!values.length) continue;
                 if (!values.includes(String(row[key] ?? ""))) return false;
             }
+
+            // ✅ STOCK FILTER (NEW)
+            const values = [
+                Number(row.Total_Qty) || 0,
+                Number(row.M1_Avg_Qty) || 0,
+                Number(row.M2_AVG_Qty) || 0,
+                Number(row.M3_AVG_Qty) || 0,
+                Number(row.M6_AVG_Qty) || 0,
+                Number(row.M9_AVG_Qty) || 0,
+                Number(row.One_Year_AVG_Qty) || 0
+            ];
+
+            const hasValue = values.some(v => v !== 0);
+            const isZero = values.every(v => v === 0);
+
+            if (stockFilter === "hasValues" && !hasValue) return false;
+            if (stockFilter === "zero" && !isZero) return false;
+
             return true;
         });
-    }, [rows, filters]);
+    }, [rows, filters, stockFilter]);
 
     const enabledColumns = useMemo(
         () =>
@@ -509,6 +529,8 @@ const LedgerItemWiseDetails: React.FC = () => {
                         Date: { ...p.Date, to: v }
                     }))
                 }
+                stockFilter={stockFilter}
+                onStockFilterChange={setStockFilter}
                 onApply={() => setDrawerOpen(false)}
             />
 

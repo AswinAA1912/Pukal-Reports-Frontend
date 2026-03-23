@@ -7,6 +7,11 @@ import {
     MenuItem,
     Button,
     IconButton,
+    RadioGroup,
+    FormControlLabel,
+    Radio,
+    FormControl,
+    FormLabel
 } from "@mui/material";
 import KeyboardArrowLeftIcon from "@mui/icons-material/KeyboardArrowLeft";
 
@@ -31,6 +36,10 @@ interface ReportFilterDrawerProps {
     dropdownOptions?: DropdownOption[];
     onDropdownChange?: (value: string | number) => void;
 
+    stockFilter?: "hasValues" | "zero" | "all";
+    onStockFilterChange?: (val: "hasValues" | "zero" | "all") => void;
+
+
     onApply: () => void;
 }
 
@@ -46,6 +55,8 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
     dropdownValue,
     dropdownOptions,
     onDropdownChange,
+    stockFilter,
+    onStockFilterChange,
     onApply,
 }) => {
     return (
@@ -132,6 +143,37 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                                 </MenuItem>
                             ))}
                         </TextField>
+                    )}
+
+                    {stockFilter && onStockFilterChange && (
+                        <FormControl sx={{ mb: 2 }}>
+                            <FormLabel sx={{ fontWeight: 600 }}>
+                                Stock Filter
+                            </FormLabel>
+
+                            <RadioGroup
+                                value={stockFilter}
+                                onChange={(e) =>
+                                    onStockFilterChange(e.target.value as any)
+                                }
+                            >
+                                <FormControlLabel
+                                    value="hasValues"
+                                    control={<Radio size="small" />}
+                                    label="Data only has values"
+                                />
+                                <FormControlLabel
+                                    value="zero"
+                                    control={<Radio size="small" />}
+                                    label="Data with 0"
+                                />
+                                <FormControlLabel
+                                    value="all"
+                                    control={<Radio size="small" />}
+                                    label="All"
+                                />
+                            </RadioGroup>
+                        </FormControl>
                     )}
 
                     <Button
