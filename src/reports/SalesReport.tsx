@@ -20,7 +20,8 @@ import {
     DialogTitle,
     DialogContent,
     DialogActions,
-    CircularProgress
+    CircularProgress,
+    Slider
 } from "@mui/material";
 import dayjs from "dayjs";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -36,6 +37,7 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import FunctionsIcon from "@mui/icons-material/Functions";
 import {
     SortableContext, useSortable,
     verticalListSortingStrategy, arrayMove,
@@ -165,6 +167,11 @@ const SalesReport: React.FC = () => {
     const [expandedExpandedKeys, setExpandedExpandedKeys] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
     const [stockFilter, setStockFilter] = useState<"hasValues" | "zero" | "all">("hasValues");
+    const [rangeFilter, setRangeFilter] = useState<Record<string, [number, number]>>({});
+    const [calcMode, setCalcMode] = useState<"total" | "avg">("total");
+    const selectedValues =
+        activeHeader ? filters.columnFilters[activeHeader!] ?? [] : [];
+
 
     const HEADER_HEIGHT = 36;
 
@@ -238,13 +245,23 @@ const SalesReport: React.FC = () => {
 
     const filteredRows = useMemo(() => {
         return rawRows.filter(row => {
+
             // ✅ COLUMN FILTERS
             for (const [key, values] of Object.entries(filters.columnFilters)) {
                 if (!values.length) continue;
-                if (!values.includes(String(row[key] ?? ""))) return false;
+                const rowValue = String(row[key] ?? "");
+                if (!values.some(v => v === rowValue)) return false;
             }
 
-            // ✅ STOCK FILTER (NEW)
+            // ✅ RANGE FILTER (NEW 🔥)
+            for (const [key, range] of Object.entries(rangeFilter)) {
+                const val = Number(row[key]);
+                if (!isNaN(val)) {
+                    if (val < range[0] || val > range[1]) return false;
+                }
+            }
+
+            // ✅ STOCK FILTER (existing)
             const y1 = Number(row.Y1) || 0;
             const m6 = Number(row.M6) || 0;
             const m2 = Number(row.M2) || 0;
@@ -263,17 +280,24 @@ const SalesReport: React.FC = () => {
 
             return true;
         });
-    }, [rawRows, filters, stockFilter]);
+    }, [rawRows, filters, stockFilter, rangeFilter]);
 
     /* ================= TOTALS ================= */
 
     const getTotal = (key: string) => {
-        const total = filteredRows.reduce(
-            (sum, row) => sum + Number(row[key] || 0),
-            0
-        );
+        const values = filteredRows
+            .map(row => Number(row[key]))
+            .filter(v => !isNaN(v));
 
-        return total.toLocaleString("en-IN", {
+        const total = values.reduce((sum, v) => sum + v, 0);
+
+        let result = total;
+
+        if (calcMode === "avg") {
+            result = values.length ? total / values.length : 0;
+        }
+
+        return result.toLocaleString("en-IN", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
@@ -359,11 +383,22 @@ const SalesReport: React.FC = () => {
         [columns]
     );
 
+    const getMinMax = (key: string) => {
+        const nums = rawRows
+            .map(r => Number(r[key]))
+            .filter(v => !isNaN(v));
+
+        return {
+            min: Math.min(...nums),
+            max: Math.max(...nums),
+        };
+    };
+
     /* ================= EXPORTS ================= */
 
     const exportRows = useMemo(() => {
         return appliedGroupBy.length
-            ? flattenRows(groupedRows) // ✅ EXACT UI structure
+            ? flattenRows(groupedRows)
             : filteredRows;
     }, [groupedRows, filteredRows, appliedGroupBy, expandedKeys]);
 
@@ -445,15 +480,39 @@ const SalesReport: React.FC = () => {
 
     const filterOptions = useMemo(() => {
         if (!activeHeader) return [];
+
+        // 🚨 Apply ALL filters EXCEPT current column
+        const rowsForOptions = rawRows.filter(row => {
+            for (const [key, values] of Object.entries(filters.columnFilters)) {
+                if (key === activeHeader) continue; // ✅ skip current column
+                if (!values.length) continue;
+
+                const rowValue = String(row[key] ?? "");
+                if (!values.includes(rowValue)) return false;
+            }
+
+            // ✅ Apply range filters also except current
+            for (const [key, range] of Object.entries(rangeFilter)) {
+                if (key === activeHeader) continue;
+
+                const val = Number(row[key]);
+                if (!isNaN(val)) {
+                    if (val < range[0] || val > range[1]) return false;
+                }
+            }
+
+            return true;
+        });
+
         return Array.from(
             new Set(
-                rawRows
+                rowsForOptions
                     .map(r => r[activeHeader])
                     .filter(v => v !== null && v !== undefined && v !== "")
                     .map(v => String(v))
             )
         );
-    }, [activeHeader, rawRows]);
+    }, [activeHeader, rawRows, filters, rangeFilter]);
 
     const groupableColumns = useMemo(() => {
         return enabledColumns.map(c => ({
@@ -464,22 +523,28 @@ const SalesReport: React.FC = () => {
 
     const serialRef = React.useRef(0);
 
-    const getGroupTotal = (
-        rows: any[],
-        key: string
-    ) => {
-        const total = rows.reduce(
-            (sum, r) => sum + Number(r[key] || 0),
-            0
-        );
+    const getGroupTotal = (rows: any[], key: string) => {
+        const values = rows
+            .map(r => Number(r[key]))
+            .filter(v => !isNaN(v));
 
-        return total
-            ? total.toLocaleString("en-IN", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-            })
-            : "0.00";
+        const total = values.reduce((sum, v) => sum + v, 0);
+
+        let result = total;
+
+        if (calcMode === "avg") {
+            result = values.length ? total / values.length : 0;
+        }
+
+        return result.toLocaleString("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
     };
+
+    const mergedOptions = Array.from(
+        new Set([...selectedValues, ...filterOptions])
+    );
 
     const renderRows = (rows: any[]) =>
         rows.map((row: any, rowIndex: number) => {
@@ -655,6 +720,10 @@ const SalesReport: React.FC = () => {
             </Box>
         );
     };
+
+    const activeColumnConfig = columns.find(c => c.key === activeHeader);
+    const isNumberField = activeColumnConfig?.isNumeric ?? false;
+
     /* ================= RENDER ================= */
 
     return (
@@ -740,7 +809,24 @@ const SalesReport: React.FC = () => {
                                 }}
                             >
                                 <TableRow>
-                                    <TableCell sx={{ color: "#fff" }}>S.No</TableCell>
+                                    <TableCell sx={{ color: "#fff", display: "flex", alignItems: "center", gap: 1 }}>
+                                        S.No
+
+                                        <Tooltip title={calcMode === "total" ? "Switch to Avg" : "Switch to Total"}>
+                                            <IconButton
+                                                size="small"
+                                                onClick={() =>
+                                                    setCalcMode(prev => (prev === "total" ? "avg" : "total"))
+                                                }
+                                                sx={{
+                                                    color: "#fff",
+                                                    p: 0.3,
+                                                }}
+                                            >
+                                                <FunctionsIcon fontSize="small" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </TableCell>
 
                                     {enabledColumns.map(c => (
                                         <TableCell
@@ -765,7 +851,9 @@ const SalesReport: React.FC = () => {
 
                                 {/* ===== TOTAL ROW ===== */}
                                 <TableRow sx={{ background: "#f3f4f6" }}>
-                                    <TableCell>Total</TableCell>
+                                    <TableCell>
+                                        {calcMode === "avg" ? "Average" : "Total"}
+                                    </TableCell>
                                     {enabledColumns.map(c => (
                                         <TableCell key={c.key}>
                                             {c.isNumeric ? getTotal(c.key) : ""}
@@ -823,15 +911,49 @@ const SalesReport: React.FC = () => {
                     open={Boolean(filterAnchor)}
                     onClose={() => setFilterAnchor(null)}
                 >
-                    <Box p={2} minWidth={240}>
+                    <Box p={2} minWidth={260}>
+
+                        {/* 🔍 SEARCH */}
                         <TextField
                             size="small"
                             fullWidth
                             placeholder={`Search ${activeHeader}`}
                             value={searchText}
                             onChange={e => setSearchText(e.target.value)}
+                            sx={{ mb: 1 }}
                         />
 
+                        {/* 🔥 RANGE SLIDER (ONLY NUMBER FIELD) */}
+                        {isNumberField && (() => {
+                            const { min, max } = getMinMax(activeHeader);
+
+                            const currentRange =
+                                rangeFilter[activeHeader] || [min, max];
+
+                            return (
+                                <Box mb={2}>
+                                    <Typography fontSize={12}>
+                                        Range: {currentRange[0]} - {currentRange[1]}
+                                    </Typography>
+
+                                    <Slider
+                                        value={currentRange}
+                                        min={min}
+                                        max={max}
+                                        step={1}
+                                        onChange={(_, newValue: number | number[]) => {
+                                            setRangeFilter(prev => ({
+                                                ...prev,
+                                                [activeHeader!]: newValue as [number, number],
+                                            }));
+                                        }}
+                                        valueLabelDisplay="auto"
+                                    />
+                                </Box>
+                            );
+                        })()}
+
+                        {/* CLEAR */}
                         <MenuItem
                             onClick={() => {
                                 setFilters(p => {
@@ -839,44 +961,67 @@ const SalesReport: React.FC = () => {
                                     delete copy[activeHeader];
                                     return { ...p, columnFilters: copy };
                                 });
+
+                                setRangeFilter(p => {
+                                    const copy = { ...p };
+                                    delete copy[activeHeader];
+                                    return copy;
+                                });
+
                                 setFilterAnchor(null);
                             }}
                         >
                             All
                         </MenuItem>
 
-                        {filterOptions
+                        {/* 🔥 MULTISELECT OPTIONS */}
+                        {[
+                            ...selectedValues,
+                            ...mergedOptions.filter(v => !selectedValues.includes(v))
+                        ]
                             .filter(v =>
-                                v
-                                    .toLowerCase()
-                                    .includes(searchText.toLowerCase())
+                                v.toLowerCase().includes(searchText.toLowerCase())
                             )
                             .map(v => {
                                 const selected =
-                                    filters.columnFilters[activeHeader]?.includes(
-                                        v
-                                    ) ?? false;
+                                    filters.columnFilters[activeHeader]?.includes(v) ?? false;
 
                                 return (
                                     <MenuItem
                                         key={v}
-                                        selected={selected}
                                         onClick={() =>
                                             setFilters(p => {
                                                 const existing =
-                                                    p.columnFilters[activeHeader] ?? [];
+                                                    p.columnFilters[activeHeader!] ?? [];
+
                                                 return {
                                                     ...p,
                                                     columnFilters: {
                                                         ...p.columnFilters,
-                                                        [activeHeader]: selected
+                                                        [activeHeader!]: selected
                                                             ? existing.filter(x => x !== v)
                                                             : [...existing, v],
                                                     },
                                                 };
                                             })
                                         }
+                                        sx={{
+                                            backgroundColor: selected
+                                                ? "rgba(30, 58, 138, 0.15)"
+                                                : "transparent",
+                                            fontWeight: selected ? 600 : 400,
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 1
+                                        }}
                                     >
+                                        {/* ✅ Checkbox (important for UX) */}
+                                        <input
+                                            type="checkbox"
+                                            checked={selected}
+                                            readOnly
+                                        />
+
                                         {v}
                                     </MenuItem>
                                 );
