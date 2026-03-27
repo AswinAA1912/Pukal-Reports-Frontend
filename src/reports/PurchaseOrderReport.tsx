@@ -21,7 +21,6 @@ import {
     DialogContent,
     DialogActions,
     CircularProgress,
-    Slider
 } from "@mui/material";
 import dayjs from "dayjs";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -37,45 +36,37 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import FunctionsIcon from "@mui/icons-material/Functions";
 import {
     SortableContext, useSortable,
     verticalListSortingStrategy, arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import { SalesReportLedgerService, SalesReportItemService, } from "../services/SalesReport.service";
+import { PurchaseOrderReport,PurchaseOrderReportItem } from "../services/purchaseOrderReport.service";
 
 const ABSTRACT_DEFAULT_KEYS = [
-    "Y1",
-    "M6",
-    "M2",
-    "LM",
-    "Ledger_Name",
-    "Total_Qty",
-    "Q_Pay_Days",
-    "Freq_Days",
+    "invoice_no",
+    "Ledger_Date",
+    "Retailer_Name",
+    "itemCount",
+    "Total_Invoice_value",
 ];
 
 const EXPANDED_DEFAULT_KEYS = [
-    "Y1",
-    "M6",
-    "M2",
-    "LM",
-    "Item_Name",
-    "Total_Qty",
+    "invoice_no",
+    "Ledger_Date",
+    "Product_Name",
+    "Bill_Qty",
+    "Rate",
+    "Amount",
+    "Retailer_Name",
 ];
 
 const NUMERIC_KEYS = [
-    "Y1",
-    "M6",
-    "M2",
-    "LM",
-    "M3",
-    "M9",
-    "Total_Qty",
-    "Q_Pay_Days",
-    "Freq_Days",
+    "Bill_Qty",
+    "Rate",
+    "Amount",
+    "Total_Invoice_value",
 ];
 
 /* ================= TYPES ================= */
@@ -95,6 +86,23 @@ type FiltersMap = {
 
 /* ================= HELPERS ================= */
 
+const buildAbstractData = (rows: any[]) => {
+    const map: Record<string, any> = {};
+
+    rows.forEach((row) => {
+        if (!map[row.invoice_no]) {
+            map[row.invoice_no] = {
+                ...row,
+                itemCount: 0,
+            };
+        }
+
+        map[row.invoice_no].itemCount += 1;
+    });
+
+    return Object.values(map);
+};
+
 const buildColumnsFromApi = (
     rows: any[],
     mode: "Abstract" | "Expanded"
@@ -106,18 +114,67 @@ const buildColumnsFromApi = (
             ? ABSTRACT_DEFAULT_KEYS
             : EXPANDED_DEFAULT_KEYS;
 
-    return Object.keys(rows[0]).map((key, index) => ({
+    // ✅ Normalize keys
+    const normalizeKey = (key: string) => {
+        if (key === "Item_Count") return "itemCount";
+        if (key.includes("Reatailer")) return key.replace(/Reatailer/g, "Retailer");
+        return key;
+    };
+
+    // ✅ Collect normalized keys
+    const keySet = new Set<string>();
+
+    rows.forEach(row => {
+        Object.keys(row).forEach(k => {
+            keySet.add(normalizeKey(k));
+        });
+    });
+
+    // ✅ Ensure itemCount exists for Abstract
+    if (mode === "Abstract") {
+        keySet.add("itemCount");
+    }
+
+    const keys = Array.from(keySet);
+
+    return keys.map((key, index) => ({
         key,
-        label: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
-        enabled: defaults.includes(key),
+        label:
+            key === "invoice_no" ? "Invoice No" :
+                key === "Ledger_Date" ? "Ledger Date" :
+                    key === "Retailer_Name" ? "Retailer Name" :
+                        key === "Product_Name" ? "Product Name" :
+                            key === "Bill_Qty" ? "Bill Qty" :
+                                key === "Total_Invoice_value" ? "Total Invoice Value" :
+                                    key.replace(/_/g, " ")
+                                        .replace(/\b\w/g, c => c.toUpperCase()),
+
+       enabled: defaults.includes(key) || key === "invoice_no",
         isNumeric: NUMERIC_KEYS.includes(key),
         order: index,
     }));
 };
 
+const normalizeRow = (row: any) => {
+    const newRow: any = {};
+
+    Object.keys(row).forEach(key => {
+        let newKey = key;
+
+        if (key === "Item_Count") newKey = "itemCount";
+        if (key.includes("Reatailer")) {
+            newKey = key.replace(/Reatailer/g, "Retailer");
+        }
+
+        newRow[newKey] = row[key];
+    });
+
+    return newRow;
+};
+
 /* ================= COMPONENT ================= */
 
-const SalesReport: React.FC = () => {
+const PurchaseOrder: React.FC = () => {
     const today = dayjs().format("YYYY-MM-DD");
     const { toggleMode, setToggleMode } = useToggleMode();
 
@@ -166,11 +223,14 @@ const SalesReport: React.FC = () => {
     const [abstractExpandedKeys, setAbstractExpandedKeys] = useState<string[]>([]);
     const [expandedExpandedKeys, setExpandedExpandedKeys] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
-    const [stockFilter, setStockFilter] = useState<"hasValues" | "zero" | "all">("hasValues");
-    const [rangeFilter, setRangeFilter] = useState<Record<string, [number, number]>>({});
-    const [calcMode, setCalcMode] = useState<"total" | "avg">("total");
+    const [rangeFilter] = useState<Record<string, [number, number]>>({});
     const selectedValues =
         activeHeader ? filters.columnFilters[activeHeader!] ?? [] : [];
+
+    const [tempDateFilter, setTempDateFilter] = useState({
+        from: today,
+        to: today,
+    });
 
 
     const HEADER_HEIGHT = 36;
@@ -181,29 +241,38 @@ const SalesReport: React.FC = () => {
         setLoading(true);
         const service =
             toggleMode === "Expanded"
-                ? SalesReportItemService.getReports
-                : SalesReportLedgerService.getReports;
+                ? PurchaseOrderReportItem.getPurchaseOrderItem
+                : PurchaseOrderReport.getPurchaseOrder;
 
         service({
             Fromdate: filters.Date.from,
             Todate: filters.Date.to,
         })
             .then(res => {
-                const apiRows = res.data.data || [];
+                const apiRowsRaw =
+                    res.data?.data?.data ||
+                    res.data?.data ||
+                    [];
+
+                // ✅ normalize ALL rows FIRST
+                const apiRows = apiRowsRaw.map(normalizeRow);
+
                 const cols = buildColumnsFromApi(apiRows, toggleMode);
 
                 if (toggleMode === "Expanded") {
                     setExpandedRows(apiRows);
                     setExpandedColumns(prev => (prev.length ? prev : cols));
                 } else {
-                    setAbstractRows(apiRows);
+                    const abstractData = buildAbstractData(apiRows);
+
+                    setAbstractRows(abstractData);
                     setAbstractColumns(prev => (prev.length ? prev : cols));
                 }
 
                 setPage(1);
             })
             .catch(err => {
-                console.error("Sales Report API Error:", err);
+                console.error("Purchase Order Report API Error:", err);
             })
             .finally(() => {
                 setLoading(false);
@@ -246,14 +315,17 @@ const SalesReport: React.FC = () => {
     const filteredRows = useMemo(() => {
         return rawRows.filter(row => {
 
-            // ✅ COLUMN FILTERS
+            // ✅ COLUMN FILTERS (SKIP DATE COLUMN)
             for (const [key, values] of Object.entries(filters.columnFilters)) {
+                if (key === "Ledger_Date") continue; // 🚨 IMPORTANT
+
                 if (!values.length) continue;
                 const rowValue = String(row[key] ?? "");
-                if (!values.some(v => v === rowValue)) return false;
+                if (!values.includes(rowValue)) return false;
             }
 
-            // ✅ RANGE FILTER (NEW 🔥)
+
+            // ✅ NUMBER RANGE
             for (const [key, range] of Object.entries(rangeFilter)) {
                 const val = Number(row[key]);
                 if (!isNaN(val)) {
@@ -261,26 +333,9 @@ const SalesReport: React.FC = () => {
                 }
             }
 
-            // ✅ STOCK FILTER (existing)
-            const y1 = Number(row.Y1) || 0;
-            const m6 = Number(row.M6) || 0;
-            const m2 = Number(row.M2) || 0;
-            const m3 = Number(row.M3) || 0;
-            const m9 = Number(row.M9) || 0;
-            const total = Number(row.Total_Qty) || 0;
-
-            const hasValue =
-                y1 !== 0 || m6 !== 0 || m2 !== 0 || m3 !== 0 || m9 !== 0 || total !== 0;
-
-            const isZero =
-                y1 === 0 && m6 === 0 && m2 === 0 && m3 === 0 && m9 === 0 && total === 0;
-
-            if (stockFilter === "hasValues" && !hasValue) return false;
-            if (stockFilter === "zero" && !isZero) return false;
-
             return true;
         });
-    }, [rawRows, filters, stockFilter, rangeFilter]);
+    }, [rawRows, filters, rangeFilter]);
 
     /* ================= TOTALS ================= */
 
@@ -291,13 +346,7 @@ const SalesReport: React.FC = () => {
 
         const total = values.reduce((sum, v) => sum + v, 0);
 
-        let result = total;
-
-        if (calcMode === "avg") {
-            result = values.length ? total / values.length : 0;
-        }
-
-        return result.toLocaleString("en-IN", {
+        return total.toLocaleString("en-IN", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
@@ -383,17 +432,6 @@ const SalesReport: React.FC = () => {
         [columns]
     );
 
-    const getMinMax = (key: string) => {
-        const nums = rawRows
-            .map(r => Number(r[key]))
-            .filter(v => !isNaN(v));
-
-        return {
-            min: Math.min(...nums),
-            max: Math.max(...nums),
-        };
-    };
-
     /* ================= EXPORTS ================= */
 
     const exportRows = useMemo(() => {
@@ -438,7 +476,7 @@ const SalesReport: React.FC = () => {
 
         XLSX.writeFile(
             wb,
-            `Sales_Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.xlsx`
+            `Purchase Order Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.xlsx`
         );
     };
 
@@ -462,7 +500,7 @@ const SalesReport: React.FC = () => {
             })
         );
 
-        doc.text(`Sales Report (${toggleMode})`, 14, 10);
+        doc.text(`Purchase Order Report (${toggleMode})`, 14, 10);
 
         autoTable(doc, {
             startY: 15,
@@ -472,7 +510,7 @@ const SalesReport: React.FC = () => {
         });
 
         doc.save(
-            `Sales_Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.pdf`
+            `Purchase Order Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.pdf`
         );
     };
 
@@ -484,7 +522,7 @@ const SalesReport: React.FC = () => {
         // 🚨 Apply ALL filters EXCEPT current column
         const rowsForOptions = rawRows.filter(row => {
             for (const [key, values] of Object.entries(filters.columnFilters)) {
-                if (key === activeHeader) continue; // ✅ skip current column
+                if (key === activeHeader) continue;
                 if (!values.length) continue;
 
                 const rowValue = String(row[key] ?? "");
@@ -530,13 +568,7 @@ const SalesReport: React.FC = () => {
 
         const total = values.reduce((sum, v) => sum + v, 0);
 
-        let result = total;
-
-        if (calcMode === "avg") {
-            result = values.length ? total / values.length : 0;
-        }
-
-        return result.toLocaleString("en-IN", {
+        return total.toLocaleString("en-IN", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         });
@@ -610,32 +642,10 @@ const SalesReport: React.FC = () => {
                     </TableCell>
 
                     {enabledColumns.map(c => {
-                        if (c.key === "Ledger_Name" && toggleMode === "Abstract") {
+                        if (c.key === "Ledger_Date") {
                             return (
-                                <TableCell
-                                    key={c.key}
-                                    sx={{
-                                        cursor: "pointer",
-                                        color: "#1E3A8A",
-                                        fontWeight: 500,
-                                        textDecoration: "underline"
-                                    }}
-                                    onClick={() => {
-
-                                        const params = new URLSearchParams({
-                                            ledgerId: String(row["Retailer_Id"]),
-                                            ledgerName: String(row["Ledger_Name"]),
-                                            from: filters.Date.from,
-                                            to: filters.Date.to
-                                        });
-
-                                        window.open(
-                                            `/reports/ledger-item?${params.toString()}`,
-                                            "ledgerItemTab"
-                                        );
-                                    }}
-                                >
-                                    {row[c.key]}
+                                <TableCell key={c.key}>
+                                    {dayjs(row[c.key]).format("DD/MM/YYYY")}
                                 </TableCell>
                             );
                         }
@@ -721,9 +731,6 @@ const SalesReport: React.FC = () => {
         );
     };
 
-    const activeColumnConfig = columns.find(c => c.key === activeHeader);
-    const isNumberField = activeColumnConfig?.isNumeric ?? false;
-
     /* ================= RENDER ================= */
 
     return (
@@ -784,8 +791,6 @@ const SalesReport: React.FC = () => {
                 onToDateChange={v =>
                     setFilters(p => ({ ...p, Date: { ...p.Date, to: v } }))
                 }
-                stockFilter={stockFilter}
-                onStockFilterChange={setStockFilter}
                 onApply={() => setDrawerOpen(false)}
             />
 
@@ -809,23 +814,14 @@ const SalesReport: React.FC = () => {
                                 }}
                             >
                                 <TableRow>
-                                    <TableCell sx={{ color: "#fff", display: "flex", alignItems: "center", gap: 1 }}>
+                                    <TableCell
+                                        sx={{
+                                            color: "#fff",
+                                            fontWeight: 500,
+                                            width: 70,
+                                        }}
+                                    >
                                         S.No
-
-                                        <Tooltip title={calcMode === "total" ? "Switch to Avg" : "Switch to Total"}>
-                                            <IconButton
-                                                size="small"
-                                                onClick={() =>
-                                                    setCalcMode(prev => (prev === "total" ? "avg" : "total"))
-                                                }
-                                                sx={{
-                                                    color: "#fff",
-                                                    p: 0.3,
-                                                }}
-                                            >
-                                                <FunctionsIcon fontSize="small" />
-                                            </IconButton>
-                                        </Tooltip>
                                     </TableCell>
 
                                     {enabledColumns.map(c => (
@@ -851,9 +847,7 @@ const SalesReport: React.FC = () => {
 
                                 {/* ===== TOTAL ROW ===== */}
                                 <TableRow sx={{ background: "#f3f4f6" }}>
-                                    <TableCell>
-                                        {calcMode === "avg" ? "Average" : "Total"}
-                                    </TableCell>
+                                    <TableCell>Total</TableCell>
                                     {enabledColumns.map(c => (
                                         <TableCell key={c.key}>
                                             {c.isNumeric ? getTotal(c.key) : ""}
@@ -911,121 +905,134 @@ const SalesReport: React.FC = () => {
                     open={Boolean(filterAnchor)}
                     onClose={() => setFilterAnchor(null)}
                 >
-                    <Box p={2} minWidth={260}>
-
-                        {/* 🔍 SEARCH */}
-                        <TextField
-                            size="small"
-                            fullWidth
-                            placeholder={`Search ${activeHeader}`}
-                            value={searchText}
-                            onChange={e => setSearchText(e.target.value)}
-                            sx={{ mb: 1 }}
-                        />
+                    <Box p={1} minWidth={260}>
 
                         {/* 🔥 RANGE SLIDER (ONLY NUMBER FIELD) */}
-                        {isNumberField && (() => {
-                            const { min, max } = getMinMax(activeHeader);
+                        {activeHeader === "Ledger_Date" ? (
+                            <Box p={1} minWidth={260} display="flex" flexDirection="column" gap={2}>
+                                <TextField
+                                    type="date"
+                                    size="small"
+                                    label="From Date"
+                                    InputLabelProps={{ shrink: true }}
+                                    value={tempDateFilter.from}
+                                    onChange={(e) =>
+                                        setTempDateFilter(prev => ({
+                                            ...prev,
+                                            from: e.target.value,
+                                        }))
+                                    }
+                                />
 
-                            const currentRange =
-                                rangeFilter[activeHeader] || [min, max];
+                                <TextField
+                                    type="date"
+                                    size="small"
+                                    label="To Date"
+                                    InputLabelProps={{ shrink: true }}
+                                    value={tempDateFilter.to}
+                                    onChange={(e) =>
+                                        setTempDateFilter(prev => ({
+                                            ...prev,
+                                            to: e.target.value,
+                                        }))
+                                    }
+                                />
 
-                            return (
-                                <Box mb={2}>
-                                    <Typography fontSize={12}>
-                                        Range: {currentRange[0]} - {currentRange[1]}
-                                    </Typography>
+                                <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => {
+                                        setFilters(prev => ({
+                                            ...prev,
+                                            Date: {
+                                                from: tempDateFilter.from,
+                                                to: tempDateFilter.to,
+                                            },
+                                        }));
+                                        setFilterAnchor(null);
+                                    }}
+                                >
+                                    Apply
+                                </Button>
 
-                                    <Slider
-                                        value={currentRange}
-                                        min={min}
-                                        max={max}
-                                        step={1}
-                                        onChange={(_, newValue: number | number[]) => {
-                                            setRangeFilter(prev => ({
-                                                ...prev,
-                                                [activeHeader!]: newValue as [number, number],
-                                            }));
-                                        }}
-                                        valueLabelDisplay="auto"
-                                    />
-                                </Box>
-                            );
-                        })()}
+                            </Box>
+                        ) : (
+                            <Box p={1} minWidth={260}>
 
-                        {/* CLEAR */}
-                        <MenuItem
-                            onClick={() => {
-                                setFilters(p => {
-                                    const copy = { ...p.columnFilters };
-                                    delete copy[activeHeader];
-                                    return { ...p, columnFilters: copy };
-                                });
+                                {/* 🔍 SEARCH */}
+                                <TextField
+                                    size="small"
+                                    fullWidth
+                                    placeholder={`Search ${activeHeader}`}
+                                    value={searchText}
+                                    onChange={e => setSearchText(e.target.value)}
+                                    sx={{ mb: 1 }}
+                                />
 
-                                setRangeFilter(p => {
-                                    const copy = { ...p };
-                                    delete copy[activeHeader];
-                                    return copy;
-                                });
+                                {/* CLEAR */}
+                                <MenuItem
+                                    onClick={() => {
+                                        setFilters(p => {
+                                            const copy = { ...p.columnFilters };
+                                            delete copy[activeHeader!];
+                                            return { ...p, columnFilters: copy };
+                                        });
 
-                                setFilterAnchor(null);
-                            }}
-                        >
-                            All
-                        </MenuItem>
+                                        setFilterAnchor(null);
+                                    }}
+                                >
+                                    All
+                                </MenuItem>
 
-                        {/* 🔥 MULTISELECT OPTIONS */}
-                        {[
-                            ...selectedValues,
-                            ...mergedOptions.filter(v => !selectedValues.includes(v))
-                        ]
-                            .filter(v =>
-                                v.toLowerCase().includes(searchText.toLowerCase())
-                            )
-                            .map(v => {
-                                const selected =
-                                    filters.columnFilters[activeHeader]?.includes(v) ?? false;
+                                {/* 🔥 MULTISELECT */}
+                                {[
+                                    ...selectedValues,
+                                    ...mergedOptions.filter(v => !selectedValues.includes(v))
+                                ]
+                                    .filter(v =>
+                                        v.toLowerCase().includes(searchText.toLowerCase())
+                                    )
+                                    .map(v => {
+                                        const selected =
+                                            filters.columnFilters[activeHeader!]?.includes(v) ?? false;
 
-                                return (
-                                    <MenuItem
-                                        key={v}
-                                        onClick={() =>
-                                            setFilters(p => {
-                                                const existing =
-                                                    p.columnFilters[activeHeader!] ?? [];
+                                        return (
+                                            <MenuItem
+                                                key={v}
+                                                onClick={() =>
+                                                    setFilters(p => {
+                                                        const existing =
+                                                            p.columnFilters[activeHeader!] ?? [];
 
-                                                return {
-                                                    ...p,
-                                                    columnFilters: {
-                                                        ...p.columnFilters,
-                                                        [activeHeader!]: selected
-                                                            ? existing.filter(x => x !== v)
-                                                            : [...existing, v],
-                                                    },
-                                                };
-                                            })
-                                        }
-                                        sx={{
-                                            backgroundColor: selected
-                                                ? "rgba(30, 58, 138, 0.15)"
-                                                : "transparent",
-                                            fontWeight: selected ? 600 : 400,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 1
-                                        }}
-                                    >
-                                        {/* ✅ Checkbox (important for UX) */}
-                                        <input
-                                            type="checkbox"
-                                            checked={selected}
-                                            readOnly
-                                        />
+                                                        return {
+                                                            ...p,
+                                                            columnFilters: {
+                                                                ...p.columnFilters,
+                                                                [activeHeader!]: selected
+                                                                    ? existing.filter(x => x !== v)
+                                                                    : [...existing, v],
+                                                            },
+                                                        };
+                                                    })
+                                                }
+                                                sx={{
+                                                    backgroundColor: selected
+                                                        ? "rgba(30, 58, 138, 0.15)"
+                                                        : "transparent",
+                                                    fontWeight: selected ? 600 : 400,
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    gap: 1
+                                                }}
+                                            >
+                                                <input type="checkbox" checked={selected} readOnly />
+                                                {v}
+                                            </MenuItem>
+                                        );
+                                    })}
 
-                                        {v}
-                                    </MenuItem>
-                                );
-                            })}
+                            </Box>
+                        )}
                     </Box>
                 </Menu>
             )}
@@ -1126,13 +1133,15 @@ const SalesReport: React.FC = () => {
                                 size="medium"
                                 checked={false}
                                 onChange={() =>
-                                    setColumns(prev =>
-                                        prev.map(c =>
+                                    setColumns(prev => {
+                                        const maxOrder = prev.length ? Math.max(...prev.map(c => c.order)) : 0;
+
+                                        return prev.map(c =>
                                             c.key === col.key
-                                                ? { ...c, enabled: true }
+                                                ? { ...c, enabled: true, order: maxOrder + 1 }
                                                 : c
-                                        )
-                                    )
+                                        );
+                                    })
                                 }
                                 sx={{
                                     "& .MuiSwitch-switchBase.Mui-checked": {
@@ -1213,4 +1222,4 @@ const SalesReport: React.FC = () => {
     );
 };
 
-export default SalesReport;
+export default PurchaseOrder;

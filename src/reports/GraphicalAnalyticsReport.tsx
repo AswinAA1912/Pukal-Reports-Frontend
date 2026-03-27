@@ -202,6 +202,14 @@ const AnalyticsReportPage: React.FC = () => {
 
   const graphData = viewType === "day" ? formattedDayData : formattedWeekData;
 
+  const tableData = useMemo(() => {
+    const source =
+      viewType === "day" ? formattedDayData : formattedWeekData;
+
+    // ✅ Reverse for table (latest first)
+    return [...source].reverse();
+  }, [formattedDayData, formattedWeekData, viewType]);
+
   const formatINR = (value: number) => {
     return new Intl.NumberFormat("en-IN").format(value || 0);
   };
@@ -508,7 +516,7 @@ const AnalyticsReportPage: React.FC = () => {
                     </TableHead>
 
                     <TableBody>
-                      {graphData.map((row, i) => (
+                      {tableData.map((row, i) => (
                         <TableRow key={i}>
                           <TableCell
                             sx={{

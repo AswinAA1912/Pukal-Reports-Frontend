@@ -13,10 +13,12 @@ import StockInHandReport from "../reports/stockinhandReport";
 import ItemWiseTransaction from "../reports/ItemTransactionList";
 import GodownItemWiseTransaction from "../reports/GodownItemTransactionList";
 import OnlineSalesReportLOL from "../reports/onlineSalesReportLOL";
-import SalesReport from "../reports/SalesReport";
+import SalesReport from "../reports/SalesAnalyticsReport";
 import LedgerWiseItemDetails from "../reports/LedgerWiseItemDetails";
 import SalesAnalyticsReportPage from "../reports/GraphicalAnalyticsReport";
 import OnlinePurchaseReportPage from "../reports/onlinePurchaseReport";
+import SalesOrderReport from "../reports/SaleOrderReport";
+import PurchaseOrder from "../reports/PurchaseOrderReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -224,6 +226,32 @@ const AppRouting: React.FC<AppRoutingProps> = ({
                 fullWidth
               >
                 <OnlinePurchaseReportPage/>
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/saleorder"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <SalesOrderReport/>
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/purchaseorder"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <PurchaseOrder/>
               </AppLayout>
             </RequireAuth>
           }

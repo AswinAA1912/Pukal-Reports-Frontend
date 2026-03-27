@@ -16,9 +16,14 @@ import {
     TextField,
     MenuItem,
     Tooltip,
+    Dialog,
+    DialogActions,
+    DialogTitle,
+    DialogContent
 } from "@mui/material";
 import dayjs from "dayjs";
 import SettingsIcon from "@mui/icons-material/Settings";
+import GroupWorkIcon from "@mui/icons-material/GroupWork";
 import {
     DndContext,
     closestCenter,
@@ -35,6 +40,8 @@ import {
 } from "@dnd-kit/sortable";
 import ArrowDropUpIcon from "@mui/icons-material/ArrowDropUp";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import AppLayout, { useToggleMode } from "../Layout/appLayout";
@@ -250,6 +257,15 @@ const OnlineSalesReportLOL: React.FC = () => {
 
     const currentDateKey = `${filters.Date.from}_${filters.Date.to}`;
 
+    const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+
+    const [grouping, setGrouping] = useState<string[]>([]);
+    const [pendingGrouping, setPendingGrouping] = useState<string[]>([]);
+
+    const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+
+    const serialRef = React.useRef(0);
+
     const HEADER_HEIGHT = 36;
 
     /* ================= LOAD DATA ================= */
@@ -328,103 +344,29 @@ const OnlineSalesReportLOL: React.FC = () => {
 
     };
 
-    /* ================= GROUPING ================= */
-
-    const processedRows = useMemo(() => {
-
-        const invoiceEnabled = columns.find(
-            c => c.key === "invoice_no"
-        )?.enabled;
-
-        // Grouping columns
-        const groupByColumns = columns
-            .filter(c => c.enabled && !c.isNumeric)
-            .map(c => c.key);
-
-        // If invoice_no explicitly enabled → no grouping
-        if (invoiceEnabled) return rawRows;
-
-        const map = new Map<string, any>();
-
-        rawRows.forEach(row => {
-            const key = groupByColumns
-                .map(col =>
-                    col === "Ledger_Date"
-                        ? dayjs(row[col]).format("YYYY-MM-DD")
-                        : row[col]
-                )
-                .join("__");
-
-            if (!map.has(key)) {
-                const base: any = {};
-                groupByColumns.forEach(c => (base[c] = row[c]));
-
-                // numeric aggregation
-                columns
-                    .filter(c => c.isNumeric)
-                    .forEach(c => (base[c.key] = Number(row[c.key] || 0)));
-
-                // invoice tracking
-                base.__invoiceSet = new Set(
-                    row.invoice_no ? [row.invoice_no] : []
-                );
-
-                map.set(key, base);
-            } else {
-                const existing = map.get(key);
-
-                columns
-                    .filter(c => c.isNumeric)
-                    .forEach(
-                        c => (existing[c.key] += Number(row[c.key] || 0))
-                    );
-
-                if (row.invoice_no)
-                    existing.__invoiceSet.add(row.invoice_no);
-            }
-        });
-
-        return Array.from(map.values()).map(r => ({
-            ...r,
-            __invoiceCount: r.__invoiceSet.size,
-        }));
-    }, [rawRows, columns, toggleMode]);
-
     /* ================= FILTERING ================= */
 
     const filteredRows = useMemo(() => {
-        return processedRows.filter(row => {
+        return rawRows.filter(row => {
             const rowDate = dayjs(row.Ledger_Date);
 
-            if (
-                filters.Date.from &&
-                rowDate.isBefore(dayjs(filters.Date.from), "day")
-            )
+            if (filters.Date.from && rowDate.isBefore(dayjs(filters.Date.from), "day"))
                 return false;
 
-            if (
-                filters.Date.to &&
-                rowDate.isAfter(dayjs(filters.Date.to), "day")
-            )
+            if (filters.Date.to && rowDate.isAfter(dayjs(filters.Date.to), "day"))
                 return false;
 
             for (const [key, values] of Object.entries(filters.columnFilters)) {
                 if (!values.length) continue;
 
-                const rowValue = String(row[key] ?? "")
-                    .trim()
-                    .toLowerCase();
-
-                const selectedValues = values.map(v =>
-                    v.trim().toLowerCase()
-                );
-
-                if (!selectedValues.includes(rowValue)) return false;
+                const rowValue = String(row[key] ?? "").toLowerCase();
+                if (!values.map(v => v.toLowerCase()).includes(rowValue))
+                    return false;
             }
 
             return true;
         });
-    }, [processedRows, filters]);
+    }, [rawRows, filters]);
 
     const sortedRows = useMemo(() => {
         if (!sortConfig.key) return filteredRows;
@@ -457,12 +399,71 @@ const OnlineSalesReportLOL: React.FC = () => {
         });
     }, [filteredRows, sortConfig]);
 
-    /* ================= PAGINATION ================= */
+    /* ================= GROUPING ================= */
 
-    const paginatedRows = sortedRows.slice(
-        (page - 1) * rowsPerPage ,
-        page * rowsPerPage 
+    const buildGroupedData = React.useCallback(
+        (data: any[], level: number, parentKey = ""): any[] => {
+            const groupKey = grouping[level];
+            if (!groupKey) return data;
+
+            const map = new Map<string, any[]>();
+
+            for (const row of data) {
+                const val = String(row[groupKey] ?? "Others");
+                if (!map.has(val)) map.set(val, []);
+                map.get(val)!.push(row);
+            }
+
+            return Array.from(map.entries()).map(([value, rows]) => ({
+                __group: true,
+                __key: `${parentKey}${groupKey}:${value}`,
+                __value: value,
+                __level: level,
+                __rows: rows,
+            }));
+        },
+        [grouping]
     );
+
+    const groupedRows = useMemo(() => {
+        if (!grouping.length) return filteredRows;
+        return buildGroupedData(filteredRows, 0);
+    }, [filteredRows, grouping]);
+
+    const flattenRows = (rows: any[]): any[] => {
+        const result: any[] = [];
+
+        const walk = (list: any[]) => {
+            for (const r of list) {
+                result.push(r);
+                if (r.__group && expandedKeys.includes(r.__key)) {
+                    walk(
+                        buildGroupedData(
+                            r.__rows,
+                            r.__level + 1,
+                            `${r.__key} > `
+                        )
+                    );
+                }
+            }
+        };
+
+        walk(rows);
+        return result;
+    };
+
+    const finalRows = useMemo(() => {
+        const rows = grouping.length
+            ? flattenRows(groupedRows)
+            : sortedRows;
+
+        return rows.slice(
+            (page - 1) * rowsPerPage,
+            page * rowsPerPage
+        );
+    }, [groupedRows, sortedRows, grouping, expandedKeys, page, rowsPerPage]);
+
+    /* ================= PAGINATION ================= */
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -585,7 +586,7 @@ const OnlineSalesReportLOL: React.FC = () => {
 
         const uniqueValues = Array.from(
             new Set(
-                processedRows
+                filteredRows
                     .map(r => r[activeHeader])
                     .filter(v => v !== null && v !== undefined && v !== "")
                     .map(v => String(v).trim())
@@ -597,7 +598,7 @@ const OnlineSalesReportLOL: React.FC = () => {
             activeHeader,
             sortConfig.order   // 🔥 sync with header sort icon
         );
-    }, [activeHeader, processedRows, sortConfig.order]);
+    }, [activeHeader, filteredRows, sortConfig.order]);
 
     const exportColumns = enabledColumns.map(c => ({
         key: c.key,
@@ -666,18 +667,40 @@ const OnlineSalesReportLOL: React.FC = () => {
                 onExportPDF={handleExportPDF}
                 onExportExcel={handleExportExcel}
                 settingsSlot={
-                    <Tooltip title="Table Settings">
-                        <IconButton size="small"
-                            onClick={(e) => setSettingsAnchor(e.currentTarget)}
-                            sx={{
-                                height: 24, width: 24,
-                                backgroundColor: "#fff",
-                                borderRadius: 0.5,
-                            }} >
-                            <SettingsIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
+                    <Box display="flex" gap={1}>
+                        {/* GROUP BY ICON */}
+                        <Tooltip title="Group By">
+                            <IconButton
+                                size="small"
+                                onClick={() => {
+                                    setPendingGrouping(grouping);
+                                    setGroupDialogOpen(true);
+                                }}
+                                sx={{
+                                    height: 24,
+                                    width: 24,
+                                    backgroundColor: "#fff",
+                                    borderRadius: 0.5,
+                                }}
+                            >
+                                <GroupWorkIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+
+                        <Tooltip title="Table Settings">
+                            <IconButton size="small"
+                                onClick={(e) => setSettingsAnchor(e.currentTarget)}
+                                sx={{
+                                    height: 24, width: 24,
+                                    backgroundColor: "#fff",
+                                    borderRadius: 0.5,
+                                }} >
+                                <SettingsIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
                 }
+
             />
 
             <ReportFilterDrawer
@@ -786,30 +809,84 @@ const OnlineSalesReportLOL: React.FC = () => {
                             </TableHead>
 
                             <TableBody>
+                                {(() => {
+                                    serialRef.current = grouping.length
+                                        ? 0
+                                        : (page - 1) * rowsPerPage;
 
-                                {paginatedRows.map((row, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell>
-                                            {(page - 1) * rowsPerPage  + i + 1}
-                                        </TableCell>
-                                        {enabledColumns.map((c) => (
-                                            <TableCell key={c.key}>
-                                                {c.key === "Ledger_Date"
-                                                    ? dayjs(row[c.key]).format("DD/MM/YYYY")
-                                                    : CURRENCY_KEYS.includes(c.key)
-                                                        ? formatINR(Number(row[c.key])) +
-                                                        (toggleMode === "Expanded" && row.__invoiceCount
-                                                            ? ` (${row.__invoiceCount})`
-                                                            : "")
-                                                        : c.key === "Item_Count" &&
-                                                            toggleMode === "Abstract" &&
-                                                            row.__invoiceCount
-                                                            ? `${row[c.key]} (${row.__invoiceCount})`
+                                    return finalRows.map((row: any, i) => {
+                                        if (row.__group) {
+                                            const expanded = expandedKeys.includes(row.__key);
+
+                                            return (
+                                                <TableRow key={row.__key} sx={{ background: "#E2E8F0" }}>
+                                                    <TableCell>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() =>
+                                                                setExpandedKeys(p =>
+                                                                    p.includes(row.__key)
+                                                                        ? p.filter(x => x !== row.__key)
+                                                                        : [...p, row.__key]
+                                                                )
+                                                            }
+                                                        >
+                                                            {expanded ? (
+                                                                <ExpandMoreIcon fontSize="small" />
+                                                            ) : (
+                                                                <ChevronRightIcon fontSize="small" />
+                                                            )}
+                                                        </IconButton>
+                                                    </TableCell>
+
+                                                    {enabledColumns.map(c => {
+                                                        const currentGroupKey = grouping[row.__level];
+
+                                                        if (c.key === currentGroupKey) {
+                                                            return (
+                                                                <TableCell key={c.key} sx={{ fontWeight: 700 }}>
+                                                                    {row.__value}
+                                                                </TableCell>
+                                                            );
+                                                        }
+
+                                                        if (c.isNumeric) {
+                                                            const total = row.__rows.reduce(
+                                                                (s: number, r: any) =>
+                                                                    s + Number(r[c.key] || 0),
+                                                                0
+                                                            );
+
+                                                            return (
+                                                                <TableCell key={c.key}>
+                                                                    {formatINR(total)}
+                                                                </TableCell>
+                                                            );
+                                                        }
+
+                                                        return <TableCell key={c.key} />;
+                                                    })}
+                                                </TableRow>
+                                            );
+                                        }
+
+                                        return (
+                                            <TableRow key={i}>
+                                                <TableCell>
+                                                    {!row.__group ? ++serialRef.current : ""}
+                                                </TableCell>
+
+                                                {enabledColumns.map(c => (
+                                                    <TableCell key={c.key}>
+                                                        {c.key === "Ledger_Date"
+                                                            ? dayjs(row[c.key]).format("DD/MM/YYYY")
                                                             : row[c.key]}
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                ))}
+                                                    </TableCell>
+                                                ))}
+                                            </TableRow>
+                                        );
+                                    });
+                                })()}
                             </TableBody>
                         </Table>
                     </TableContainer>
@@ -1054,6 +1131,66 @@ const OnlineSalesReportLOL: React.FC = () => {
                     </DndContext>
                 </Box>
             </Menu>
+
+            {/* *******GROUPING******* */}
+            <Dialog
+                open={groupDialogOpen}
+                onClose={() => setGroupDialogOpen(false)}
+                fullWidth
+                maxWidth="sm"
+            >
+                <DialogTitle>Group By Columns</DialogTitle>
+
+                <DialogContent>
+                    {[0, 1, 2].map(level => (
+                        <TextField
+                            key={level}
+                            select
+                            fullWidth
+                            margin="dense"
+                            label={`Level ${level + 1}`}
+                            value={pendingGrouping[level] || ""}
+                            onChange={e => {
+                                const copy = [...pendingGrouping];
+                                copy[level] = e.target.value;
+                                setPendingGrouping(copy);
+                            }}
+                        >
+                            <MenuItem value="">
+                                No Grouping (Level {level + 1})
+                            </MenuItem>
+
+                            {enabledColumns.map(col => (
+                                <MenuItem
+                                    key={col.key}
+                                    value={col.key}
+                                    disabled={pendingGrouping.includes(col.key)}
+                                >
+                                    {col.label}
+                                </MenuItem>
+                            ))}
+                        </TextField>
+                    ))}
+                </DialogContent>
+
+                <DialogActions>
+                    <Button color="warning" onClick={() => setGroupDialogOpen(false)}>
+                        Close
+                    </Button>
+
+                    <Button
+                        variant="contained"
+                        color="info"
+                        onClick={() => {
+                            setGrouping(pendingGrouping.filter(Boolean));
+                            setExpandedKeys([]);
+                            setGroupDialogOpen(false);
+                        }}
+                    >
+                        Apply
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
 };

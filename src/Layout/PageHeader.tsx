@@ -208,6 +208,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                     height: 24,
                     fontSize: "0.75rem",
                     backgroundColor: "#fff",
+                    color: "#000000",
                     borderRadius: 0.5,
                     display: "flex",
                     alignItems: "center",
