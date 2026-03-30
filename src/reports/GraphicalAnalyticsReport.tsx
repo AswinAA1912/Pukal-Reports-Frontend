@@ -28,7 +28,7 @@ import dayjs from "dayjs";
 import AppLayout from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
 import ReportFilterDrawer from "../Components/ReportFilterDrawer";
-import { DashBoardSalesGraph, DashBoardPurchaseGraph } from "../services/graphAnalysis.services";
+import { DashBoardSalesGraph, DashBoardPurchaseGraph, StockValueGraph } from "../services/graphAnalysis.services";
 import {
   ResponsiveContainer,
   LineChart,
@@ -112,27 +112,66 @@ const AnalyticsReportPage: React.FC = () => {
     try {
       let res;
 
+      const params = {
+        Fromdate: filters.Date.from,
+        Todate: filters.Date.to,
+      };
+
       if (reportType === "sales") {
-        res = await DashBoardSalesGraph.getDashboardGraph({
-          Fromdate: filters.Date.from,
-          Todate: filters.Date.to,
-        });
-      } else if (reportType === "purchase") {
-        res = await DashBoardPurchaseGraph.getDashboardGraph({
-          Fromdate: filters.Date.from,
-          Todate: filters.Date.to,
-        });
-      } else {
-        setLoading(false);
-        return;
+        res = await DashBoardSalesGraph.getDashboardGraph(params);
+
+        const data = res.data.data;
+
+        setDayData(data.DayWise || []);
+        setWeekData(data.WeekWiseData || []);
+        setDayTonnage(data.DayWiseTonnage || []);
+        setWeekTonnage(data.WeekWiseTonnage || []);
       }
 
-      const data = res.data.data;
+      else if (reportType === "purchase") {
+        res = await DashBoardPurchaseGraph.getDashboardGraph(params);
 
-      setDayData(data.DayWise || []);
-      setWeekData(data.WeekWiseData || []);
-      setDayTonnage(data.DayWiseTonnage || []);
-      setWeekTonnage(data.WeekWiseTonnage || []);
+        const data = res.data.data;
+
+        setDayData(data.DayWise || []);
+        setWeekData(data.WeekWiseData || []);
+        setDayTonnage(data.DayWiseTonnage || []);
+        setWeekTonnage(data.WeekWiseTonnage || []);
+      }
+
+      else if (reportType === "stock") {
+        res = await StockValueGraph.getDashboardGraph(params);
+
+        const data = res.data.data;
+
+        // 🔥 NORMALIZE STOCK DATA
+
+        setDayData(
+          (data.DayWise || []).map((d: any) => ({
+            Invoice_Date: d.Trans_Date,
+            Invoice_Count: d.Group_Count,
+            Total_Invoice_value: d.Total_value,
+          }))
+        );
+
+        setWeekData(
+          (data.WeekWiseData || []).map((w: any) => ({
+            Week_No: w.Week_No,
+            Invoice_Count: w.Group_Count,
+            Total_Invoice_value: w.Total_value,
+          }))
+        );
+
+        setDayTonnage(
+          (data.DayWiseTonnage || []).map((t: any) => ({
+            Invoice_Date: t.Trans_Date,
+            Total_Tons: t.Total_Tons,
+          }))
+        );
+
+        setWeekTonnage(data.WeekWiseTonnage || []);
+      }
+
     } catch (err) {
       console.error(err);
     }
@@ -141,9 +180,7 @@ const AnalyticsReportPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (reportType === "sales" || reportType === "purchase") {
-      loadGraph();
-    }
+    loadGraph();
   }, [filters, reportType]);
 
   /* ================= KPI VALUES ================= */
@@ -228,6 +265,12 @@ const AnalyticsReportPage: React.FC = () => {
   const avgInvoices = useMemo(() => totalInvoices / activeCount, [totalInvoices, activeCount]);
 
   const avgTonnage = useMemo(() => totalTonnage / activeCount, [totalTonnage, activeCount]);
+
+  const isStock = reportType === "stock";
+
+  const valueLabel = isStock ? "Stock Value" : "Invoice Value";
+  const countLabel = isStock ? "Group Count" : "Invoice Count";
+  const periodLabel = viewType === "day" ? "Days" : "Weeks";
 
 
   /* ================= UI ================= */
@@ -354,33 +397,64 @@ const AnalyticsReportPage: React.FC = () => {
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+                    gridTemplateColumns: isMobile
+                      ? "1fr"
+                      : isStock
+                        ? "repeat(2, 1fr)"
+                        : "repeat(3, 1fr)",
                     gap: 1,
                   }}
                 >
-                  <DualKpiCard
-                    totalLabel="Total Value"
-                    totalValue={totalValue}
-                    avgLabel={`Avg Value (${activeCount} Days)`}
-                    avgValue={avgValue}
-                    isCurrency
-                  />
+                  {/* ✅ STOCK KPI */}
+                  {isStock ? (
+                    <>
+                      <DualKpiCard
+                        totalLabel="Today's Stock Value"
+                        totalValue={
+                          formattedDayData[formattedDayData.length - 1]?.value || 0
+                        }
+                        avgLabel={`Monthly Avg (${activeCount} ${periodLabel})`}
+                        avgValue={avgValue}
+                        isCurrency
+                      />
 
-                  <DualKpiCard
-                    totalLabel="Invoice Count"
-                    totalValue={totalInvoices}
-                    avgLabel={`Avg Invoice (${activeCount} Days)`}
-                    avgValue={avgInvoices}
-                    isCurrency={false}
-                  />
+                      <DualKpiCard
+                        totalLabel="Today's Tonnage"
+                        totalValue={
+                          formattedDayData[formattedDayData.length - 1]?.tonnage || 0
+                        }
+                        avgLabel={`Avg Tonnage (${activeCount} ${periodLabel})`}
+                        avgValue={avgTonnage}
+                        isCurrency={false}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <DualKpiCard
+                        totalLabel={`Total ${valueLabel}`}
+                        totalValue={totalValue}
+                        avgLabel={`Avg Value (${activeCount} ${periodLabel})`}
+                        avgValue={avgValue}
+                        isCurrency
+                      />
 
-                  <DualKpiCard
-                    totalLabel="Total Tonnage"
-                    totalValue={totalTonnage}
-                    avgLabel={`Avg Tonnage (${activeCount} Days)`}
-                    avgValue={avgTonnage}
-                    isCurrency={false}
-                  />
+                      <DualKpiCard
+                        totalLabel={countLabel}
+                        totalValue={totalInvoices}
+                        avgLabel={`Avg ${countLabel} (${activeCount} ${periodLabel})`}
+                        avgValue={avgInvoices}
+                        isCurrency={false}
+                      />
+
+                      <DualKpiCard
+                        totalLabel="Total Tonnage"
+                        totalValue={totalTonnage}
+                        avgLabel={`Avg Tonnage (${activeCount} ${periodLabel})`}
+                        avgValue={avgTonnage}
+                        isCurrency={false}
+                      />
+                    </>
+                  )}
                 </Box>
 
                 {/* GRAPH */}
@@ -401,18 +475,25 @@ const AnalyticsReportPage: React.FC = () => {
                         <BarChart data={graphData}>
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="label" />
-                          <YAxis yAxisId="left" />
+                          <YAxis
+                            yAxisId="left"
+                            tickFormatter={(value) => {
+                              if (value >= 10000000) return `${(value / 10000000).toFixed(1)}Cr`;
+                              if (value >= 100000) return `${(value / 100000).toFixed(1)}L`;
+                              if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+                              return value;
+                            }}
+                          />
                           <YAxis yAxisId="right" orientation="right" />
 
                           <ChartTooltip
                             formatter={(value, name) => {
-                              if (name === "Invoice Value")
-                                return [
-                                  `₹${formatINR(value as number)}`,
-                                  name,
-                                ];
+                              if (name === valueLabel)
+                                return [`₹${formatINR(value as number)}`, name];
+
                               if (name === "Tonnage")
                                 return [`${value} Tons`, name];
+
                               return value;
                             }}
                           />
@@ -421,7 +502,7 @@ const AnalyticsReportPage: React.FC = () => {
                             yAxisId="left"
                             dataKey="value"
                             fill="#1E3A8A"
-                            name="Invoice Value"
+                            name={valueLabel}
                           />
 
                           <Bar
@@ -440,13 +521,12 @@ const AnalyticsReportPage: React.FC = () => {
 
                           <ChartTooltip
                             formatter={(value, name) => {
-                              if (name === "Invoice Value")
-                                return [
-                                  `₹${formatINR(value as number)}`,
-                                  name,
-                                ];
+                              if (name === valueLabel)
+                                return [`₹${formatINR(value as number)}`, name];
+
                               if (name === "Tonnage")
                                 return [`${value} Tons`, name];
+
                               return value;
                             }}
                           />
@@ -457,7 +537,7 @@ const AnalyticsReportPage: React.FC = () => {
                             dataKey="value"
                             stroke="#1E3A8A"
                             strokeWidth={2}
-                            name="Invoice Value"
+                            name={valueLabel}
                           />
 
                           <Line
@@ -503,14 +583,19 @@ const AnalyticsReportPage: React.FC = () => {
                         <TableCell sx={{ fontWeight: 600 }}>
                           {viewType === "day" ? "Date" : "Week"}
                         </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>
-                          Invoice
-                        </TableCell>
+
+                        {!isStock && (
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>
+                            {countLabel}
+                          </TableCell>
+                        )}
+
                         <TableCell align="right" sx={{ fontWeight: 600 }}>
                           Tonnage
                         </TableCell>
+
                         <TableCell align="right" sx={{ fontWeight: 600 }}>
-                          Value
+                          {valueLabel}
                         </TableCell>
                       </TableRow>
                     </TableHead>
@@ -518,20 +603,13 @@ const AnalyticsReportPage: React.FC = () => {
                     <TableBody>
                       {tableData.map((row, i) => (
                         <TableRow key={i}>
-                          <TableCell
-                            sx={{
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              maxWidth: 100
-                            }}
-                          >
-                            {row.label}
-                          </TableCell>
+                          <TableCell>{row.label}</TableCell>
 
-                          <TableCell align="right">
-                            {formatINR(row.invoiceCount)}
-                          </TableCell>
+                          {!isStock && (
+                            <TableCell align="right">
+                              {formatINR(row.invoiceCount)}
+                            </TableCell>
+                          )}
 
                           <TableCell align="right">
                             {row.tonnage.toFixed(2)}
@@ -629,21 +707,36 @@ const DualKpiCard = ({
   avgValue: number;
   isCurrency?: boolean;
 }) => (
-  <Card sx={{ height: 60 }}>
-    <CardContent sx={{ p: "8px !important" }}>
+  <Card sx={{ height: 70 }}>
+    <CardContent sx={{ p: "8px !important", height: "100%" }}>
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          height: "100%",
         }}
       >
         {/* TOTAL */}
-        <Box sx={{ flex: 1 }}>
-          <Typography fontSize={12} color="text.secondary">
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <Typography
+            fontSize={11}
+            color="text.secondary"
+            noWrap
+          >
             {totalLabel}
           </Typography>
-          <Typography fontWeight={700} fontSize={14}>
+
+          <Typography
+            fontWeight={700}
+            fontSize={14}
+            noWrap
+          >
             {isCurrency
               ? `₹${formatINR(totalValue)}`
               : formatINR(totalValue)}
@@ -654,18 +747,33 @@ const DualKpiCard = ({
         <Box
           sx={{
             width: "1px",
-            height: 30,
+            height: "70%",
             background: "#e5e7eb",
             mx: 1,
           }}
         />
 
         {/* AVG */}
-        <Box sx={{ flex: 1 }}>
-          <Typography fontSize={12} color="text.secondary">
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            textAlign: "right",
+          }}
+        >
+          <Typography
+            fontSize={11}
+            color="text.secondary"
+            noWrap
+          >
             {avgLabel}
           </Typography>
-          <Typography fontWeight={600} fontSize={13}>
+
+          <Typography
+            fontWeight={600}
+            fontSize={13}
+            noWrap
+          >
             {isCurrency
               ? `₹${formatINR(avgValue)}`
               : avgValue.toFixed(2)}

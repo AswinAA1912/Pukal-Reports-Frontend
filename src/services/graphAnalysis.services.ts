@@ -48,3 +48,12 @@ export const DashBoardPurchaseGraph = {
       { params }
     )
 }
+
+export const StockValueGraph = {
+  getDashboardGraph: (params?: { Fromdate?: string; Todate?: string; Company_Id?: number; }) =>
+    axios.get<{ success: boolean; data: DashboardGraphResponse }>(
+      //  `http://192.168.1.92:9001/api/reports/externalAPI/StockValueGraph`,
+      `${getBaseURL()}api/reports/externalAPI/StockValueGraph`,
+      {params}
+    )
+}
