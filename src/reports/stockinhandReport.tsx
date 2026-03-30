@@ -57,11 +57,8 @@ const StockInHandReport: React.FC = () => {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [fromDate, setFromDate] = useState(today);
     const [toDate, setToDate] = useState(today);
-    const [level1Options, setLevel1Options] = useState<
-        { value: string; label: string }[]
-    >([]);
-    const [level1Column, setLevel1Column] = useState<string>("");
-    const [selectedLevel1, setSelectedLevel1] = useState<string | number>("");
+    const [filterLevels, setFilterLevels] = useState<Record<number, any[]>>({});
+    const [selectedFilters, setSelectedFilters] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
     const [selectedLevel2, setSelectedLevel2] = useState<string[]>([]);
 
@@ -116,17 +113,21 @@ const StockInHandReport: React.FC = () => {
                 );
 
                 // LEVEL 1 FILTER
-                const level1Filter = cfg.find(
-                    g => g.FilterLevel === 1 && g.isGroupFilter === false
-                );
+                // ✅ GROUP ALL FILTERS BY LEVEL
+                const filtersOnly = cfg.filter(g => g.isGroupFilter === false);
 
-                if (level1Filter) {
-                    setLevel1Options(level1Filter.options || []);
-                    setLevel1Column(level1Filter.columnName);
-                } else {
-                    setLevel1Options([]);
-                    setLevel1Column("");
-                }
+                const grouped: Record<number, any[]> = {};
+
+                filtersOnly.forEach((f) => {
+                    const lvl = f.FilterLevel || 1;
+                    if (!grouped[lvl]) grouped[lvl] = [];
+                    grouped[lvl].push(f);
+                });
+
+                setFilterLevels(grouped);
+
+                // reset selected values
+                setSelectedFilters({});
 
                 // LEVEL 2 FILTER (CASCADING META)
                 const lvl2 = cfg.filter(
@@ -161,11 +162,11 @@ const StockInHandReport: React.FC = () => {
                 rawData,
                 expanded,
                 page,
-                selectedLevel1,
+                selectedFilters,
                 selectedLevel2ByType
             }
         }));
-    }, [rawData, expanded, page, selectedLevel1, selectedLevel2ByType, toggleMode]);
+    }, [rawData, expanded, page, selectedFilters, selectedLevel2ByType, toggleMode]);
 
     useEffect(() => {
         const state = modeState[toggleMode];
@@ -173,7 +174,7 @@ const StockInHandReport: React.FC = () => {
         if (state) {
             setExpanded(state.expanded || {});
             setPage(state.page || 1);
-            setSelectedLevel1(state.selectedLevel1 || "");
+            setSelectedFilters(state.selectedFilters || "");
             setSelectedLevel2ByType(state.selectedLevel2ByType || {});
         }
 
@@ -192,18 +193,24 @@ const StockInHandReport: React.FC = () => {
             ? godownwisestockreportservice.getGodownwiseReports
             : itemwisestockreportservice.getItemwiseReports;
 
-        const level1Label = level1Options.find(
-            opt => opt.value === selectedLevel1
-        )?.label;
-
         const payload: any = {
             Fromdate: fromDate,
             Todate: toDate,
         };
 
-        if (level1Column && level1Label) {
-            payload[level1Column] = level1Label;
-        }
+        Object.keys(selectedFilters).forEach((col) => {
+            const value = selectedFilters[col];
+
+            const filter = Object.values(filterLevels)
+                .flat()
+                .find((f: any) => f.columnName === col);
+
+            const label = filter?.options?.find((o: any) => o.value === value)?.label;
+
+            if (label) {
+                payload[col] = label;
+            }
+        });
 
         try {
             const res = await api(payload);
@@ -214,19 +221,18 @@ const StockInHandReport: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    }, [isExpanded, selectedLevel1, fromDate, toDate, level1Column]);
+    }, [isExpanded, selectedFilters, fromDate, toDate]);
 
     useEffect(() => {
-        if (!level1Column) return;
 
         loadData();
-    }, [toggleMode, selectedLevel1, fromDate, toDate]);
+    }, [toggleMode, selectedFilters, fromDate, toDate]);
 
     useEffect(() => {
         setSelectedLevel2([]);
         setExpanded({});
         setPage(1);
-    }, [selectedLevel1, toggleMode]);
+    }, [selectedFilters, toggleMode]);
 
     useEffect(() => {
         const saved = sessionStorage.getItem("stockInHandState");
@@ -237,7 +243,7 @@ const StockInHandReport: React.FC = () => {
         setRawData(state.rawData || []);
         setExpanded(state.expanded || {});
         setPage(state.page || 1);
-        setSelectedLevel1(state.selectedLevel1 || "");
+        setSelectedFilters(state.selectedFilters || "");
         setSelectedLevel2ByType(state.selectedLevel2ByType || {});
         setToggleMode(state.toggleMode || "Abstract");
         setFromDate(state.fromDate || today);
@@ -253,14 +259,24 @@ const StockInHandReport: React.FC = () => {
         let filtered = rawData;
 
         // LEVEL 1 FILTER
-        if (selectedLevel1 && level1Column) {
-            const level1Label =
-                level1Options.find(opt => opt.value === selectedLevel1)?.label;
+        // ✅ DYNAMIC FILTERS
+        Object.keys(selectedFilters).forEach((col) => {
+            const value = selectedFilters[col];
 
-            filtered = filtered.filter(
-                r => String(r[level1Column]) === String(level1Label)
-            );
-        }
+            const filter = Object.values(filterLevels)
+                .flat()
+                .find((f: any) => f.columnName === col);
+
+            const label = filter?.options?.find(
+                (opt: any) => String(opt.value) === String(value)
+            )?.label;
+
+            if (label) {
+                filtered = filtered.filter(
+                    (r) => String(r[col]) === String(label)
+                );
+            }
+        });
 
         // LEVEL 2 FILTER
         level2TypeOrder.forEach(type => {
@@ -294,9 +310,7 @@ const StockInHandReport: React.FC = () => {
         return filtered;
     }, [
         rawData,
-        selectedLevel1,
-        level1Column,
-        level1Options,
+        selectedFilters,
         level2TypeOrder,
         level2Meta,
         selectedLevel2ByType,
@@ -319,7 +333,7 @@ const StockInHandReport: React.FC = () => {
             JSON.stringify({
                 expanded,
                 page,
-                selectedLevel1,
+                selectedFilters,
                 selectedLevel2ByType,
                 toggleMode,
                 fromDate,
@@ -373,17 +387,28 @@ const StockInHandReport: React.FC = () => {
 
     // ✅ BASE DATA FOR LEVEL-2 CHIPS (MOBILE PARITY)
     const level1FilteredData = useMemo(() => {
-        if (!selectedLevel1 || !level1Column) return rawData;
+    let filtered = rawData;
 
-        const level1Label =
-            level1Options.find(opt => opt.value === selectedLevel1)?.label;
+    Object.keys(selectedFilters).forEach((col) => {
+        const value = selectedFilters[col];
 
-        if (!level1Label) return rawData;
+        const filter = Object.values(filterLevels)
+            .flat()
+            .find((f: any) => f.columnName === col);
 
-        return rawData.filter(
-            r => String(r[level1Column]) === String(level1Label)
-        );
-    }, [rawData, selectedLevel1, level1Column, level1Options]);
+        const label = filter?.options?.find(
+            (opt: any) => String(opt.value) === String(value)
+        )?.label;
+
+        if (label) {
+            filtered = filtered.filter(
+                (r) => String(r[col]) === String(label)
+            );
+        }
+    });
+
+    return filtered;
+}, [rawData, selectedFilters, filterLevels]);
 
 
     /* ===== GODOWN FIRST (EXPANDED MODE) ===== */
@@ -749,10 +774,14 @@ const StockInHandReport: React.FC = () => {
                 toDate={toDate}
                 onFromDateChange={setFromDate}
                 onToDateChange={setToDate}
-                dropdownLabel="Filter Level 1"
-                dropdownValue={selectedLevel1}
-                dropdownOptions={level1Options}
-                onDropdownChange={setSelectedLevel1}
+                filterLevels={filterLevels}
+                selectedFilters={selectedFilters}
+                onFilterChange={(col, val) => {
+                    setSelectedFilters((prev) => ({
+                        ...prev,
+                        [col]: val,
+                    }));
+                }}
                 stockFilter={stockFilter}
                 onStockFilterChange={setStockFilter}
                 onApply={() => {
