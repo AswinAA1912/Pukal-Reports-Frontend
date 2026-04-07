@@ -21,9 +21,10 @@ import {
     DialogContent,
     DialogActions,
     CircularProgress,
-    Slider
+    Slider,
 } from "@mui/material";
 import dayjs from "dayjs";
+import { toast } from "react-toastify";
 import SettingsIcon from "@mui/icons-material/Settings";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import GroupWorkIcon from "@mui/icons-material/GroupWork";
@@ -177,7 +178,17 @@ const SalesReport: React.FC = () => {
         abstract: ColumnConfig[];
         expanded: ColumnConfig[];
     } | null>(null);
-
+    const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+    const [reportName, setReportName] = useState("");
+    const [parentReportName, setParentReportName] = useState("");
+    const [spConfig, setSpConfig] = useState({
+        abstractSP: "",
+        expandedSP: ""
+    });
+    const SP_MAP = {
+        Abstract: "Avg_Live_Sales_Report_3",
+        Expanded: "Avg_Live_Sales_Report_1"
+    };
 
     const HEADER_HEIGHT = 36;
 
@@ -185,10 +196,12 @@ const SalesReport: React.FC = () => {
 
     useEffect(() => {
         setLoading(true);
-        const service =
-            toggleMode === "Expanded"
-                ? SalesReportItemService.getReports
-                : SalesReportLedgerService.getReports;
+
+        const isExpanded = toggleMode === "Expanded";
+
+        const service = isExpanded
+            ? SalesReportItemService.getReports
+            : SalesReportLedgerService.getReports;
 
         service({
             Fromdate: filters.Date.from,
@@ -196,9 +209,17 @@ const SalesReport: React.FC = () => {
         })
             .then(res => {
                 const apiRows = res.data.data || [];
+
+                // ✅ AUTO DETECT SP
+                setSpConfig(prev => ({
+                    ...prev,
+                    abstractSP: !isExpanded ? SP_MAP.Abstract : prev.abstractSP,
+                    expandedSP: isExpanded ? SP_MAP.Expanded : prev.expandedSP,
+                }));
+
                 let cols = buildColumnsFromApi(apiRows, toggleMode);
 
-                // 🔥 APPLY TEMPLATE
+                // ✅ APPLY TEMPLATE IF EXISTS
                 if (toggleMode === "Expanded" && templateConfig?.expanded) {
                     cols = applyTemplateToColumns(cols, templateConfig.expanded);
                 }
@@ -207,12 +228,29 @@ const SalesReport: React.FC = () => {
                     cols = applyTemplateToColumns(cols, templateConfig.abstract);
                 }
 
-                if (toggleMode === "Expanded") {
+                if (isExpanded) {
                     setExpandedRows(apiRows);
-                    setExpandedColumns(cols);
+
+                    setExpandedColumns(prev => {
+                        // 🔥 RESET ONLY when DATE or TEMPLATE changes
+                        const shouldReset =
+                            prev.length === 0 ||
+                            templateConfig !== null;
+
+                        return shouldReset ? cols : prev;
+                    });
+
                 } else {
                     setAbstractRows(apiRows);
-                    setAbstractColumns(cols);
+
+                    setAbstractColumns(prev => {
+                        // 🔥 RESET ONLY when DATE or TEMPLATE changes
+                        const shouldReset =
+                            prev.length === 0 ||
+                            templateConfig !== null;
+
+                        return shouldReset ? cols : prev;
+                    });
                 }
 
                 setPage(1);
@@ -289,6 +327,12 @@ const SalesReport: React.FC = () => {
                 expanded: expRes.data.data.columns || []
             });
 
+            // 🔥 FIX: GET SP FROM reportInfo
+            setSpConfig({
+                abstractSP: absRes.data.data.reportInfo.Abstract_SP,
+                expandedSP: expRes.data.data.reportInfo.Expanded_SP
+            });
+
         } catch (err) {
             console.error("Template Load Error:", err);
         }
@@ -359,6 +403,13 @@ const SalesReport: React.FC = () => {
         }
 
     }, [templateConfig, toggleMode]);
+
+    useEffect(() => {
+        setSpConfig({
+            abstractSP: SP_MAP.Abstract,
+            expandedSP: SP_MAP.Expanded
+        });
+    }, []);
 
     /* ================= FILTERING ================= */
 
@@ -852,6 +903,115 @@ const SalesReport: React.FC = () => {
     const activeColumnConfig = columns.find(c => c.key === activeHeader);
     const isNumberField = activeColumnConfig?.isNumeric ?? false;
 
+    const handleQuickSave = async () => {
+        try {
+
+            if (!reportName.trim()) {
+                toast.error("Enter Report Name");
+                return;
+            }
+
+            if (!parentReportName?.trim()) {
+                toast.error("Parent Report missing");
+                return;
+            }
+
+            if (!spConfig.abstractSP || !spConfig.expandedSP) {
+                toast.error("SP not initialized");
+                return;
+            }
+
+            let finalAbstractCols = abstractColumns;
+            let finalExpandedCols = expandedColumns;
+
+            // 🔥 AUTO FIX: if Expanded not loaded → build from Abstract rows
+            if (!expandedColumns.length && expandedRows.length) {
+                finalExpandedCols = buildColumnsFromApi(expandedRows, "Expanded");
+            }
+
+            // 🔥 AUTO FIX: if Abstract not loaded → build from Expanded rows
+            if (!abstractColumns.length && abstractRows.length) {
+                finalAbstractCols = buildColumnsFromApi(abstractRows, "Abstract");
+            }
+
+            // 🚨 FINAL SAFETY CHECK
+            if (!finalAbstractCols.length || !finalExpandedCols.length) {
+                toast.error("Both Abstract & Expanded data must be loaded at least once");
+                return;
+            }
+
+            const payload = {
+                reportName,
+                parentReport: parentReportName,
+                abstractSP: spConfig.abstractSP,
+                expandedSP: spConfig.expandedSP,
+
+                abstractColumns: finalAbstractCols.map((c) => ({
+                    key: c.key,
+                    label: c.label,
+                    enabled: c.enabled,
+                    order: c.order,
+                    groupBy: abstractGrouping.indexOf(c.key) + 1 || 0,
+                    dataType: "nvarchar"
+                })),
+
+                expandedColumns: finalExpandedCols.map((c) => ({
+                    key: c.key,
+                    label: c.label,
+                    enabled: c.enabled,
+                    order: c.order,
+                    groupBy: expandedGrouping.indexOf(c.key) + 1 || 0,
+                    dataType: "nvarchar"
+                }))
+            };
+
+            await SettingsService.saveReportSettings(payload);
+
+            toast.success("Template Saved");
+            setSaveDialogOpen(false);
+
+            // 🔥 RESET EVERYTHING TO INITIAL STATE
+            setTemplateConfig(null);
+
+            // reset columns
+            setAbstractColumns([]);
+            setExpandedColumns([]);
+
+            // reset grouping
+            setAbstractGrouping([]);
+            setExpandedGrouping([]);
+            setAbstractPendingGrouping([]);
+            setExpandedPendingGrouping([]);
+            setAbstractExpandedKeys([]);
+            setExpandedExpandedKeys([]);
+
+            // reset filters (optional but recommended)
+            setFilters({
+                Date: {
+                    from: dayjs().format("YYYY-MM-DD"),
+                    to: dayjs().format("YYYY-MM-DD"),
+                },
+                columnFilters: {}
+            });
+
+            // reset range + modes
+            setRangeFilter({});
+            setColumnMode({});
+
+            // reset pagination
+            setPage(1);
+
+            // 🔥 force reload (optional but safest)
+            setTimeout(() => {
+                window.location.reload();
+            }, 300);
+
+        } catch (err) {
+            console.error("❌ SAVE ERROR:", err);
+            toast.error("Error saving ❌");
+        }
+    };
+
     /* ================= RENDER ================= */
 
     return (
@@ -864,10 +1024,14 @@ const SalesReport: React.FC = () => {
                 onReportChange={(template) => {
                     loadTemplate(template.Report_Id);
                 }}
+                onQuickSave={(parentName) => {
+                    setParentReportName(parentName);
+                    setSaveDialogOpen(true);
+                }}
                 settingsSlot={
-                    <Box display="flex" gap={1}>
+                    < Box display="flex" gap={1} >
                         {/* GROUP BY ICON */}
-                        <Tooltip title="Group By">
+                        < Tooltip title="Group By" >
                             <IconButton
                                 size="small"
                                 onClick={() => {
@@ -883,10 +1047,10 @@ const SalesReport: React.FC = () => {
                             >
                                 <GroupWorkIcon fontSize="small" />
                             </IconButton>
-                        </Tooltip>
+                        </Tooltip >
 
                         {/* COLUMN SETTINGS */}
-                        <Tooltip title="Column Settings">
+                        < Tooltip title="Column Settings" >
                             <IconButton
                                 size="small"
                                 onClick={e => setSettingsAnchor(e.currentTarget)}
@@ -899,28 +1063,30 @@ const SalesReport: React.FC = () => {
                             >
                                 <SettingsIcon fontSize="small" />
                             </IconButton>
-                        </Tooltip>
-                    </Box>
+                        </Tooltip >
+                    </Box >
                 }
             />
-            <ReportFilterDrawer
+            < ReportFilterDrawer
                 open={drawerOpen}
                 onToggle={() => setDrawerOpen(p => !p)}
                 onClose={() => setDrawerOpen(false)}
                 fromDate={filters.Date.from}
                 toDate={filters.Date.to}
-                onFromDateChange={v =>
-                    setFilters(p => ({ ...p, Date: { ...p.Date, from: v } }))
+                onFromDateChange={
+                    v =>
+                        setFilters(p => ({ ...p, Date: { ...p.Date, from: v } }))
                 }
-                onToDateChange={v =>
-                    setFilters(p => ({ ...p, Date: { ...p.Date, to: v } }))
+                onToDateChange={
+                    v =>
+                        setFilters(p => ({ ...p, Date: { ...p.Date, to: v } }))
                 }
                 stockFilter={stockFilter}
                 onStockFilterChange={setStockFilter}
                 onApply={() => setDrawerOpen(false)}
             />
 
-            <AppLayout fullWidth>
+            < AppLayout fullWidth >
                 <Box sx={{ overflow: "auto", mt: 1 }}>
                     <TableContainer
                         component={Paper}
@@ -1054,206 +1220,208 @@ const SalesReport: React.FC = () => {
                         }}
                     />
                 </Box>
-            </AppLayout>
+            </AppLayout >
 
             {/* ===== FILTER MENU ===== */}
-            {activeHeader && (
-                <Menu
-                    anchorEl={filterAnchor}
-                    open={Boolean(filterAnchor)}
-                    onClose={() => setFilterAnchor(null)}
-                >
-                    <Box p={2} minWidth={260}>
+            {
+                activeHeader && (
+                    <Menu
+                        anchorEl={filterAnchor}
+                        open={Boolean(filterAnchor)}
+                        onClose={() => setFilterAnchor(null)}
+                    >
+                        <Box p={2} minWidth={260}>
 
-                        {/* 🔍 SEARCH */}
-                        <TextField
-                            size="small"
-                            fullWidth
-                            placeholder={`Search ${activeHeader}`}
-                            value={searchText}
-                            onChange={e => setSearchText(e.target.value)}
-                            sx={{ mb: 1 }}
-                        />
+                            {/* 🔍 SEARCH */}
+                            <TextField
+                                size="small"
+                                fullWidth
+                                placeholder={`Search ${activeHeader}`}
+                                value={searchText}
+                                onChange={e => setSearchText(e.target.value)}
+                                sx={{ mb: 1 }}
+                            />
 
-                        {/* 🔥 RANGE SLIDER (ONLY NUMBER FIELD) */}
-                        {isNumberField && (() => {
-                            const { min, max } = getMinMax(activeHeader);
+                            {/* 🔥 RANGE SLIDER (ONLY NUMBER FIELD) */}
+                            {isNumberField && (() => {
+                                const { min, max } = getMinMax(activeHeader);
 
-                            const currentRange =
-                                rangeFilter[activeHeader] || [min, max];
+                                const currentRange =
+                                    rangeFilter[activeHeader] || [min, max];
 
-                            const handleSliderChange = (newValue: number[]) => {
-                                setRangeFilter(prev => ({
-                                    ...prev,
-                                    [activeHeader!]: newValue as [number, number],
-                                }));
-                            };
+                                const handleSliderChange = (newValue: number[]) => {
+                                    setRangeFilter(prev => ({
+                                        ...prev,
+                                        [activeHeader!]: newValue as [number, number],
+                                    }));
+                                };
 
-                            const handleFromChange = (value: string) => {
-                                let newFrom = Number(value);
-                                if (isNaN(newFrom)) return;
+                                const handleFromChange = (value: string) => {
+                                    let newFrom = Number(value);
+                                    if (isNaN(newFrom)) return;
 
-                                newFrom = Math.max(min, Math.min(newFrom, currentRange[1]));
+                                    newFrom = Math.max(min, Math.min(newFrom, currentRange[1]));
 
-                                handleSliderChange([newFrom, currentRange[1]]);
-                            };
+                                    handleSliderChange([newFrom, currentRange[1]]);
+                                };
 
-                            const handleToChange = (value: string) => {
-                                let newTo = Number(value);
-                                if (isNaN(newTo)) return;
+                                const handleToChange = (value: string) => {
+                                    let newTo = Number(value);
+                                    if (isNaN(newTo)) return;
 
-                                newTo = Math.min(max, Math.max(newTo, currentRange[0]));
+                                    newTo = Math.min(max, Math.max(newTo, currentRange[0]));
 
-                                handleSliderChange([currentRange[0], newTo]);
-                            };
+                                    handleSliderChange([currentRange[0], newTo]);
+                                };
 
-                            return (
-                                <Box m={1}>
-                                    {/* 🔥 RANGE HEADER + INPUTS INLINE */}
-                                    <Box display="flex" alignItems="center" gap={1} mb={0.5}>
+                                return (
+                                    <Box m={1}>
+                                        {/* 🔥 RANGE HEADER + INPUTS INLINE */}
+                                        <Box display="flex" alignItems="center" gap={1} mb={0.5}>
 
-                                        {/* LABEL */}
-                                        <Typography fontSize={12} sx={{ minWidth: 40 }}>
-                                            Range
-                                        </Typography>
+                                            {/* LABEL */}
+                                            <Typography fontSize={12} sx={{ minWidth: 40 }}>
+                                                Range
+                                            </Typography>
 
-                                        {/* FROM */}
-                                        <TextField
-                                            type="number"
+                                            {/* FROM */}
+                                            <TextField
+                                                type="number"
+                                                size="small"
+                                                value={currentRange[0]}
+                                                onChange={(e) => handleFromChange(e.target.value)}
+                                                placeholder="From"
+                                                sx={{
+                                                    width: 65,
+                                                    "& input": {
+                                                        py: 0.4,
+                                                        fontSize: "0.75rem",
+                                                        textAlign: "center"
+                                                    }
+                                                }}
+                                            />
+
+                                            {/* DASH */}
+                                            <Typography fontSize={12}>—</Typography>
+
+                                            {/* TO */}
+                                            <TextField
+                                                type="number"
+                                                size="small"
+                                                value={currentRange[1]}
+                                                onChange={(e) => handleToChange(e.target.value)}
+                                                placeholder="To"
+                                                sx={{
+                                                    width: 65,
+                                                    "& input": {
+                                                        py: 0.4,
+                                                        fontSize: "0.75rem",
+                                                        textAlign: "center"
+                                                    }
+                                                }}
+                                            />
+                                        </Box>
+
+                                        {/* 🔥 SLIDER */}
+                                        <Slider
+                                            value={currentRange}
+                                            min={min}
+                                            max={max}
+                                            step={1}
                                             size="small"
-                                            value={currentRange[0]}
-                                            onChange={(e) => handleFromChange(e.target.value)}
-                                            placeholder="From"
+                                            onChange={(_, newValue) =>
+                                                handleSliderChange(newValue as number[])
+                                            }
+                                            valueLabelDisplay="auto"
                                             sx={{
-                                                width: 65,
-                                                "& input": {
-                                                    py: 0.4,
-                                                    fontSize: "0.75rem",
-                                                    textAlign: "center"
-                                                }
-                                            }}
-                                        />
-
-                                        {/* DASH */}
-                                        <Typography fontSize={12}>—</Typography>
-
-                                        {/* TO */}
-                                        <TextField
-                                            type="number"
-                                            size="small"
-                                            value={currentRange[1]}
-                                            onChange={(e) => handleToChange(e.target.value)}
-                                            placeholder="To"
-                                            sx={{
-                                                width: 65,
-                                                "& input": {
-                                                    py: 0.4,
-                                                    fontSize: "0.75rem",
-                                                    textAlign: "center"
+                                                py: 0,
+                                                "& .MuiSlider-thumb": {
+                                                    width: 12,
+                                                    height: 12,
                                                 }
                                             }}
                                         />
                                     </Box>
-
-                                    {/* 🔥 SLIDER */}
-                                    <Slider
-                                        value={currentRange}
-                                        min={min}
-                                        max={max}
-                                        step={1}
-                                        size="small"
-                                        onChange={(_, newValue) =>
-                                            handleSliderChange(newValue as number[])
-                                        }
-                                        valueLabelDisplay="auto"
-                                        sx={{
-                                            py: 0,
-                                            "& .MuiSlider-thumb": {
-                                                width: 12,
-                                                height: 12,
-                                            }
-                                        }}
-                                    />
-                                </Box>
-                            );
-                        })()}
-
-                        {/* CLEAR */}
-                        <MenuItem
-                            onClick={() => {
-                                setFilters(p => {
-                                    const copy = { ...p.columnFilters };
-                                    delete copy[activeHeader];
-                                    return { ...p, columnFilters: copy };
-                                });
-
-                                setRangeFilter(p => {
-                                    const copy = { ...p };
-                                    delete copy[activeHeader];
-                                    return copy;
-                                });
-
-                                setFilterAnchor(null);
-                            }}
-                        >
-                            All
-                        </MenuItem>
-
-                        {/* 🔥 MULTISELECT OPTIONS */}
-                        {[
-                            ...selectedValues,
-                            ...mergedOptions.filter(v => !selectedValues.includes(v))
-                        ]
-                            .filter(v =>
-                                v.toLowerCase().includes(searchText.toLowerCase())
-                            )
-                            .map(v => {
-                                const selected =
-                                    filters.columnFilters[activeHeader]?.includes(v) ?? false;
-
-                                return (
-                                    <MenuItem
-                                        key={v}
-                                        onClick={() =>
-                                            setFilters(p => {
-                                                const existing =
-                                                    p.columnFilters[activeHeader!] ?? [];
-
-                                                return {
-                                                    ...p,
-                                                    columnFilters: {
-                                                        ...p.columnFilters,
-                                                        [activeHeader!]: selected
-                                                            ? existing.filter(x => x !== v)
-                                                            : [...existing, v],
-                                                    },
-                                                };
-                                            })
-                                        }
-                                        sx={{
-                                            backgroundColor: selected
-                                                ? "rgba(30, 58, 138, 0.15)"
-                                                : "transparent",
-                                            fontWeight: selected ? 600 : 400,
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: 1
-                                        }}
-                                    >
-                                        {/* ✅ Checkbox (important for UX) */}
-                                        <input
-                                            type="checkbox"
-                                            checked={selected}
-                                            readOnly
-                                        />
-
-                                        {v}
-                                    </MenuItem>
                                 );
-                            })}
-                    </Box>
-                </Menu>
-            )}
+                            })()}
+
+                            {/* CLEAR */}
+                            <MenuItem
+                                onClick={() => {
+                                    setFilters(p => {
+                                        const copy = { ...p.columnFilters };
+                                        delete copy[activeHeader];
+                                        return { ...p, columnFilters: copy };
+                                    });
+
+                                    setRangeFilter(p => {
+                                        const copy = { ...p };
+                                        delete copy[activeHeader];
+                                        return copy;
+                                    });
+
+                                    setFilterAnchor(null);
+                                }}
+                            >
+                                All
+                            </MenuItem>
+
+                            {/* 🔥 MULTISELECT OPTIONS */}
+                            {[
+                                ...selectedValues,
+                                ...mergedOptions.filter(v => !selectedValues.includes(v))
+                            ]
+                                .filter(v =>
+                                    v.toLowerCase().includes(searchText.toLowerCase())
+                                )
+                                .map(v => {
+                                    const selected =
+                                        filters.columnFilters[activeHeader]?.includes(v) ?? false;
+
+                                    return (
+                                        <MenuItem
+                                            key={v}
+                                            onClick={() =>
+                                                setFilters(p => {
+                                                    const existing =
+                                                        p.columnFilters[activeHeader!] ?? [];
+
+                                                    return {
+                                                        ...p,
+                                                        columnFilters: {
+                                                            ...p.columnFilters,
+                                                            [activeHeader!]: selected
+                                                                ? existing.filter(x => x !== v)
+                                                                : [...existing, v],
+                                                        },
+                                                    };
+                                                })
+                                            }
+                                            sx={{
+                                                backgroundColor: selected
+                                                    ? "rgba(30, 58, 138, 0.15)"
+                                                    : "transparent",
+                                                fontWeight: selected ? 600 : 400,
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 1
+                                            }}
+                                        >
+                                            {/* ✅ Checkbox (important for UX) */}
+                                            <input
+                                                type="checkbox"
+                                                checked={selected}
+                                                readOnly
+                                            />
+
+                                            {v}
+                                        </MenuItem>
+                                    );
+                                })}
+                        </Box>
+                    </Menu>
+                )
+            }
 
             {/* ===== COLUMN SETTINGS MENU ===== */}
             <Menu
@@ -1431,6 +1599,35 @@ const SalesReport: React.FC = () => {
                         }}
                     >
                         Apply
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* ===== DYNAMIC REPORT SAVING ===== */}
+
+            <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
+                <DialogTitle>Save Template</DialogTitle>
+
+                <DialogContent>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="Report Name"
+                        value={reportName}
+                        onChange={(e) => setReportName(e.target.value)}
+                    />
+                </DialogContent>
+
+                <DialogActions>
+                    <Button onClick={() => setSaveDialogOpen(false)}>
+                        Cancel
+                    </Button>
+
+                    <Button
+                        variant="contained"
+                        onClick={handleQuickSave}
+                    >
+                        Save
                     </Button>
                 </DialogActions>
             </Dialog>

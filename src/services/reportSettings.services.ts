@@ -53,14 +53,14 @@ export const SettingsService = {
     getMenuSP: () =>
         axios.get<{ success: boolean; data: Settings[] }>(
             // `http://192.168.1.92:9001/api/reports/settings/MenuSettings`
-              `${getBaseURL()}api/reports/settings/MenuSettings`
+            `${getBaseURL()}api/reports/settings/MenuSettings`
         ),
 
     // 🔹 2. Execute Stored Procedure (Dynamic Columns)
     executeSP: (payload: ExecuteSPPayload) =>
         axios.post<{ success: boolean; data: any[] }>(
             // `http://192.168.1.92:9001/api/reports/settings/executeSP`,
-              `${getBaseURL()}api/reports/settings/executeSP`,
+            `${getBaseURL()}api/reports/settings/executeSP`,
             payload
         ),
 
@@ -68,20 +68,20 @@ export const SettingsService = {
     saveReport: (payload: SaveReportPayload) =>
         axios.post<{ success: boolean; message: string }>(
             // `http://192.168.1.92:9001/api/reports/settings/saveReport`,
-              `${getBaseURL()}api/reports/settings/saveReport`,
+            `${getBaseURL()}api/reports/settings/saveReport`,
             payload
         ),
-    saveReportByType: (payload: SaveReportByTypePayload) =>
+    saveReportSettings: (payload: any) =>
         axios.post<{ success: boolean; message: string }>(
             // `http://192.168.1.92:9001/api/reports/settings/saveReport`,
-              `${getBaseURL()}api/reports/settings/saveReport`,
+            `${getBaseURL()}api/reports/settings/saveReport`,
             payload
         ),
 
     // 🔹 4. get Reports
     getReportList: () =>
         // axios.get(`http://192.168.1.92:9001/api/reports/settings/reportList`),
-    axios.get(`${getBaseURL()}api/reports/settings/reportList`),
+        axios.get(`${getBaseURL()}api/reports/settings/reportList`),
 
     /* 🔹 5. Get Edit Data (IMPORTANT) */
     getReportEditData: (params: {
@@ -91,14 +91,14 @@ export const SettingsService = {
         // axios.get(`http://192.168.1.92:9001/api/reports/settings/editreport`, {
         //     params
         // }),
-    axios.get(`${getBaseURL()}api/reports/settings/editreport`, {
-        params
-    }),
+        axios.get(`${getBaseURL()}api/reports/settings/editreport`, {
+            params
+        }),
 
     /* 🔹 6. Update Report (EDIT SAVE) */
     updateReport: (payload: UpdateReportPayload) =>
         // axios.put(`http://192.168.1.92:9001/api/reports/settings/updatereport`, payload),
-    axios.put(`${getBaseURL()}api/reports/settings/updatereport`, payload),
+        axios.put(`${getBaseURL()}api/reports/settings/updatereport`, payload),
 
     getReportsByParent(parentReport: string) {
         // return axios.get(`http://192.168.1.92:9001/api/reports/settings/byParent`, {

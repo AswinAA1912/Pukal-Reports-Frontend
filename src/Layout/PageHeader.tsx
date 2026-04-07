@@ -381,20 +381,23 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             }}
           >
             {infoSlot}
-            <Tooltip title="Save Template">
-              <IconButton
-                size="small"
-                onClick={() => onQuickSave?.(currentPageLabel)}
-                sx={{
-                  height: 24,
-                  width: 24,
-                  backgroundColor: "#fff",
-                  borderRadius: 0.5,
-                }}
-              >
-                +
-              </IconButton>
-            </Tooltip>
+
+            {onQuickSave && (
+              <Tooltip title="Save Template">
+                <IconButton
+                  size="small"
+                  onClick={() => onQuickSave(currentPageLabel)}
+                  sx={{
+                    height: 24,
+                    width: 24,
+                    backgroundColor: "#fff",
+                    borderRadius: 0.5,
+                  }}
+                >
+                  +
+                </IconButton>
+              </Tooltip>
+            )}
 
             {toggleMode && onToggleChange && (
               <ToggleButtonGroup
