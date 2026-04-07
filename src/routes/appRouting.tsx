@@ -19,6 +19,8 @@ import SalesAnalyticsReportPage from "../reports/GraphicalAnalyticsReport";
 import OnlinePurchaseReportPage from "../reports/onlinePurchaseReport";
 import SalesOrderReport from "../reports/SaleOrderReport";
 import PurchaseOrder from "../reports/PurchaseOrderReport";
+import ReportSettings from "../settings/ReportSettings";
+import ReportList from "../settings/ReportList";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -192,7 +194,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
           }
         />
 
-         <Route
+        <Route
           path="/reports/ledger-item"
           element={
             <RequireAuth>
@@ -205,14 +207,14 @@ const AppRouting: React.FC<AppRoutingProps> = ({
           }
         />
 
-         <Route
+        <Route
           path="/graphanalysis"
           element={
             <RequireAuth>
               <AppLayout
                 fullWidth
               >
-                <SalesAnalyticsReportPage/>
+                <SalesAnalyticsReportPage />
               </AppLayout>
             </RequireAuth>
           }
@@ -225,7 +227,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
               <AppLayout
                 fullWidth
               >
-                <OnlinePurchaseReportPage/>
+                <OnlinePurchaseReportPage />
               </AppLayout>
             </RequireAuth>
           }
@@ -238,7 +240,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
               <AppLayout
                 fullWidth
               >
-                <SalesOrderReport/>
+                <SalesOrderReport />
               </AppLayout>
             </RequireAuth>
           }
@@ -251,7 +253,33 @@ const AppRouting: React.FC<AppRoutingProps> = ({
               <AppLayout
                 fullWidth
               >
-                <PurchaseOrder/>
+                <PurchaseOrder />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="templateList"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <ReportList />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <ReportSettings />
               </AppLayout>
             </RequireAuth>
           }

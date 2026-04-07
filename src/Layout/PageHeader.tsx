@@ -20,6 +20,7 @@ import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import logo from "../assets/logo.png";
+import { SettingsService } from "../services/reportSettings.services";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth, Company } from "../auth/authContext";
 import { MenuService } from "../services/menus.service";
@@ -51,6 +52,8 @@ interface PageHeaderProps {
   settingsSlot?: React.ReactNode;
   infoSlot?: React.ReactNode;
   showPages?: boolean;
+  onReportChange?: (report: any) => void;
+  onQuickSave?: (parentName: string) => void;
 }
 
 export const PAGE_HEADER_HEIGHT = 40;
@@ -64,6 +67,8 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   settingsSlot,
   infoSlot,
   showPages = true,
+  onReportChange,
+  onQuickSave
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -77,6 +82,9 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   const openExportMenu = Boolean(anchorElExport);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+
 
   // Company name for display
   const companyName = useMemo(() => user?.Company_Name || "", [user]);
@@ -143,6 +151,24 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   const currentPageLabel =
     pages.find((p) => p.path === selectedPath)?.label ||
     location.pathname.replace("/", "").replace(/-/g, " ").toUpperCase();
+
+  useEffect(() => {
+    if (!currentPageLabel) return;
+
+    const loadTemplates = async () => {
+      try {
+        const res = await SettingsService.getReportsByParent(currentPageLabel);
+
+        if (res.data.success) {
+          setTemplates(res.data.data || []);
+        }
+      } catch (err) {
+        console.error("Template load error", err);
+      }
+    };
+
+    loadTemplates();
+  }, [currentPageLabel]);
 
   return (
     <>
@@ -248,6 +274,56 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                   ))}
                 </Select>
               ))}
+
+            {templates.length > 0 && (
+              <Select
+                size="small"
+                value={selectedTemplate}
+                onChange={(e) => {
+                  const reportId = e.target.value;
+                  setSelectedTemplate(reportId);
+
+                  if (!reportId) {
+                    // 🔥 "Select Template" selected → reset to parent report
+                    const parentReport = {
+                      Report_Name: currentPageLabel,
+                      Report_Id: null,
+                    };
+                    onReportChange?.(parentReport);
+                    return;
+                  }
+
+                  const selected = templates.find(
+                    (t) => t.Report_Id === reportId
+                  );
+
+                  if (selected) {
+                    onReportChange?.(selected);
+                  }
+                }}
+                displayEmpty
+                sx={{
+                  minWidth: isMobile ? 130 : 170,
+                  height: 24,
+                  fontSize: "0.7rem",
+                  backgroundColor: "#fff",
+                  borderRadius: 0.5,
+                  "& .MuiSelect-select": {
+                    py: 0,
+                    display: "flex",
+                    alignItems: "center",
+                  },
+                }}
+              >
+                <MenuItem value="">Select Template</MenuItem>
+
+                {templates.map((t) => (
+                  <MenuItem key={t.Report_Id} value={t.Report_Id}>
+                    {t.Report_Name}
+                  </MenuItem>
+                ))}
+              </Select>
+            )}
           </Box>
 
           {/* DESKTOP COMPANY SWITCH */}
@@ -305,6 +381,20 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             }}
           >
             {infoSlot}
+            <Tooltip title="Save Template">
+              <IconButton
+                size="small"
+                onClick={() => onQuickSave?.(currentPageLabel)}
+                sx={{
+                  height: 24,
+                  width: 24,
+                  backgroundColor: "#fff",
+                  borderRadius: 0.5,
+                }}
+              >
+                +
+              </IconButton>
+            </Tooltip>
 
             {toggleMode && onToggleChange && (
               <ToggleButtonGroup

@@ -19,7 +19,8 @@ import {
     Dialog,
     DialogActions,
     DialogTitle,
-    DialogContent
+    DialogContent,
+    Checkbox
 } from "@mui/material";
 import dayjs from "dayjs";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -357,11 +358,15 @@ const OnlineSalesReportLOL: React.FC = () => {
                 return false;
 
             for (const [key, values] of Object.entries(filters.columnFilters)) {
-                if (!values.length) continue;
+                if (!values || values.length === 0) continue;
 
-                const rowValue = String(row[key] ?? "").toLowerCase();
-                if (!values.map(v => v.toLowerCase()).includes(rowValue))
-                    return false;
+                const rowValue = String(row[key] ?? "").trim().toLowerCase();
+
+                const match = values.some(v =>
+                    String(v).trim().toLowerCase() === rowValue
+                );
+
+                if (!match) return false;
             }
 
             return true;
@@ -586,7 +591,7 @@ const OnlineSalesReportLOL: React.FC = () => {
 
         const uniqueValues = Array.from(
             new Set(
-                filteredRows
+                rawRows   // ✅ FIXED
                     .map(r => r[activeHeader])
                     .filter(v => v !== null && v !== undefined && v !== "")
                     .map(v => String(v).trim())
@@ -596,9 +601,9 @@ const OnlineSalesReportLOL: React.FC = () => {
         return sortFilterValues(
             uniqueValues,
             activeHeader,
-            sortConfig.order   // 🔥 sync with header sort icon
+            sortConfig.order
         );
-    }, [activeHeader, filteredRows, sortConfig.order]);
+    }, [activeHeader, rawRows, sortConfig.order]);
 
     const exportColumns = enabledColumns.map(c => ({
         key: c.key,
@@ -961,71 +966,70 @@ const OnlineSalesReportLOL: React.FC = () => {
                                     sx={{ mb: 1 }}
                                 />
 
-                                {/* ALL OPTION */}
+                                {/* ALL = CLEAR FILTER */}
                                 <MenuItem
                                     dense
                                     sx={{ fontWeight: 600 }}
                                     onClick={() => {
                                         setFilters(p => {
                                             const copy = { ...p.columnFilters };
-                                            delete copy[activeHeader];
+                                            delete copy[activeHeader]; // 🔥 clear filter
                                             return { ...p, columnFilters: copy };
                                         });
-                                        setFilterAnchor(null);
                                     }}
                                 >
+                                    <Checkbox
+                                        size="small"
+                                        checked={
+                                            !filters.columnFilters[activeHeader] ||
+                                            filters.columnFilters[activeHeader].length === 0
+                                        }
+                                    />
                                     All
                                 </MenuItem>
 
-                                {/* MULTI OPTIONS */}
-                                {filterOptions
-                                    .filter(v =>
-                                        v.toLowerCase().includes(searchText.toLowerCase())
-                                    )
-                                    .map(v => {
-                                        const selected =
-                                            filters.columnFilters[activeHeader]?.includes(v) ?? false;
+                                {/* OPTIONS */}
+                                <Box sx={{ maxHeight: 250, overflow: "auto" }}>
+                                    {filterOptions
+                                        .filter(v =>
+                                            v.toLowerCase().includes(searchText.toLowerCase())
+                                        )
+                                        .map(v => {
+                                            const selected =
+                                                filters.columnFilters[activeHeader]?.includes(v) ?? false;
 
-                                        return (
-                                            <MenuItem
-                                                key={v}
-                                                dense
-                                                selected={selected}
-                                                onClick={() => {
-                                                    setFilters(p => {
-                                                        const existing =
-                                                            p.columnFilters[activeHeader] ?? [];
+                                            return (
+                                                <MenuItem
+                                                    key={v}
+                                                    dense
+                                                    onClick={() => {
+                                                        setFilters(p => {
+                                                            const existing =
+                                                                p.columnFilters[activeHeader] ?? [];
 
-                                                        const updated = existing.includes(v)
-                                                            ? existing.filter(x => x !== v)
-                                                            : [...existing, v];
+                                                            const updated = existing.includes(v)
+                                                                ? existing.filter(x => x !== v)
+                                                                : [...existing, v];
 
-                                                        return {
-                                                            ...p,
-                                                            columnFilters: {
-                                                                ...p.columnFilters,
-                                                                [activeHeader]: updated,
-                                                            },
-                                                        };
-                                                    });
-                                                }}
-                                            >
-                                                {/* CHECKBOX UI */}
-                                                <Box
-                                                    sx={{
-                                                        width: 12,
-                                                        height: 12,
-                                                        border: "1px solid #555",
-                                                        mr: 1,
-                                                        bgcolor: selected
-                                                            ? "#1E3A8A"
-                                                            : "transparent",
+                                                            return {
+                                                                ...p,
+                                                                columnFilters: {
+                                                                    ...p.columnFilters,
+                                                                    [activeHeader]: updated,
+                                                                },
+                                                            };
+                                                        });
                                                     }}
-                                                />
-                                                {v}
-                                            </MenuItem>
-                                        );
-                                    })}
+                                                >
+                                                    <Checkbox
+                                                        size="small"
+                                                        checked={selected}
+                                                    />
+                                                    {v}
+                                                </MenuItem>
+                                            );
+                                        })}
+                                </Box>
                             </>
                         )}
                     </Box>

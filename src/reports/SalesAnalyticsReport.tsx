@@ -45,6 +45,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { SalesReportLedgerService, SalesReportItemService, } from "../services/SalesReport.service";
+import { SettingsService } from "../services/reportSettings.services";
 
 const ABSTRACT_DEFAULT_KEYS = [
     "Y1",
@@ -86,6 +87,7 @@ type ColumnConfig = {
     enabled: boolean;
     isNumeric?: boolean;
     order: number;
+    groupBy?: number;
 };
 
 type FiltersMap = {
@@ -171,6 +173,10 @@ const SalesReport: React.FC = () => {
     const [columnMode, setColumnMode] = useState<Record<string, "total" | "avg">>({});
     const selectedValues =
         activeHeader ? filters.columnFilters[activeHeader!] ?? [] : [];
+    const [templateConfig, setTemplateConfig] = useState<{
+        abstract: ColumnConfig[];
+        expanded: ColumnConfig[];
+    } | null>(null);
 
 
     const HEADER_HEIGHT = 36;
@@ -190,14 +196,23 @@ const SalesReport: React.FC = () => {
         })
             .then(res => {
                 const apiRows = res.data.data || [];
-                const cols = buildColumnsFromApi(apiRows, toggleMode);
+                let cols = buildColumnsFromApi(apiRows, toggleMode);
+
+                // 🔥 APPLY TEMPLATE
+                if (toggleMode === "Expanded" && templateConfig?.expanded) {
+                    cols = applyTemplateToColumns(cols, templateConfig.expanded);
+                }
+
+                if (toggleMode === "Abstract" && templateConfig?.abstract) {
+                    cols = applyTemplateToColumns(cols, templateConfig.abstract);
+                }
 
                 if (toggleMode === "Expanded") {
                     setExpandedRows(apiRows);
-                    setExpandedColumns(prev => (prev.length ? prev : cols));
+                    setExpandedColumns(cols);
                 } else {
                     setAbstractRows(apiRows);
-                    setAbstractColumns(prev => (prev.length ? prev : cols));
+                    setAbstractColumns(cols);
                 }
 
                 setPage(1);
@@ -209,7 +224,7 @@ const SalesReport: React.FC = () => {
                 setLoading(false);
             });
 
-    }, [toggleMode, filters.Date.from, filters.Date.to]);
+    }, [toggleMode, filters.Date.from, filters.Date.to, templateConfig]);
 
     useEffect(() => {
         if (!columns.length) return;
@@ -256,6 +271,94 @@ const SalesReport: React.FC = () => {
         toggleMode === "Expanded"
             ? setExpandedExpandedKeys
             : setAbstractExpandedKeys;
+
+    const loadTemplate = async (reportId: number) => {
+        try {
+            const absRes = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 1
+            });
+
+            const expRes = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 2
+            });
+
+            setTemplateConfig({
+                abstract: absRes.data.data.columns || [],
+                expanded: expRes.data.data.columns || []
+            });
+
+        } catch (err) {
+            console.error("Template Load Error:", err);
+        }
+    };
+
+    const applyTemplateToColumns = (
+        baseCols: ColumnConfig[],
+        templateCols: ColumnConfig[]
+    ): ColumnConfig[] => {
+
+        const templateBasedCols: ColumnConfig[] = templateCols.map((t) => ({
+            key: t.key,
+            label: t.label || t.key,
+            enabled: t.enabled,
+            order: t.order ?? 0,
+            groupBy: (t as any).groupBy || 0
+        }));
+
+        const merged = templateBasedCols.map((col) => {
+            const base = baseCols.find(
+                (b) => b.key.toLowerCase() === col.key.toLowerCase()
+            );
+
+            return {
+                ...col,
+                isNumeric: base?.isNumeric,
+            };
+        });
+
+        const missingBase = baseCols
+            .filter(
+                (b) =>
+                    !templateBasedCols.some(
+                        (t) => t.key.toLowerCase() === b.key.toLowerCase()
+                    )
+            )
+            .map((b) => ({
+                ...b,
+                enabled: false,
+            }));
+
+        return [...merged, ...missingBase];
+    };
+
+    useEffect(() => {
+        if (!templateConfig) return;
+
+        const templateCols =
+            toggleMode === "Expanded"
+                ? templateConfig.expanded
+                : templateConfig.abstract;
+
+        if (!templateCols?.length) return;
+
+        const grouping: string[] = [];
+
+        templateCols.forEach((col: any) => {
+            if (col.groupBy && col.groupBy > 0 && col.enabled) {
+                grouping[col.groupBy - 1] = col.key;
+            }
+        });
+
+        const finalGrouping = grouping.filter(Boolean);
+
+        if (finalGrouping.length) {
+            setAppliedGroupBy(finalGrouping);
+            setExpandedKeys([]);
+        }
+
+    }, [templateConfig, toggleMode]);
 
     /* ================= FILTERING ================= */
 
@@ -578,25 +681,51 @@ const SalesReport: React.FC = () => {
                     <React.Fragment key={row.__key}>
                         {/* ===== GROUP HEADER ===== */}
                         <TableRow sx={{ background: "#E2E8F0" }}>
+                            {/* S.No / Expand */}
                             <TableCell>
-                                <IconButton
-                                    size="small"
-                                    onClick={() =>
-                                        setExpandedKeys(p =>
-                                            p.includes(row.__key)
-                                                ? p.filter(x => x !== row.__key)
-                                                : [...p, row.__key]
-                                        )
-                                    }
-                                >
-                                    {expanded ? (
-                                        <ExpandMoreIcon fontSize="small" />
-                                    ) : (
-                                        <ChevronRightIcon fontSize="small" />
-                                    )}
-                                </IconButton>
+                                <Box display="flex" alignItems="center">
+                                    <IconButton
+                                        size="small"
+                                        onClick={() =>
+                                            setExpandedKeys(p =>
+                                                p.includes(row.__key)
+                                                    ? p.filter(x => x !== row.__key)
+                                                    : [...p, row.__key]
+                                            )
+                                        }
+                                    >
+                                        {expanded ? (
+                                            <ExpandMoreIcon fontSize="small" />
+                                        ) : (
+                                            <ChevronRightIcon fontSize="small" />
+                                        )}
+                                    </IconButton>
+                                </Box>
                             </TableCell>
 
+                            {/* 🔥 IMPORTANT: Render all columns */}
+                            {enabledColumns.map(c => {
+                                // ✅ Show group value in grouped column
+                                if (c.key === appliedGroupBy[row.__level]) {
+                                    return (
+                                        <TableCell key={c.key} sx={{ fontWeight: 600 }}>
+                                            {row.__value}
+                                        </TableCell>
+                                    );
+                                }
+
+                                // ✅ Show totals for numeric columns
+                                if (c.isNumeric) {
+                                    return (
+                                        <TableCell key={c.key} sx={{ fontWeight: 600 }}>
+                                            {getGroupTotal(row.__rows, c.key)}
+                                        </TableCell>
+                                    );
+                                }
+
+                                // ✅ Empty for others
+                                return <TableCell key={c.key} />;
+                            })}
                         </TableRow>
                     </React.Fragment>
                 );
@@ -732,6 +861,9 @@ const SalesReport: React.FC = () => {
                 onToggleChange={setToggleMode}
                 onExportExcel={handleExportExcel}
                 onExportPDF={handleExportPDF}
+                onReportChange={(template) => {
+                    loadTemplate(template.Report_Id);
+                }}
                 settingsSlot={
                     <Box display="flex" gap={1}>
                         {/* GROUP BY ICON */}

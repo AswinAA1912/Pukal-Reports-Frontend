@@ -11,7 +11,6 @@ export interface Menus {
 export const MenuService = {
     getMenus: () =>
         axios.get<{ success: boolean; data: Menus[] }>(
-            // `http://test.erpsmt.in/api/authorization/menuMaster`,
             `${getBaseURL()}api/authorization/menuMaster`,
         ),
 };

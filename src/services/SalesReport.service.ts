@@ -59,6 +59,7 @@ export interface RetailersList {
 /* ---------- ABSTRACT : LEDGER BASED ---------- */
 
 export const SalesReportLedgerService = {
+    spName: "sp_Ledger_Report",
     getReports: (params?: { Fromdate?: string; Todate?: string }) =>
         axios.get<{ success: boolean; data: SalesReportLedger[] }>(
             `${getBaseURL()}api/reports/salesReport/ledger`,
@@ -69,6 +70,7 @@ export const SalesReportLedgerService = {
 /* ---------- EXPANDED : ITEM BASED ---------- */
 
 export const SalesReportItemService = {
+    spName: "sp_Ledger_Report",
     getReports: (params?: { Fromdate?: string; Todate?: string }) =>
         axios.get<{ success: boolean; data: SalesReportItem[] }>(
             `${getBaseURL()}api/reports/salesReport/products`,

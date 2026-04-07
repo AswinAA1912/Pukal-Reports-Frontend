@@ -34,6 +34,7 @@ import {
   SortableContext, useSortable,
   verticalListSortingStrategy, arrayMove,
 } from "@dnd-kit/sortable";
+import { SettingsService } from "../services/reportSettings.services";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { exportToPDF } from "../utils/exportToPDF";
@@ -44,6 +45,7 @@ type ColumnConfig = {
   label: string;
   enabled: boolean;
   order: number;
+  groupBy?: number;
   type?: "date" | "number" | "text";
 };
 
@@ -71,6 +73,11 @@ const OnlineSalesReportPage: React.FC = () => {
     },
   });
 
+  const [templateConfig, setTemplateConfig] = useState<{
+    abstract: ColumnConfig[];
+    expanded: ColumnConfig[];
+  } | null>(null);
+
   const ABSTRACT_INITIAL_COLUMNS: ColumnConfig[] = [
     { key: "sno", label: "S.No", enabled: true, order: 0 },
     { key: "Ledger_Date", label: "Date", enabled: true, order: 1, type: "date" },
@@ -78,6 +85,7 @@ const OnlineSalesReportPage: React.FC = () => {
     { key: "Retailer_Name", label: "Customer", enabled: true, order: 3 },
     { key: "Item_Count", label: "Count", enabled: true, order: 4, type: "number" },
     { key: "Total_Invoice_value", label: "Amount", enabled: true, order: 5, type: "number" },
+    { key: "Created_on", label: "Created On", enabled: true, order: 6, type: "date" },
   ];
 
   const EXPANDED_INITIAL_COLUMNS: ColumnConfig[] = [
@@ -89,6 +97,7 @@ const OnlineSalesReportPage: React.FC = () => {
     { key: "Bill_Qty", label: "Quantity", enabled: true, order: 5, type: "number" },
     { key: "Rate", label: "Rate", enabled: true, order: 6, type: "number" },
     { key: "Total_Invoice_value", label: "Amount", enabled: true, order: 7, type: "number" },
+    { key: "Created_on", label: "Created On", enabled: true, order: 8, type: "date" },
   ];
 
   const [abstractColumns, setAbstractColumns] = useState<ColumnConfig[]>(ABSTRACT_INITIAL_COLUMNS);
@@ -105,6 +114,78 @@ const OnlineSalesReportPage: React.FC = () => {
     toggleMode === "Abstract"
       ? setAbstractColumns
       : setExpandedColumns;
+
+  const loadTemplate = async (reportId: number) => {
+    try {
+      const absRes = await SettingsService.getReportEditData({
+        reportId,
+        typeId: 1
+      });
+
+      const expRes = await SettingsService.getReportEditData({
+        reportId,
+        typeId: 2
+      });
+
+      setTemplateConfig({
+        abstract: absRes.data.data.columns || [],
+        expanded: expRes.data.data.columns || []  // ✅ MUST exist
+      });
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const applyTemplateToColumns = (
+    baseCols: ColumnConfig[],
+    templateCols: ColumnConfig[]
+  ): ColumnConfig[] => {
+
+    // 🔥 STEP 1: Create all columns from backend template
+    const templateBasedCols: ColumnConfig[] = templateCols.map((t) => ({
+      key: t.key,
+      label: t.label || t.key,
+      enabled: t.enabled,
+      order: t.order ?? 0,
+      groupBy: t.groupBy ?? 0,
+    }));
+
+    // 🔥 STEP 2: Ensure S.NO always exists
+    const snoCol: ColumnConfig = {
+      key: "sno",
+      label: "S.No",
+      enabled: true,
+      order: 0,
+    };
+
+    // 🔥 STEP 3: Merge base columns (for types etc.)
+    const merged = templateBasedCols.map((col) => {
+      const base = baseCols.find(
+        (b) => b.key.toLowerCase() === col.key.toLowerCase()
+      );
+
+      return {
+        ...col,
+        type: base?.type, // preserve type
+      };
+    });
+
+    // 🔥 STEP 4: Add missing base columns as disabled
+    const missingBase = baseCols
+      .filter(
+        (b) =>
+          !templateBasedCols.some(
+            (t) => t.key.toLowerCase() === b.key.toLowerCase()
+          ) && b.key !== "sno"
+      )
+      .map((b) => ({
+        ...b,
+        enabled: false,
+      }));
+
+    return [snoCol, ...merged, ...missingBase];
+  };
 
   const enabledColumns = useMemo(
     () =>
@@ -131,6 +212,8 @@ const OnlineSalesReportPage: React.FC = () => {
             return toggleMode === "Abstract"
               ? row.Total_Invoice_value
               : row.Amount;
+          case "Created_on":
+            return formatISTDateTime(row.Created_on);
           default:
             return row[c.key] ?? "";
         }
@@ -161,6 +244,8 @@ const OnlineSalesReportPage: React.FC = () => {
             return toggleMode === "Abstract"
               ? row.Total_Invoice_value
               : row.Amount;
+          case "Created_on":
+            return formatISTDateTime(row.Created_on);
           default:
             return row[c.key] ?? "";
         }
@@ -184,38 +269,49 @@ const OnlineSalesReportPage: React.FC = () => {
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
-    const fromDate =
-      columnFilters?.Ledger_Date?.from || dayjs().format("YYYY-MM-DD");
+    const fromDate = columnFilters?.Ledger_Date?.from || dayjs().format("YYYY-MM-DD");
+    const toDate = columnFilters?.Ledger_Date?.to || dayjs().format("YYYY-MM-DD");
 
-    const toDate =
-      columnFilters?.Ledger_Date?.to || dayjs().format("YYYY-MM-DD");
+    const mergeColumns = (newCols: ColumnConfig[], currentCols: ColumnConfig[]) => {
+      return newCols.map(col => {
+        const existing = currentCols.find(c => c.key === col.key);
+        return {
+          ...col,
+          enabled: existing ? existing.enabled : col.enabled, // preserve user's toggle
+        };
+      });
+    };
 
     if (toggleMode === "Abstract") {
-      OnlineSalesReportService.getReports({
-        Fromdate: fromDate,
-        Todate: toDate,
-      }).then((res) => {
+      OnlineSalesReportService.getReports({ Fromdate: fromDate, Todate: toDate }).then((res) => {
         const rows = res.data.data || [];
         setRawAbstract(rows);
 
-        setAbstractColumns(
-          generateColumns(rows, ABSTRACT_INITIAL_COLUMNS)
-        );
+        let cols = generateColumns(rows, ABSTRACT_INITIAL_COLUMNS);
+
+        if (templateConfig?.abstract) {
+          cols = applyTemplateToColumns(cols, templateConfig.abstract);
+        }
+
+        // 🔥 Merge with current column toggles
+        setAbstractColumns(prev => mergeColumns(cols, prev));
       });
     } else {
-      OnlineSalesReportItemService.getReportsitem({
-        Fromdate: fromDate,
-        Todate: toDate,
-      }).then((res) => {
+      OnlineSalesReportItemService.getReportsitem({ Fromdate: fromDate, Todate: toDate }).then((res) => {
         const rows = res.data.data || [];
         setRawExpanded(rows);
 
-        setExpandedColumns(
-          generateColumns(rows, EXPANDED_INITIAL_COLUMNS)
-        );
+        let cols = generateColumns(rows, EXPANDED_INITIAL_COLUMNS);
+
+        if (templateConfig?.expanded) {
+          cols = applyTemplateToColumns(cols, templateConfig.expanded);
+        }
+
+        // 🔥 Merge with current column toggles
+        setExpandedColumns(prev => mergeColumns(cols, prev));
       });
     }
-  }, [toggleMode, columnFilters["Ledger_Date"]]);
+  }, [toggleMode, columnFilters["Ledger_Date"], templateConfig]);
 
   /* ================= APPLY FILTERS ================= */
 
@@ -252,15 +348,19 @@ const OnlineSalesReportPage: React.FC = () => {
     });
   };
 
-  const filteredAbstract = useMemo(
-    () => applyFilters(rawAbstract),
-    [rawAbstract, columnFilters]
-  );
+  const filteredAbstract = useMemo(() => {
+    const filtered = applyFilters(rawAbstract);
+    return filtered.sort((a, b) =>
+      dayjs(b.Ledger_Date).valueOf() - dayjs(a.Ledger_Date).valueOf()
+    );
+  }, [rawAbstract, columnFilters]);
 
-  const filteredExpanded = useMemo(
-    () => applyFilters(rawExpanded),
-    [rawExpanded, columnFilters]
-  );
+  const filteredExpanded = useMemo(() => {
+    const filtered = applyFilters(rawExpanded); 
+    return filtered.sort((a, b) =>
+      dayjs(b.Ledger_Date).valueOf() - dayjs(a.Ledger_Date).valueOf()
+    );
+  }, [rawExpanded, columnFilters]);
 
 
   /* ================= PAGINATION ================= */
@@ -309,6 +409,29 @@ const OnlineSalesReportPage: React.FC = () => {
     setActiveHeader(columnKey);
     setSearchText("");
     setFilterAnchor(e.currentTarget);
+  };
+
+  const formatISTDateTime = (dateString: string) => {
+    if (!dateString) return "";
+
+    const date = new Date(dateString);
+
+    const ist = new Date(
+      date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+    );
+
+    const day = String(ist.getDate()).padStart(2, "0");
+    const month = String(ist.getMonth() + 1).padStart(2, "0");
+    const year = ist.getFullYear();
+
+    let hours = ist.getHours();
+    const minutes = String(ist.getMinutes()).padStart(2, "0");
+
+    const ampm = hours >= 12 ? "p.m." : "a.m.";
+
+    hours = hours % 12 || 12;
+
+    return `${day}-${month}-${year} ${String(hours).padStart(2, "0")}.${minutes} ${ampm}`;
   };
 
   /* ================= TABLE ================= */
@@ -449,6 +572,13 @@ const OnlineSalesReportPage: React.FC = () => {
                         </TableCell>
                       );
 
+                    case "Created_on":
+                      return (
+                        <TableCell key={col.key}>
+                          {formatISTDateTime(row.Created_on)}
+                        </TableCell>
+                      );
+
                     default:
                       return <TableCell key={col.key}>{row[col.key]}</TableCell>;
                   }
@@ -563,6 +693,9 @@ const OnlineSalesReportPage: React.FC = () => {
         onToggleChange={setToggleMode}
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
+        onReportChange={(template) => {
+          loadTemplate(template.Report_Id);
+        }}
         settingsSlot={
           <Box display="flex" gap={1}>
             <Tooltip title="Column Settings">
