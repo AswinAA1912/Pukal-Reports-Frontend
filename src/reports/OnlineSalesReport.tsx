@@ -16,14 +16,19 @@ import {
   IconButton,
   Typography,
   Switch,
-
+  Dialog,
+  DialogActions,
+  DialogTitle,
+  DialogContent
 } from "@mui/material";
+import CircularProgress from "@mui/material/CircularProgress";
 import dayjs from "dayjs";
 import SettingsIcon from "@mui/icons-material/Settings";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import ReportFilterDrawer from "../Components/ReportFilterDrawer";
 import AppLayout, { useToggleMode } from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
+import { toast } from "react-toastify";
 import CommonPagination from "../Components/CommonPagination";
 import {
   OnlineSalesReportService,
@@ -110,6 +115,15 @@ const OnlineSalesReportPage: React.FC = () => {
 
   const activeCol = columns.find(c => c.key === activeHeader);
 
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [reportName, setReportName] = useState("");
+  const [parentReportName, setParentReportName] = useState("");
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const spConfig = {
+    abstractSP: "Reporting_Online_Sales_VW",
+    expandedSP: "Reporting_Online_Sales_Item_VW"
+  };
+
   const setColumns =
     toggleMode === "Abstract"
       ? setAbstractColumns
@@ -117,6 +131,8 @@ const OnlineSalesReportPage: React.FC = () => {
 
   const loadTemplate = async (reportId: number) => {
     try {
+      setTemplateLoading(true);
+
       const absRes = await SettingsService.getReportEditData({
         reportId,
         typeId: 1
@@ -127,13 +143,28 @@ const OnlineSalesReportPage: React.FC = () => {
         typeId: 2
       });
 
+      const abstractCols = absRes.data.data.columns || [];
+      const expandedCols = expRes.data.data.columns || [];
+
       setTemplateConfig({
-        abstract: absRes.data.data.columns || [],
-        expanded: expRes.data.data.columns || []  // ✅ MUST exist
+        abstract: abstractCols,
+        expanded: expandedCols
       });
+
+      // 🔥 APPLY IMMEDIATELY (CRITICAL FIX)
+      setAbstractColumns(
+        applyTemplateToColumns(ABSTRACT_INITIAL_COLUMNS, abstractCols)
+      );
+
+      setExpandedColumns(
+        applyTemplateToColumns(EXPANDED_INITIAL_COLUMNS, expandedCols)
+      );
 
     } catch (err) {
       console.error(err);
+      toast.error("Failed to load template ❌");
+    } finally {
+      setTemplateLoading(false);
     }
   };
 
@@ -266,50 +297,55 @@ const OnlineSalesReportPage: React.FC = () => {
     }).format(value);
   };
 
+  const mergeColumns = (
+    newCols: ColumnConfig[],
+    currentCols: ColumnConfig[]
+  ) => {
+    return newCols.map(col => {
+      const existing = currentCols.find(c => c.key === col.key);
+
+      return {
+        ...col,
+        enabled: existing ? existing.enabled : col.enabled,
+        order: existing ? existing.order : col.order,
+        groupBy: existing ? existing.groupBy : col.groupBy,
+      };
+    });
+  };
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
     const fromDate = columnFilters?.Ledger_Date?.from || dayjs().format("YYYY-MM-DD");
     const toDate = columnFilters?.Ledger_Date?.to || dayjs().format("YYYY-MM-DD");
 
-    const mergeColumns = (newCols: ColumnConfig[], currentCols: ColumnConfig[]) => {
-      return newCols.map(col => {
-        const existing = currentCols.find(c => c.key === col.key);
-        return {
-          ...col,
-          enabled: existing ? existing.enabled : col.enabled, // preserve user's toggle
-        };
-      });
-    };
-
     if (toggleMode === "Abstract") {
-      OnlineSalesReportService.getReports({ Fromdate: fromDate, Todate: toDate }).then((res) => {
-        const rows = res.data.data || [];
-        setRawAbstract(rows);
+      OnlineSalesReportService.getReports({ Fromdate: fromDate, Todate: toDate })
+        .then((res) => {
+          const rows = res.data.data || [];
+          setRawAbstract(rows);
 
-        let cols = generateColumns(rows, ABSTRACT_INITIAL_COLUMNS);
+          let cols = generateColumns(rows, ABSTRACT_INITIAL_COLUMNS);
 
-        if (templateConfig?.abstract) {
-          cols = applyTemplateToColumns(cols, templateConfig.abstract);
-        }
+          if (templateConfig?.abstract) {
+            cols = applyTemplateToColumns(cols, templateConfig.abstract);
+          }
 
-        // 🔥 Merge with current column toggles
-        setAbstractColumns(prev => mergeColumns(cols, prev));
-      });
+          setAbstractColumns(prev => mergeColumns(cols, prev));
+        });
     } else {
-      OnlineSalesReportItemService.getReportsitem({ Fromdate: fromDate, Todate: toDate }).then((res) => {
-        const rows = res.data.data || [];
-        setRawExpanded(rows);
+      OnlineSalesReportItemService.getReportsitem({ Fromdate: fromDate, Todate: toDate })
+        .then((res) => {
+          const rows = res.data.data || [];
+          setRawExpanded(rows);
 
-        let cols = generateColumns(rows, EXPANDED_INITIAL_COLUMNS);
+          let cols = generateColumns(rows, EXPANDED_INITIAL_COLUMNS);
 
-        if (templateConfig?.expanded) {
-          cols = applyTemplateToColumns(cols, templateConfig.expanded);
-        }
+          if (templateConfig?.expanded) {
+            cols = applyTemplateToColumns(cols, templateConfig.expanded);
+          }
 
-        // 🔥 Merge with current column toggles
-        setExpandedColumns(prev => mergeColumns(cols, prev));
-      });
+          setExpandedColumns(prev => mergeColumns(cols, prev));
+        });
     }
   }, [toggleMode, columnFilters["Ledger_Date"], templateConfig]);
 
@@ -356,7 +392,7 @@ const OnlineSalesReportPage: React.FC = () => {
   }, [rawAbstract, columnFilters]);
 
   const filteredExpanded = useMemo(() => {
-    const filtered = applyFilters(rawExpanded); 
+    const filtered = applyFilters(rawExpanded);
     return filtered.sort((a, b) =>
       dayjs(b.Ledger_Date).valueOf() - dayjs(a.Ledger_Date).valueOf()
     );
@@ -685,6 +721,64 @@ const OnlineSalesReportPage: React.FC = () => {
     return [...baseColumns, ...dynamicCols];
   };
 
+  const handleQuickSave = async () => {
+    try {
+      if (!reportName.trim()) {
+        toast.error("Enter Report Name");
+        return;
+      }
+
+      if (!parentReportName?.trim()) {
+        toast.error("Parent Report missing");
+        return;
+      }
+
+      const payload = {
+        reportName,
+        parentReport: parentReportName,
+        abstractSP: spConfig.abstractSP,
+        expandedSP: spConfig.expandedSP,
+
+        abstractColumns: abstractColumns.map((c) => ({
+          key: c.key,
+          label: c.label,
+          enabled: c.enabled,
+          order: c.order,
+          groupBy: 0,
+          dataType: "nvarchar"
+        })),
+
+        expandedColumns: expandedColumns.map((c) => ({
+          key: c.key,
+          label: c.label,
+          enabled: c.enabled,
+          order: c.order,
+          groupBy: 0,
+          dataType: "nvarchar"
+        }))
+      };
+
+      await SettingsService.saveReportSettings(payload);
+
+      toast.success("Template Saved ✅");
+
+      // ✅ CLOSE DIALOG
+      setSaveDialogOpen(false);
+
+      // ✅ RESET (optional)
+      setReportName("");
+
+      // 🔥 AUTO RELOAD AFTER SUCCESS
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+
+    } catch (err) {
+      console.error(err);
+      toast.error("Error saving ❌");
+    }
+  };
+
   /* ================= RENDER ================= */
   return (
     <>
@@ -694,7 +788,12 @@ const OnlineSalesReportPage: React.FC = () => {
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
         onReportChange={(template) => {
+          if (!template?.Report_Id) return;
           loadTemplate(template.Report_Id);
+        }}
+        onQuickSave={(parentName) => {
+          setParentReportName(parentName);
+          setSaveDialogOpen(true);
         }}
         settingsSlot={
           <Box display="flex" gap={1}>
@@ -742,6 +841,24 @@ const OnlineSalesReportPage: React.FC = () => {
         }
         onApply={() => setDrawerOpen(false)}
       />
+      {templateLoading && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(255,255,255,0.6)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      )}
       <AppLayout fullWidth >
 
         <Box sx={{ mt: 1 }}>
@@ -1037,6 +1154,35 @@ const OnlineSalesReportPage: React.FC = () => {
             </Box>
           ))}
       </Menu>
+
+      {/* *****TEMPLATE***** */}
+
+      <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
+        <DialogTitle>Save Template</DialogTitle>
+
+        <DialogContent>
+          <TextField
+            fullWidth
+            size="small"
+            label="Report Name"
+            value={reportName}
+            onChange={(e) => setReportName(e.target.value)}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setSaveDialogOpen(false)}>
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleQuickSave}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

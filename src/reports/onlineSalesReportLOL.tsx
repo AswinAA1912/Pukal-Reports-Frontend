@@ -20,7 +20,8 @@ import {
     DialogActions,
     DialogTitle,
     DialogContent,
-    Checkbox
+    Checkbox,
+    CircularProgress
 } from "@mui/material";
 import dayjs from "dayjs";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -47,11 +48,13 @@ import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import AppLayout, { useToggleMode } from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
+import { SettingsService } from "../services/reportSettings.services";
 import ReportFilterDrawer from "../Components/ReportFilterDrawer";
 import CommonPagination from "../Components/CommonPagination";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { toast } from "react-toastify";
 import {
     onlineSalesReportLOLService,
     onlineSalesReportItemLOLService,
@@ -65,6 +68,7 @@ type ColumnConfig = {
     enabled: boolean;
     isNumeric?: boolean;
     order: number;
+    groupBy?: number;
 };
 
 /* ================= CONSTANTS ================= */
@@ -233,8 +237,8 @@ const OnlineSalesReportLOL: React.FC = () => {
         useState<null | HTMLElement>(null);
     const [activeHeader, setActiveHeader] = useState<string | null>(null);
     const [searchText, setSearchText] = useState("");
-    const [defaultAbstractColumns, setDefaultAbstractColumns] = useState<ColumnConfig[]>([]);
-    const [defaultExpandedColumns, setDefaultExpandedColumns] = useState<ColumnConfig[]>([]);
+    // const [defaultAbstractColumns, setDefaultAbstractColumns] = useState<ColumnConfig[]>([]);
+    // const [defaultExpandedColumns, setDefaultExpandedColumns] = useState<ColumnConfig[]>([]);
     type FiltersMap = {
         Date: { from: string; to: string };
         columnFilters: Record<string, string[]>;
@@ -260,35 +264,90 @@ const OnlineSalesReportLOL: React.FC = () => {
 
     const [groupDialogOpen, setGroupDialogOpen] = useState(false);
 
-    const [grouping, setGrouping] = useState<string[]>([]);
-    const [pendingGrouping, setPendingGrouping] = useState<string[]>([]);
+    const [abstractGrouping, setAbstractGrouping] = useState<string[]>([]);
+    const [expandedGrouping, setExpandedGrouping] = useState<string[]>([]);
 
-    const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+    const [abstractPendingGrouping, setAbstractPendingGrouping] = useState<string[]>([]);
+    const [expandedPendingGrouping, setExpandedPendingGrouping] = useState<string[]>([]);
+
+    const [abstractExpandedKeys, setAbstractExpandedKeys] = useState<string[]>([]);
+    const [expandedExpandedKeys, setExpandedExpandedKeys] = useState<string[]>([]);
 
     const serialRef = React.useRef(0);
 
+    const [templateConfig, setTemplateConfig] = useState<{
+        abstract: ColumnConfig[];
+        expanded: ColumnConfig[];
+    } | null>(null);
+    const [templateLoading, setTemplateLoading] = useState(false);
+    const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+    const [reportName, setReportName] = useState("");
+    const [parentReportName, setParentReportName] = useState("");
+    const grouping =
+        toggleMode === "Expanded" ? expandedGrouping : abstractGrouping;
+
+    const [spConfig, setSpConfig] = useState({
+        abstractSP: "",
+        expandedSP: ""
+    });
+
+    const SP_MAP = {
+        Abstract: "Reporting_Online_Sales_LOL_VW",
+        Expanded: "Reporting_Online_Sales_Item_LOL_VW"
+    };
+
     const HEADER_HEIGHT = 36;
+
+    const setGrouping =
+        toggleMode === "Expanded" ? setExpandedGrouping : setAbstractGrouping;
+
+    const pendingGrouping =
+        toggleMode === "Expanded"
+            ? expandedPendingGrouping
+            : abstractPendingGrouping;
+
+    const setPendingGrouping =
+        toggleMode === "Expanded"
+            ? setExpandedPendingGrouping
+            : setAbstractPendingGrouping;
+
+    const expandedKeys =
+        toggleMode === "Expanded"
+            ? expandedExpandedKeys
+            : abstractExpandedKeys;
+
+    const setExpandedKeys =
+        toggleMode === "Expanded"
+            ? setExpandedExpandedKeys
+            : setAbstractExpandedKeys;
 
     /* ================= LOAD DATA ================= */
 
     useEffect(() => {
-        // 🔹 ABSTRACT MODE
-        // 🔹 ABSTRACT MODE CACHE CHECK
-        if (
-            toggleMode === "Abstract" &&
-            abstractRows.length > 0 &&
-            abstractDateKey === currentDateKey
-        ) {
-            return;
-        }
+        const isTemplateApplied =
+            (toggleMode === "Abstract" && templateConfig?.abstract) ||
+            (toggleMode === "Expanded" && templateConfig?.expanded);
 
-        // 🔹 EXPANDED MODE CACHE CHECK
-        if (
-            toggleMode === "Expanded" &&
-            expandedRows.length > 0 &&
-            expandedDateKey === currentDateKey
-        ) {
-            return;
+        // ❌ SKIP CACHE ONLY IF NO TEMPLATE
+        const isResetState =
+            abstractRows.length === 0 && expandedRows.length === 0;
+
+        if (!isTemplateApplied && !isResetState) {
+            if (
+                toggleMode === "Abstract" &&
+                abstractRows.length > 0 &&
+                abstractDateKey === currentDateKey
+            ) {
+                return;
+            }
+
+            if (
+                toggleMode === "Expanded" &&
+                expandedRows.length > 0 &&
+                expandedDateKey === currentDateKey
+            ) {
+                return;
+            }
         }
 
         const service =
@@ -301,29 +360,54 @@ const OnlineSalesReportLOL: React.FC = () => {
             Todate: filters.Date.to,
         }).then((res: any) => {
             const apiRows = res.data.data || [];
-            const cols = buildColumnsFromApi(apiRows, toggleMode);
+
+            let cols = buildColumnsFromApi(apiRows, toggleMode);
+
+            // ✅ APPLY TEMPLATE
+            if (toggleMode === "Abstract" && templateConfig?.abstract) {
+                cols = applyTemplateToColumns(cols, templateConfig.abstract);
+            }
+
+            if (toggleMode === "Expanded" && templateConfig?.expanded) {
+                cols = applyTemplateToColumns(cols, templateConfig.expanded);
+            }
 
             if (toggleMode === "Expanded") {
                 setExpandedRows(apiRows);
                 setExpandedDateKey(currentDateKey);
-
-                setExpandedColumns(prev => prev.length === 0 ? cols : prev);
-                setDefaultExpandedColumns(prev => prev.length === 0 ? cols : prev);
+                setExpandedColumns(cols);
+                
             } else {
                 setAbstractRows(apiRows);
                 setAbstractDateKey(currentDateKey);
-
-                setAbstractColumns(prev => prev.length === 0 ? cols : prev);
-                setDefaultAbstractColumns(prev => prev.length === 0 ? cols : prev);
+                setAbstractColumns(cols);
+                
             }
 
             setPage(1);
         });
-    }, [toggleMode, filters.Date.from, filters.Date.to]);
+
+    }, [
+        toggleMode,
+        filters.Date.from,
+        filters.Date.to,
+        templateConfig // 🔥 VERY IMPORTANT
+    ]);
+
+    useEffect(() => {
+        setSpConfig({
+            abstractSP: SP_MAP.Abstract,
+            expandedSP: SP_MAP.Expanded
+        });
+    }, []);
 
     const handleResetSettings = () => {
         const todayDate = dayjs().format("YYYY-MM-DD");
 
+        // ✅ Clear template FIRST
+        setTemplateConfig(null);
+
+        // ✅ Reset filters
         setFromDate(todayDate);
         setToDate(todayDate);
 
@@ -332,17 +416,36 @@ const OnlineSalesReportLOL: React.FC = () => {
             columnFilters: {},
         });
 
-        // 🔑 Reset columns ONLY
-        setAbstractColumns(defaultAbstractColumns.map(c => ({ ...c })));
-        setExpandedColumns(defaultExpandedColumns.map(c => ({ ...c })));
+        // ✅ Reset grouping
+        // Reset BOTH modes
+        setAbstractGrouping([]);
+        setExpandedGrouping([]);
 
-        // 🔑 Reset sort
+        setAbstractPendingGrouping([]);
+        setExpandedPendingGrouping([]);
+
+        setAbstractExpandedKeys([]);
+        setExpandedExpandedKeys([]);
+
+        // ✅ Reset sort
         setSortConfig({ key: null, order: "asc" });
 
+        // ✅ HARD RESET DATA (IMPORTANT)
+        setAbstractRows([]);
+        setExpandedRows([]);
+
+        setAbstractColumns([]);
+        setExpandedColumns([]);
+        
+        setAbstractDateKey(null);
+        setExpandedDateKey(null);
+
+        // ✅ Reset pagination
         setPage(1);
+
+        // ✅ Close menus
         setSettingsAnchor(null);
         setFilterAnchor(null);
-
     };
 
     /* ================= FILTERING ================= */
@@ -431,9 +534,9 @@ const OnlineSalesReportLOL: React.FC = () => {
     );
 
     const groupedRows = useMemo(() => {
-        if (!grouping.length) return filteredRows;
-        return buildGroupedData(filteredRows, 0);
-    }, [filteredRows, grouping]);
+        if (!grouping.length) return sortedRows;
+        return buildGroupedData(sortedRows, 0);
+    }, [sortedRows, grouping]);
 
     const flattenRows = (rows: any[]): any[] => {
         const result: any[] = [];
@@ -515,11 +618,11 @@ const OnlineSalesReportLOL: React.FC = () => {
 
     const enabledColumns = sortedColumns.filter(c => c.enabled);
 
+    const baseRows = grouping.length ? filteredRows : sortedRows;
+
     const getTotal = (key: string) =>
         Number(
-            filteredRows
-                .reduce((s, r) => s + Number(r[key] || 0), 0)
-                .toFixed(2)
+            baseRows.reduce((s, r) => s + Number(r[key] || 0), 0).toFixed(2)
         );
 
     const handleHeaderClick = (
@@ -662,6 +765,152 @@ const OnlineSalesReportLOL: React.FC = () => {
         );
     };
 
+    /* ================= TEMPLATE ================= */
+
+    const loadTemplate = async (reportId: number) => {
+        try {
+            setTemplateLoading(true); // 🔥 START LOADING
+
+            const absRes = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 1,
+            });
+
+            const expRes = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 2,
+            });
+
+            setTemplateConfig({
+                abstract: absRes.data.data.columns || [],
+                expanded: expRes.data.data.columns || [],
+            });
+
+            // 🔥 FORCE TABLE REFRESH
+            setAbstractRows([]);
+            setExpandedRows([]);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setTemplateLoading(false); // 🔥 STOP LOADING
+        }
+    };
+
+    const applyTemplateToColumns = (
+        baseCols: ColumnConfig[],
+        templateCols: any[]
+    ): ColumnConfig[] => {
+
+        const templateBased = templateCols.map(t => ({
+            key: t.key,
+            label: t.label || t.key,
+            enabled: t.enabled,
+            order: t.order ?? 0,
+            groupBy: t.groupBy ?? 0,
+            isNumeric: NUMERIC_KEYS.includes(t.key),
+        }));
+
+        const merged = templateBased.map(col => {
+            const base = baseCols.find(b => b.key === col.key);
+            return {
+                ...col,
+                isNumeric: base?.isNumeric ?? col.isNumeric,
+            };
+        });
+
+        const missing = baseCols
+            .filter(b => !templateBased.some(t => t.key === b.key))
+            .map(b => ({
+                ...b,
+                enabled: false,
+                groupBy: 0,
+            }));
+
+        return [...merged, ...missing];
+    };
+
+    useEffect(() => {
+        if (!columns.length || !templateConfig) return;
+
+        const autoGroupCols = columns
+            .filter(col => col.groupBy && col.enabled)
+            .sort((a, b) => (a.groupBy! - b.groupBy!))
+            .map(col => col.key);
+
+        if (toggleMode === "Expanded") {
+            setExpandedGrouping(autoGroupCols);
+            setExpandedPendingGrouping(autoGroupCols);
+            setExpandedExpandedKeys([]);
+        } else {
+            setAbstractGrouping(autoGroupCols);
+            setAbstractPendingGrouping(autoGroupCols);
+            setAbstractExpandedKeys([]);
+        }
+    }, [columns]); // 🔥 REMOVE templateConfig & toggleMode
+
+    const handleQuickSave = async () => {
+        try {
+            if (!reportName.trim()) {
+                toast.error("Enter Report Name");
+                return;
+            }
+
+            if (!parentReportName?.trim()) {
+                toast.error("Parent Report missing");
+                return;
+            }
+
+            if (!abstractColumns.length || !expandedColumns.length) {
+                toast.error("Load both Abstract & Expanded once");
+                return;
+            }
+
+            const payload = {
+                reportName,
+                parentReport: parentReportName,
+                abstractSP: spConfig.abstractSP,
+                expandedSP: spConfig.expandedSP,
+
+                abstractColumns: abstractColumns.map(c => ({
+                    key: c.key,
+                    label: c.label,
+                    enabled: c.enabled,
+                    order: c.order,
+                    groupBy: abstractGrouping.includes(c.key)
+                        ? abstractGrouping.indexOf(c.key) + 1
+                        : 0,
+                    dataType: "nvarchar"
+                })),
+
+                expandedColumns: expandedColumns.map(c => ({
+                    key: c.key,
+                    label: c.label,
+                    enabled: c.enabled,
+                    order: c.order,
+                    groupBy: expandedGrouping.includes(c.key)
+                        ? expandedGrouping.indexOf(c.key) + 1
+                        : 0,
+                    dataType: "nvarchar"
+                }))
+            };
+
+            await SettingsService.saveReportSettings(payload);
+
+            toast.success("Template Saved Successfully ✅");
+
+            setSaveDialogOpen(false);
+
+            // ✅ SIMPLE & CLEAN RESET
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+
+        } catch (err) {
+            console.error(err);
+            toast.error("Save Failed ❌");
+        }
+    };
+
     /* ================= RENDER ================= */
 
     return (
@@ -671,6 +920,13 @@ const OnlineSalesReportLOL: React.FC = () => {
                 onToggleChange={setToggleMode}
                 onExportPDF={handleExportPDF}
                 onExportExcel={handleExportExcel}
+                onReportChange={(template) => {
+                    loadTemplate(template.Report_Id);
+                }}
+                onQuickSave={(parentName) => {
+                    setParentReportName(parentName);
+                    setSaveDialogOpen(true);
+                }}
                 settingsSlot={
                     <Box display="flex" gap={1}>
                         {/* GROUP BY ICON */}
@@ -726,6 +982,24 @@ const OnlineSalesReportLOL: React.FC = () => {
 
             <AppLayout fullWidth>
                 <Box sx={{ overflow: "auto", mt: 1 }}>
+                    {templateLoading && (
+                        <Box
+                            sx={{
+                                position: "absolute",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                background: "rgba(255,255,255,0.5)",
+                                zIndex: 10,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
+                            <CircularProgress size={40} />
+                        </Box>
+                    )}
                     <TableContainer
                         component={Paper}
                         sx={{
@@ -1192,6 +1466,35 @@ const OnlineSalesReportLOL: React.FC = () => {
                         }}
                     >
                         Apply
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* *****TEMPLATE***** */}
+
+            <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
+                <DialogTitle>Save Template</DialogTitle>
+
+                <DialogContent>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="Report Name"
+                        value={reportName}
+                        onChange={(e) => setReportName(e.target.value)}
+                    />
+                </DialogContent>
+
+                <DialogActions>
+                    <Button onClick={() => setSaveDialogOpen(false)}>
+                        Cancel
+                    </Button>
+
+                    <Button
+                        variant="contained"
+                        onClick={handleQuickSave}
+                    >
+                        Save
                     </Button>
                 </DialogActions>
             </Dialog>

@@ -78,6 +78,7 @@ const NUMERIC_KEYS = [
     "Total_Qty",
     "Q_Pay_Days",
     "Freq_Days",
+    "Tot_Amo",
 ];
 
 /* ================= TYPES ================= */
@@ -98,6 +99,9 @@ type FiltersMap = {
 
 /* ================= HELPERS ================= */
 
+const normalizeKey = (k: string) =>
+    k.replace(/[\s_]/g, "").toLowerCase();
+
 const buildColumnsFromApi = (
     rows: any[],
     mode: "Abstract" | "Expanded"
@@ -113,7 +117,12 @@ const buildColumnsFromApi = (
         key,
         label: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
         enabled: defaults.includes(key),
-        isNumeric: NUMERIC_KEYS.includes(key),
+
+        // ✅ FIX HERE
+        isNumeric:
+            NUMERIC_KEYS.some(n => normalizeKey(n) === normalizeKey(key)) ||
+            rows.some(r => !isNaN(Number(r[key]))),
+
         order: index,
     }));
 };
@@ -438,12 +447,13 @@ const SalesReport: React.FC = () => {
             const m3 = Number(row.M3) || 0;
             const m9 = Number(row.M9) || 0;
             const total = Number(row.Total_Qty) || 0;
+            const totAmo = Number(row["Tot_Amo"]) || 0;
 
             const hasValue =
-                y1 !== 0 || m6 !== 0 || m2 !== 0 || m3 !== 0 || m9 !== 0 || total !== 0;
+                y1 !== 0 || m6 !== 0 || m2 !== 0 || m3 !== 0 || m9 !== 0 || total !== 0 || totAmo !== 0;
 
             const isZero =
-                y1 === 0 && m6 === 0 && m2 === 0 && m3 === 0 && m9 === 0 && total === 0;
+                y1 === 0 && m6 === 0 && m2 === 0 && m3 === 0 && m9 === 0 && total === 0 && totAmo === 0;
 
             if (stockFilter === "hasValues" && !hasValue) return false;
             if (stockFilter === "zero" && !isZero) return false;
@@ -461,24 +471,24 @@ const SalesReport: React.FC = () => {
         }));
     };
 
-    const getTotal = (key: string) => {
-        const values = filteredRows
-            .map(row => Number(row[key]))
-            .filter(v => !isNaN(v));
+    // const getTotal = (key: string) => {
+    //     const values = filteredRows
+    //         .map(row => Number(row[key]))
+    //         .filter(v => !isNaN(v));
 
-        const total = values.reduce((sum, v) => sum + v, 0);
+    //     const total = values.reduce((sum, v) => sum + v, 0);
 
-        let result = total;
+    //     let result = total;
 
-        if (columnMode[key] === "avg") {
-            result = values.length ? total / values.length : 0;
-        }
+    //     if (columnMode[key] === "avg") {
+    //         result = values.length ? total / values.length : 0;
+    //     }
 
-        return result.toLocaleString("en-IN", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        });
-    };
+    //     return result.toLocaleString("en-IN", {
+    //         minimumFractionDigits: 2,
+    //         maximumFractionDigits: 2,
+    //     });
+    // };
 
     /* ================= PAGINATION ================= */
 
@@ -1012,6 +1022,34 @@ const SalesReport: React.FC = () => {
         }
     };
 
+    const totalsMap = useMemo(() => {
+        const map: Record<string, string> = {};
+
+        enabledColumns.forEach(c => {
+            if (!c.isNumeric) return;
+
+            const values = filteredRows
+                .map(row => Number(row[c.key]))
+                .filter(v => !isNaN(v));
+
+            const total = values.reduce((sum, v) => sum + v, 0);
+
+            let result = total;
+
+            if (columnMode[c.key] === "avg") {
+                result = values.length ? total / values.length : 0;
+            }
+
+            map[c.key] = result.toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+        });
+
+        return map;
+
+    }, [filteredRows, enabledColumns, columnMode]);
+
     /* ================= RENDER ================= */
 
     return (
@@ -1174,7 +1212,7 @@ const SalesReport: React.FC = () => {
                                     </TableCell>
                                     {enabledColumns.map(c => (
                                         <TableCell key={c.key}>
-                                            {c.isNumeric ? getTotal(c.key) : ""}
+                                            {c.isNumeric ? totalsMap[c.key] : ""}
                                         </TableCell>
                                     ))}
                                 </TableRow>
