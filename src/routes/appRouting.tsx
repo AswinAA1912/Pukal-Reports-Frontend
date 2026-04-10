@@ -21,6 +21,7 @@ import SalesOrderReport from "../reports/SaleOrderReport";
 import PurchaseOrder from "../reports/PurchaseOrderReport";
 import ReportSettings from "../settings/ReportSettings";
 import ReportList from "../settings/ReportList";
+import StockValueReport from "../reports/stockValueReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -280,6 +281,19 @@ const AppRouting: React.FC<AppRoutingProps> = ({
                 fullWidth
               >
                 <ReportSettings />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/stockValue"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <StockValueReport />
               </AppLayout>
             </RequireAuth>
           }
