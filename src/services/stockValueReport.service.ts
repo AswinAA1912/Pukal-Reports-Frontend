@@ -77,8 +77,8 @@ export const stockGroupingService = {
 export const itemwisestockvaluereportservice = {
     getItemwiseReports: (params?: { Fromdate?: string; Todate?: string }) =>
         axios.get<{ success: boolean; data: stockWiseReport[] }>(
-            `http://192.168.1.92:9001/api/reports/storageStock/stockvalueitem`,
-            // `${getBaseURL()}api/reports/storageStock/stockvalueitem`,
+            // `http://192.168.1.92:9001/api/reports/storageStock/stockvalueitem`,
+            `${getBaseURL()}api/reports/storageStock/stockvalueitem`,
             { params }
         ),
 };
@@ -86,8 +86,8 @@ export const itemwisestockvaluereportservice = {
 export const godownwisestockvaluereportservice = {
     getGodownwiseReports: (params?: { Fromdate?: string; Todate?: string }) =>
         axios.get<{ success: boolean; data: stockWiseReport[] }>(
-            `http://192.168.1.92:9001/api/reports/storageStock/stockvaluegodown`,
-            // `${getBaseURL()}api/reports/storageStock/stockvaluegodown`,
+            // `http://192.168.1.92:9001/api/reports/storageStock/stockvaluegodown`,
+            `${getBaseURL()}api/reports/storageStock/stockvaluegodown`,
             { params }
         ),
 };
