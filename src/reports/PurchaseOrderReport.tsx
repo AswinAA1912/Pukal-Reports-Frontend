@@ -27,6 +27,8 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import GroupWorkIcon from "@mui/icons-material/GroupWork";
 import AppLayout, { useToggleMode } from "../Layout/appLayout";
+import { SettingsService } from "../services/reportSettings.services";
+import { toast } from "react-toastify";
 import PageHeader from "../Layout/PageHeader";
 import ReportFilterDrawer from "../Components/ReportFilterDrawer";
 import CommonPagination from "../Components/CommonPagination";
@@ -42,7 +44,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import { PurchaseOrderReport,PurchaseOrderReportItem } from "../services/purchaseOrderReport.service";
+import { PurchaseOrderReport, PurchaseOrderReportItem } from "../services/purchaseOrderReport.service";
 
 const ABSTRACT_DEFAULT_KEYS = [
     "invoice_no",
@@ -149,7 +151,7 @@ const buildColumnsFromApi = (
                                     key.replace(/_/g, " ")
                                         .replace(/\b\w/g, c => c.toUpperCase()),
 
-       enabled: defaults.includes(key) || key === "invoice_no",
+        enabled: defaults.includes(key) || key === "invoice_no",
         isNumeric: NUMERIC_KEYS.includes(key),
         order: index,
     }));
@@ -227,6 +229,27 @@ const PurchaseOrder: React.FC = () => {
     const selectedValues =
         activeHeader ? filters.columnFilters[activeHeader!] ?? [] : [];
 
+    const [templateConfig, setTemplateConfig] = useState<{
+        abstract: ColumnConfig[];
+        expanded: ColumnConfig[];
+    } | null>(null);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+    const [isEditTemplate, setIsEditTemplate] = useState(false);
+
+    const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+    const [reportName, setReportName] = useState("");
+    const [parentReportName, setParentReportName] = useState("");
+
+    const [spConfig, setSpConfig] = useState({
+        abstractSP: "",
+        expandedSP: ""
+    });
+
+    const SP_MAP = {
+        Abstract: "Reporting_Online_Purchase_Order_VW",
+        Expanded: "Reporting_Online_Purchase_Order_Item_VW"
+    };
+
     const [tempDateFilter, setTempDateFilter] = useState({
         from: today,
         to: today,
@@ -238,7 +261,9 @@ const PurchaseOrder: React.FC = () => {
     /* ================= LOAD DATA ================= */
 
     useEffect(() => {
+        let mounted = true;
         setLoading(true);
+
         const service =
             toggleMode === "Expanded"
                 ? PurchaseOrderReportItem.getPurchaseOrderItem
@@ -248,37 +273,91 @@ const PurchaseOrder: React.FC = () => {
             Fromdate: filters.Date.from,
             Todate: filters.Date.to,
         })
-            .then(res => {
+            .then((res) => {
+                if (!mounted) return;
+
                 const apiRowsRaw =
                     res.data?.data?.data ||
                     res.data?.data ||
                     [];
 
-                // ✅ normalize ALL rows FIRST
                 const apiRows = apiRowsRaw.map(normalizeRow);
 
-                const cols = buildColumnsFromApi(apiRows, toggleMode);
+                const freshColumns = buildColumnsFromApi(apiRows, toggleMode);
+
+                const applyTemplateColumns = (
+                    incomingCols: ColumnConfig[],
+                    templateCols?: ColumnConfig[]
+                ) => {
+                    if (!templateCols?.length) return incomingCols;
+
+                    return incomingCols.map((col) => {
+                        const matched = templateCols.find(
+                            (t) => t.key === col.key
+                        );
+
+                        return matched
+                            ? {
+                                ...col,
+                                enabled: matched.enabled,
+                                order: matched.order,
+                            }
+                            : col;
+                    });
+                };
 
                 if (toggleMode === "Expanded") {
                     setExpandedRows(apiRows);
-                    setExpandedColumns(prev => (prev.length ? prev : cols));
-                } else {
+
+                    setExpandedColumns((prev) => {
+                        // already modified by user → keep it
+                        if (prev.length > 0) return prev;
+
+                        return applyTemplateColumns(
+                            freshColumns,
+                            templateConfig?.expanded
+                        );
+                    });
+                }
+                else {
                     const abstractData = buildAbstractData(apiRows);
 
                     setAbstractRows(abstractData);
-                    setAbstractColumns(prev => (prev.length ? prev : cols));
+
+                    setAbstractColumns((prev) => {
+                        // already modified by user → keep it
+                        if (prev.length > 0) return prev;
+
+                        return applyTemplateColumns(
+                            freshColumns,
+                            templateConfig?.abstract
+                        );
+                    });
                 }
+
+                setSpConfig({
+                    abstractSP: SP_MAP.Abstract,
+                    expandedSP: SP_MAP.Expanded
+                });
 
                 setPage(1);
             })
-            .catch(err => {
+            .catch((err) => {
                 console.error("Purchase Order Report API Error:", err);
             })
             .finally(() => {
-                setLoading(false);
+                if (mounted) setLoading(false);
             });
 
-    }, [toggleMode, filters.Date.from, filters.Date.to]);
+        return () => {
+            mounted = false;
+        };
+    }, [
+        toggleMode,
+        filters.Date.from,
+        filters.Date.to,
+        templateConfig
+    ]);
 
     const appliedGroupBy =
         toggleMode === "Expanded"
@@ -514,6 +593,182 @@ const PurchaseOrder: React.FC = () => {
         );
     };
 
+    /* ================= TEMPLATE ================= */
+
+    const applyTemplateToColumns = (
+        liveColumns: ColumnConfig[],
+        templateColumns: any[]
+    ): ColumnConfig[] => {
+
+        const mapped = templateColumns.map((t: any, index: number) => {
+            const existing = liveColumns.find(c => c.key === t.key);
+
+            return {
+                key: t.key,
+                label: t.label || existing?.label || t.key,
+                enabled: t.enabled,
+                isNumeric: existing?.isNumeric || false,
+                order: t.order ?? index,
+            };
+        });
+
+        const missing = liveColumns
+            .filter(col => !mapped.some((m: any) => m.key === col.key))
+            .map((col, idx) => ({
+                ...col,
+                enabled: false,
+                order: mapped.length + idx
+            }));
+
+        return [...mapped, ...missing];
+    };
+
+
+    const loadTemplate = async (reportId: number) => {
+        try {
+            setLoading(true);
+
+            // ✅ keep selected template state
+            setSelectedTemplateId(reportId);
+            setIsEditTemplate(true);
+
+            const absRes = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 1
+            });
+
+            const expRes = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 2
+            });
+
+            const abstractCols = absRes.data?.data?.columns || [];
+            const expandedCols = expRes.data?.data?.columns || [];
+
+            /* ✅ set report name */
+            if (absRes.data?.data?.reportInfo?.Report_Name) {
+                setReportName(
+                    absRes.data.data.reportInfo.Report_Name
+                );
+            }
+
+            if (absRes.data?.data?.reportInfo?.Parent_Report) {
+                setParentReportName(
+                    absRes.data.data.reportInfo.Parent_Report
+                );
+            }
+
+            /* ✅ RESTORE GROUPING ORDER */
+            const abstractGrouping = [...abstractCols]
+                .filter((x: any) => Number(x.groupBy) > 0)
+                .sort((a: any, b: any) => Number(a.groupBy) - Number(b.groupBy))
+                .map((x: any) => x.key);
+
+            const expandedGrouping = [...expandedCols]
+                .filter((x: any) => Number(x.groupBy) > 0)
+                .sort((a: any, b: any) => Number(a.groupBy) - Number(b.groupBy))
+                .map((x: any) => x.key);
+
+            setTemplateConfig({
+                abstract: abstractCols,
+                expanded: expandedCols
+            });
+
+            setAbstractColumns(prev =>
+                applyTemplateToColumns(prev.length ? prev : [], abstractCols)
+            );
+
+            setExpandedColumns(prev =>
+                applyTemplateToColumns(prev.length ? prev : [], expandedCols)
+            );
+
+            /* ✅ APPLY GROUPING */
+            setAbstractGrouping(abstractGrouping);
+            setExpandedGrouping(expandedGrouping);
+
+            setAbstractPendingGrouping(abstractGrouping);
+            setExpandedPendingGrouping(expandedGrouping);
+
+            /* collapse expanded rows */
+            setAbstractExpandedKeys([]);
+            setExpandedExpandedKeys([]);
+
+            toast.success("Template Loaded");
+
+        } catch (error) {
+            toast.error("Failed to Load Template");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleQuickSave = async () => {
+        try {
+            if (!reportName.trim()) {
+                toast.error("Enter Report Name");
+                return;
+            }
+
+            const abstractPayload = abstractColumns.map(col => ({
+                key: col.key,
+                label: col.label,
+                enabled: col.enabled,
+                order: col.order,
+                groupBy: abstractGrouping.includes(col.key)
+                    ? abstractGrouping.indexOf(col.key) + 1
+                    : 0,
+                dataType: "nvarchar"
+            }));
+
+            const expandedPayload = expandedColumns.map(col => ({
+                key: col.key,
+                label: col.label,
+                enabled: col.enabled,
+                order: col.order,
+                groupBy: expandedGrouping.includes(col.key)
+                    ? expandedGrouping.indexOf(col.key) + 1
+                    : 0,
+                dataType: "nvarchar"
+            }));
+
+            if (selectedTemplateId) {
+                await SettingsService.updateReport({
+                    reportId: selectedTemplateId,
+                    typeId: 1,
+                    columns: abstractPayload
+                });
+
+                await SettingsService.updateReport({
+                    reportId: selectedTemplateId,
+                    typeId: 2,
+                    columns: expandedPayload
+                });
+
+                toast.success("Template Updated Successfully");
+            } else {
+                await SettingsService.saveReportSettings({
+                    reportName,
+                    parentReport: parentReportName,
+                    abstractSP: spConfig.abstractSP,
+                    expandedSP: spConfig.expandedSP,
+                    abstractColumns: abstractPayload,
+                    expandedColumns: expandedPayload
+                });
+
+                toast.success("Template Saved Successfully");
+            }
+
+            setSaveDialogOpen(false);
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+
+        } catch (err: any) {
+            toast.error("Save Failed");
+        }
+    };
+
     /* ================= FILTER MENU ================= */
 
     const filterOptions = useMemo(() => {
@@ -740,6 +995,52 @@ const PurchaseOrder: React.FC = () => {
                 onToggleChange={setToggleMode}
                 onExportExcel={handleExportExcel}
                 onExportPDF={handleExportPDF}
+                onReportChange={(template) => {
+                    if (!template) {
+                        const todayDate = dayjs().format("YYYY-MM-DD");
+
+                        setIsEditTemplate(false);
+                        setSelectedTemplateId(null);
+                        setReportName("");
+                        setParentReportName("");
+                        setTemplateConfig(null);
+
+                        setToggleMode("Abstract");
+
+                        setFilters({
+                            Date: { from: todayDate, to: todayDate },
+                            columnFilters: {},
+                        });
+
+                        setAbstractGrouping([]);
+                        setExpandedGrouping([]);
+                        setAbstractPendingGrouping([]);
+                        setExpandedPendingGrouping([]);
+                        setAbstractExpandedKeys([]);
+                        setExpandedExpandedKeys([]);
+
+                        setAbstractColumns([]);
+                        setExpandedColumns([]);
+                        setPage(1);
+
+                        return;
+                    }
+
+                    setIsEditTemplate(true);
+                    setSelectedTemplateId(template.Report_Id);
+                    setReportName(template.Report_Name);
+
+                    loadTemplate(template.Report_Id);
+                }}
+                onQuickSave={(parentName) => {
+                    setParentReportName(parentName);
+
+                    if (!selectedTemplateId) {
+                        setReportName("");
+                    }
+
+                    setSaveDialogOpen(true);
+                }}
                 settingsSlot={
                     <Box display="flex" gap={1}>
                         {/* GROUP BY ICON */}
@@ -1215,6 +1516,45 @@ const PurchaseOrder: React.FC = () => {
                         }}
                     >
                         Apply
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* ************************** SAVE TEMPLATE ************************* */}
+            <Dialog
+                open={saveDialogOpen}
+                onClose={() => setSaveDialogOpen(false)}
+            >
+                <DialogTitle>
+                    {isEditTemplate ? "Edit Template" : "Create Template"}
+                </DialogTitle>
+
+                <DialogContent sx={{ minWidth: 350 }}>
+                    <TextField
+                        fullWidth
+                        autoFocus
+                        label="Report Name"
+                        size="small"
+                        margin="dense"
+                        value={reportName}
+                        onChange={(e) =>
+                            setReportName(e.target.value)
+                        }
+                    />
+                </DialogContent>
+
+                <DialogActions>
+                    <Button
+                        onClick={() => setSaveDialogOpen(false)}
+                    >
+                        Cancel
+                    </Button>
+
+                    <Button
+                        variant="contained"
+                        onClick={handleQuickSave}
+                    >
+                        Save
                     </Button>
                 </DialogActions>
             </Dialog>

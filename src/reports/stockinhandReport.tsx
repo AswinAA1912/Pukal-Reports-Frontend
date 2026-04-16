@@ -60,7 +60,7 @@ const StockInHandReport: React.FC = () => {
     const [filterLevels, setFilterLevels] = useState<Record<number, any[]>>({});
     const [selectedFilters, setSelectedFilters] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
-    const [selectedLevel2, setSelectedLevel2] = useState<string[]>([]);
+
 
     /* ===== LEVEL 2 META (FROM CONFIG) ===== */
 
@@ -96,64 +96,81 @@ const StockInHandReport: React.FC = () => {
 
 
     useEffect(() => {
-        const reportName = isExpanded
-            ? "StockInhand-Godown"
-            : "StockInhand";
+        const reportName =
+            isExpanded ? "StockInhand-Godown" : "StockInhand";
 
-        stockGroupingService
-            .getGroupingConfig(reportName)
-            .then((res) => {
+        const loadConfig = async () => {
+            try {
+                setLoading(true);
+
+                const res =
+                    await stockGroupingService.getGroupingConfig(reportName);
+
                 const cfg = res.data.data || [];
 
-                // GROUPING
-                setGroupConfig(
-                    cfg
-                        .filter(g => g.isGroupFilter)
-                        .sort((a, b) => (a.Level_Id ?? 0) - (b.Level_Id ?? 0))
-                );
+                const groups = cfg
+                    .filter((g) => g.isGroupFilter)
+                    .sort(
+                        (a, b) =>
+                            (a.Level_Id ?? 0) - (b.Level_Id ?? 0)
+                    );
 
-                // LEVEL 1 FILTER
-                // ✅ GROUP ALL FILTERS BY LEVEL
-                const filtersOnly = cfg.filter(g => g.isGroupFilter === false);
+                setGroupConfig(groups);
+
+                const filtersOnly = cfg.filter(
+                    (g) => g.isGroupFilter === false
+                );
 
                 const grouped: Record<number, any[]> = {};
 
                 filtersOnly.forEach((f) => {
                     const lvl = f.FilterLevel || 1;
+
                     if (!grouped[lvl]) grouped[lvl] = [];
+
                     grouped[lvl].push(f);
                 });
 
                 setFilterLevels(grouped);
 
-                // reset selected values
-                setSelectedFilters({});
-
-                // LEVEL 2 FILTER (CASCADING META)
                 const lvl2 = cfg.filter(
-                    g => g.FilterLevel === 2 && g.isGroupFilter === false
+                    (g) =>
+                        g.FilterLevel === 2 &&
+                        g.isGroupFilter === false
                 );
 
-                const meta: Level2Meta[] = lvl2
-                    .filter(l => l.filterType)
-                    .map(l => ({
+                const meta = lvl2
+                    .filter((l) => l.filterType)
+                    .map((l) => ({
                         columnName: l.columnName,
                         type: Number(l.filterType),
                     }));
 
                 setLevel2Meta(meta);
 
-                const orderedTypes = Array.from(
-                    new Set(meta.map(m => m.type))
-                ).sort((a, b) => a - b);
+                setLevel2TypeOrder(
+                    Array.from(
+                        new Set(meta.map((m) => m.type))
+                    ).sort((a, b) => a - b)
+                );
 
-                setLevel2TypeOrder(orderedTypes);
                 setSelectedLevel2ByType({});
-            });
 
-        // optional cleanup not required
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadConfig();
     }, [toggleMode]);
 
+    useEffect(() => {
+        if (Object.keys(filterLevels).length > 0) {
+            loadData();
+        }
+    }, [filterLevels]);
 
     useEffect(() => {
         setModeState(prev => ({
@@ -174,65 +191,97 @@ const StockInHandReport: React.FC = () => {
         if (state) {
             setExpanded(state.expanded || {});
             setPage(state.page || 1);
-            setSelectedFilters(state.selectedFilters || "");
+            setSelectedFilters(state.selectedFilters || {});
             setSelectedLevel2ByType(state.selectedLevel2ByType || {});
         }
-
-        // ✅ ALWAYS CALL API WHEN MODE CHANGES
-        loadData();
-
     }, [toggleMode]);
 
-
-    /* ================= LOAD DATA ================= */
-
     const loadData = React.useCallback(async () => {
-        setLoading(true);
-
-        const api = isExpanded
-            ? godownwisestockreportservice.getGodownwiseReports
-            : itemwisestockreportservice.getItemwiseReports;
-
-        const payload: any = {
-            Fromdate: fromDate,
-            Todate: toDate,
-        };
-
-        Object.keys(selectedFilters).forEach((col) => {
-            const value = selectedFilters[col];
-
-            const filter = Object.values(filterLevels)
-                .flat()
-                .find((f: any) => f.columnName === col);
-
-            const label = filter?.options?.find((o: any) => o.value === value)?.label;
-
-            if (label) {
-                payload[col] = label;
-            }
-        });
-
         try {
-            const res = await api(payload);
-            setRawData(res.data?.data || []);
+            setLoading(true);
+
+            const payload: any = {
+                Fromdate: fromDate,
+                Todate: toDate,
+            };
+
+            /* =========================
+               ABSTRACT MODE
+            ========================= */
+            if (!isExpanded) {
+                Object.keys(selectedFilters).forEach((col) => {
+                    const value = selectedFilters[col];
+
+                    const filter = Object.values(filterLevels)
+                        .flat()
+                        .find((f: any) => f.columnName === col);
+
+                    const label = filter?.options?.find(
+                        (o: any) => String(o.value) === String(value)
+                    )?.label;
+
+                    payload[col] = label || value;
+                });
+
+                const res =
+                    await itemwisestockreportservice.getItemwiseReports(payload);
+
+                setRawData(res.data?.data || []);
+            }
+
+            /* =========================
+               EXPANDED MODE
+            ========================= */
+            else {
+                const godownFilter = (filterLevels[1] || []).find(
+                    (f: any) =>
+                        f.columnName === "Godown_Id" ||
+                        f.columnName === "Godown_Name"
+                );
+
+                const godownId =
+                    selectedFilters["Godown_Id"] ||
+                    selectedFilters["Godown_Name"] ||
+                    selectedFilters[godownFilter?.columnName];
+
+                if (!godownId) {
+                    setRawData([]);
+                    setExpanded({});
+                    setPage(1);
+                    return;
+                }
+
+                payload.Godown_Id = godownId;
+
+                const res =
+                    await godownwisestockreportservice.getGodownwiseReports(
+                        payload
+                    );
+
+                setRawData(res.data?.data || []);
+            }
+
+            setExpanded({});
+            setPage(1);
+
         } catch (err) {
             console.error("Stock report load error:", err);
             setRawData([]);
         } finally {
             setLoading(false);
         }
-    }, [isExpanded, selectedFilters, fromDate, toDate]);
+    }, [
+        isExpanded,
+        selectedFilters,
+        fromDate,
+        toDate,
+        filterLevels
+    ]);
 
     useEffect(() => {
-
-        loadData();
-    }, [toggleMode, selectedFilters, fromDate, toDate]);
-
-    useEffect(() => {
-        setSelectedLevel2([]);
         setExpanded({});
         setPage(1);
-    }, [selectedFilters, toggleMode]);
+    }, [toggleMode]);
 
     useEffect(() => {
         const saved = sessionStorage.getItem("stockInHandState");
@@ -240,10 +289,10 @@ const StockInHandReport: React.FC = () => {
         if (!saved) return;
         const state = JSON.parse(saved);
 
-        setRawData(state.rawData || []);
+        setRawData(state.rawData || []); 41
         setExpanded(state.expanded || {});
         setPage(state.page || 1);
-        setSelectedFilters(state.selectedFilters || "");
+        setSelectedFilters(state.selectedFilters || {});
         setSelectedLevel2ByType(state.selectedLevel2ByType || {});
         setToggleMode(state.toggleMode || "Abstract");
         setFromDate(state.fromDate || today);
@@ -357,9 +406,9 @@ const StockInHandReport: React.FC = () => {
     };
 
     useEffect(() => {
-        setExpanded({});
-        setPage(1);
-    }, [selectedLevel2]);
+    setExpanded({});
+    setPage(1);
+}, [selectedLevel2ByType]);
 
     /* ================= GROUPING ================= */
 
@@ -387,28 +436,28 @@ const StockInHandReport: React.FC = () => {
 
     // ✅ BASE DATA FOR LEVEL-2 CHIPS (MOBILE PARITY)
     const level1FilteredData = useMemo(() => {
-    let filtered = rawData;
+        let filtered = rawData;
 
-    Object.keys(selectedFilters).forEach((col) => {
-        const value = selectedFilters[col];
+        Object.keys(selectedFilters).forEach((col) => {
+            const value = selectedFilters[col];
 
-        const filter = Object.values(filterLevels)
-            .flat()
-            .find((f: any) => f.columnName === col);
+            const filter = Object.values(filterLevels)
+                .flat()
+                .find((f: any) => f.columnName === col);
 
-        const label = filter?.options?.find(
-            (opt: any) => String(opt.value) === String(value)
-        )?.label;
+            const label = filter?.options?.find(
+                (opt: any) => String(opt.value) === String(value)
+            )?.label;
 
-        if (label) {
-            filtered = filtered.filter(
-                (r) => String(r[col]) === String(label)
-            );
-        }
-    });
+            if (label) {
+                filtered = filtered.filter(
+                    (r) => String(r[col]) === String(label)
+                );
+            }
+        });
 
-    return filtered;
-}, [rawData, selectedFilters, filterLevels]);
+        return filtered;
+    }, [rawData, selectedFilters, filterLevels]);
 
 
     /* ===== GODOWN FIRST (EXPANDED MODE) ===== */
@@ -784,8 +833,8 @@ const StockInHandReport: React.FC = () => {
                 }}
                 stockFilter={stockFilter}
                 onStockFilterChange={setStockFilter}
-                onApply={() => {
-                    loadData();
+                onApply={async () => {
+                    await loadData();
                     setDrawerOpen(false);
                 }}
             />

@@ -248,22 +248,11 @@ const StockValueRateMasterReport: React.FC = () => {
                 onToggle={() => setDrawerOpen((p) => !p)}
                 onClose={() => setDrawerOpen(false)}
                 fromDate={columnFilters["Ledger_Date"]?.from || ""}
-                toDate={columnFilters["Ledger_Date"]?.to || ""}
                 onFromDateChange={(v) =>
                     setColumnFilters((prev) => ({
                         ...prev,
                         Ledger_Date: {
-                            ...prev["Ledger_Date"],
                             from: v,
-                        },
-                    }))
-                }
-                onToDateChange={(v) =>
-                    setColumnFilters((prev) => ({
-                        ...prev,
-                        Ledger_Date: {
-                            ...prev["Ledger_Date"],
-                            to: v,
                         },
                     }))
                 }

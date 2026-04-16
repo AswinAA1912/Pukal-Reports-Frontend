@@ -284,19 +284,16 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                   setSelectedTemplate(reportId);
 
                   if (!reportId) {
-                    // 🔥 "Select Template" selected → reset to parent report
-                    const parentReport = {
-                      Report_Name: currentPageLabel,
-                      Report_Id: null,
-                    };
-                    onReportChange?.(parentReport);
+                    onReportChange?.(null);
                     return;
                   }
-
                   const selected = templates.find(
-                    (t) => t.Report_Id === reportId
+                    (t) => String(t.Report_Id) === String(reportId)
                   );
 
+                  /**
+                   * Send selected template data to parent page
+                   */
                   if (selected) {
                     onReportChange?.(selected);
                   }

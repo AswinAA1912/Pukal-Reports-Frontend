@@ -82,6 +82,8 @@ const OnlineSalesReportPage: React.FC = () => {
     abstract: ColumnConfig[];
     expanded: ColumnConfig[];
   } | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [isEditTemplate, setIsEditTemplate] = useState(false);
 
   const ABSTRACT_INITIAL_COLUMNS: ColumnConfig[] = [
     { key: "sno", label: "S.No", enabled: true, order: 0 },
@@ -129,9 +131,21 @@ const OnlineSalesReportPage: React.FC = () => {
       ? setAbstractColumns
       : setExpandedColumns;
 
-  const loadTemplate = async (reportId: number) => {
+  const loadTemplate = async (
+    reportId: number,
+    templateName?: string
+  ) => {
     try {
       setTemplateLoading(true);
+
+      // ✅ mark selected template as edit mode
+      setSelectedTemplateId(reportId);
+      setIsEditTemplate(true);
+
+      // ✅ preload existing template name
+      if (templateName) {
+        setReportName(templateName);
+      }
 
       const absRes = await SettingsService.getReportEditData({
         reportId,
@@ -143,21 +157,27 @@ const OnlineSalesReportPage: React.FC = () => {
         typeId: 2
       });
 
-      const abstractCols = absRes.data.data.columns || [];
-      const expandedCols = expRes.data.data.columns || [];
+      const abstractCols = absRes?.data?.data?.columns || [];
+      const expandedCols = expRes?.data?.data?.columns || [];
 
       setTemplateConfig({
         abstract: abstractCols,
         expanded: expandedCols
       });
 
-      // 🔥 APPLY IMMEDIATELY (CRITICAL FIX)
+      // ✅ Apply template immediately
       setAbstractColumns(
-        applyTemplateToColumns(ABSTRACT_INITIAL_COLUMNS, abstractCols)
+        applyTemplateToColumns(
+          ABSTRACT_INITIAL_COLUMNS,
+          abstractCols
+        )
       );
 
       setExpandedColumns(
-        applyTemplateToColumns(EXPANDED_INITIAL_COLUMNS, expandedCols)
+        applyTemplateToColumns(
+          EXPANDED_INITIAL_COLUMNS,
+          expandedCols
+        )
       );
 
     } catch (err) {
@@ -723,58 +743,98 @@ const OnlineSalesReportPage: React.FC = () => {
 
   const handleQuickSave = async () => {
     try {
+      /* ===============================
+         VALIDATION
+      =============================== */
+
       if (!reportName.trim()) {
         toast.error("Enter Report Name");
         return;
       }
 
-      if (!parentReportName?.trim()) {
-        toast.error("Parent Report missing");
+      if (!parentReportName.trim()) {
+        toast.error("Parent Report Missing");
         return;
       }
 
-      const payload = {
-        reportName,
-        parentReport: parentReportName,
-        abstractSP: spConfig.abstractSP,
-        expandedSP: spConfig.expandedSP,
+      /* ===============================
+         CREATE NEW TEMPLATE
+      =============================== */
 
-        abstractColumns: abstractColumns.map((c) => ({
+      if (!isEditTemplate || !selectedTemplateId) {
+        const createPayload = {
+          reportName: reportName.trim(),
+          parentReport: parentReportName,
+          abstractSP: spConfig.abstractSP,
+          expandedSP: spConfig.expandedSP,
+
+          abstractColumns: abstractColumns.map((c) => ({
+            key: c.key,
+            label: c.label,
+            enabled: c.enabled,
+            order: c.order,
+            groupBy: c.groupBy ?? 0,
+            dataType: "nvarchar"
+          })),
+
+          expandedColumns: expandedColumns.map((c) => ({
+            key: c.key,
+            label: c.label,
+            enabled: c.enabled,
+            order: c.order,
+            groupBy: c.groupBy ?? 0,
+            dataType: "nvarchar"
+          }))
+        };
+
+        await SettingsService.saveReportSettings(createPayload);
+
+        toast.success("Template Saved ✅");
+        setIsEditTemplate(true);
+        setSaveDialogOpen(false);
+        return;
+      }
+
+      /* ===============================
+         EDIT EXISTING TEMPLATE
+         Using existing service only
+      =============================== */
+
+      await SettingsService.updateReport({
+        reportId: selectedTemplateId,
+        typeId: 1,
+        columns: abstractColumns.map((c) => ({
           key: c.key,
           label: c.label,
           enabled: c.enabled,
           order: c.order,
-          groupBy: 0,
-          dataType: "nvarchar"
-        })),
-
-        expandedColumns: expandedColumns.map((c) => ({
-          key: c.key,
-          label: c.label,
-          enabled: c.enabled,
-          order: c.order,
-          groupBy: 0,
-          dataType: "nvarchar"
+          groupBy: c.groupBy ?? 0
         }))
-      };
+      });
 
-      await SettingsService.saveReportSettings(payload);
+      await SettingsService.updateReport({
+        reportId: selectedTemplateId,
+        typeId: 2,
+        columns: expandedColumns.map((c) => ({
+          key: c.key,
+          label: c.label,
+          enabled: c.enabled,
+          order: c.order,
+          groupBy: c.groupBy ?? 0
+        }))
+      });
 
-      toast.success("Template Saved ✅");
-
-      // ✅ CLOSE DIALOG
+      toast.success("Template Saved Successfully ✅");
       setSaveDialogOpen(false);
 
-      // ✅ RESET (optional)
-      setReportName("");
+      setSaveDialogOpen(false);
 
-      // 🔥 AUTO RELOAD AFTER SUCCESS
       setTimeout(() => {
         window.location.reload();
       }, 500);
 
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       toast.error("Error saving ❌");
     }
   };
@@ -788,11 +848,32 @@ const OnlineSalesReportPage: React.FC = () => {
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
         onReportChange={(template) => {
-          if (!template?.Report_Id) return;
-          loadTemplate(template.Report_Id);
+          if (!template) {
+            setSelectedTemplateId(null);
+            setIsEditTemplate(false);
+            setReportName("");
+            setTemplateConfig(null);
+
+            setAbstractColumns(ABSTRACT_INITIAL_COLUMNS);
+            setExpandedColumns(EXPANDED_INITIAL_COLUMNS);
+
+            setToggleMode("Abstract");
+
+            return;
+          }
+
+          loadTemplate(
+            template.Report_Id,
+            template.Report_Name
+          );
         }}
         onQuickSave={(parentName) => {
           setParentReportName(parentName);
+
+          if (!isEditTemplate) {
+            setReportName("");
+          }
+
           setSaveDialogOpen(true);
         }}
         settingsSlot={
@@ -1158,7 +1239,9 @@ const OnlineSalesReportPage: React.FC = () => {
       {/* *****TEMPLATE***** */}
 
       <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
-        <DialogTitle>Save Template</DialogTitle>
+        <DialogTitle>
+          {isEditTemplate ? "Edit Template" : "Create Template"}
+        </DialogTitle>
 
         <DialogContent>
           <TextField

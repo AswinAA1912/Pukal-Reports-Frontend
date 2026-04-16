@@ -16,9 +16,14 @@ import {
   IconButton,
   Typography,
   Switch,
-
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle
 } from "@mui/material";
+import CircularProgress from "@mui/material/CircularProgress";
 import dayjs from "dayjs";
+import { toast } from "react-toastify";
 import SettingsIcon from "@mui/icons-material/Settings";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import ReportFilterDrawer from "../Components/ReportFilterDrawer";
@@ -36,6 +41,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import { SettingsService } from "../services/reportSettings.services";
 import { exportToPDF } from "../utils/exportToPDF";
 import { exportToExcel } from "../utils/exportToExcel";
 
@@ -70,6 +76,23 @@ const OnlinePurchaseReportPage: React.FC = () => {
       to: today,
     },
   });
+  const [templateConfig, setTemplateConfig] = useState<{
+    abstract: ColumnConfig[];
+    expanded: ColumnConfig[];
+  } | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [reportName, setReportName] = useState("");
+  const [parentReportName, setParentReportName] = useState("");
+
+  const spConfig = {
+    abstractSP: "Reporting_Online_Purchase_VW",
+    expandedSP: "Reporting_Online_Purchase_Item_VW"
+  };
+  const [abstractLoaded, setAbstractLoaded] = useState(false);
+  const [expandedLoaded, setExpandedLoaded] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [isEditTemplate, setIsEditTemplate] = useState(false);
 
   const ABSTRACT_INITIAL_COLUMNS: ColumnConfig[] = [
     { key: "sno", label: "S.No", enabled: true, order: 0 },
@@ -105,6 +128,7 @@ const OnlinePurchaseReportPage: React.FC = () => {
     toggleMode === "Abstract"
       ? setAbstractColumns
       : setExpandedColumns;
+
 
   const enabledColumns = useMemo(
     () =>
@@ -181,6 +205,124 @@ const OnlinePurchaseReportPage: React.FC = () => {
     }).format(value);
   };
 
+  /* ================= TEMPLATE ================= */
+
+  const loadTemplate = async (reportId: number) => {
+    try {
+      setTemplateLoading(true);
+
+      setSelectedTemplateId(reportId);
+      setIsEditTemplate(true);
+
+      const absRes = await SettingsService.getReportEditData({
+        reportId,
+        typeId: 1
+      });
+
+      const expRes = await SettingsService.getReportEditData({
+        reportId,
+        typeId: 2
+      });
+
+      const abstractCols = absRes.data.data.columns || [];
+      const expandedCols = expRes.data.data.columns || [];
+
+      setTemplateConfig({
+        abstract: abstractCols,
+        expanded: expandedCols
+      });
+
+      setAbstractColumns(
+        applyTemplateToColumns(ABSTRACT_INITIAL_COLUMNS, abstractCols)
+      );
+
+      setExpandedColumns(
+        applyTemplateToColumns(EXPANDED_INITIAL_COLUMNS, expandedCols)
+      );
+
+      if (absRes.data.data.reportInfo?.Report_Name) {
+        setReportName(absRes.data.data.reportInfo.Report_Name);
+      }
+
+      if (absRes.data.data.reportInfo?.Parent_Report) {
+        setParentReportName(
+          absRes.data.data.reportInfo.Parent_Report
+        );
+      }
+
+    } catch (err) {
+      toast.error("Failed to load template ❌");
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
+  const handleQuickSave = async () => {
+    try {
+      if (!reportName.trim()) {
+        toast.error("Enter Report Name");
+        return;
+      }
+
+      const abstractPayload = abstractColumns.map((c) => ({
+        key: c.key,
+        label: c.label,
+        enabled: c.enabled,
+        order: c.order,
+        groupBy: 0,
+        dataType: "nvarchar"
+      }));
+
+      const expandedPayload = expandedColumns.map((c) => ({
+        key: c.key,
+        label: c.label,
+        enabled: c.enabled,
+        order: c.order,
+        groupBy: 0,
+        dataType: "nvarchar"
+      }));
+
+      /* ===== EDIT MODE ===== */
+      if (selectedTemplateId) {
+        await SettingsService.updateReport({
+          reportId: selectedTemplateId,
+          typeId: 1,
+          columns: abstractPayload
+        });
+
+        await SettingsService.updateReport({
+          reportId: selectedTemplateId,
+          typeId: 2,
+          columns: expandedPayload
+        });
+
+        toast.success("Template Updated Successfully ✅");
+      }
+
+      /* ===== CREATE MODE ===== */
+      else {
+        await SettingsService.saveReportSettings({
+          reportName,
+          parentReport: parentReportName,
+          abstractSP: spConfig.abstractSP,
+          expandedSP: spConfig.expandedSP,
+          abstractColumns: abstractPayload,
+          expandedColumns: expandedPayload
+        });
+
+        toast.success("Template Saved Successfully ✅");
+      }
+
+      setSaveDialogOpen(false);
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+
+    } catch (err: any) {
+      toast.error("Save Failed ❌");
+    }
+  };
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
@@ -190,33 +332,64 @@ const OnlinePurchaseReportPage: React.FC = () => {
     const toDate =
       columnFilters?.Ledger_Date?.to || dayjs().format("YYYY-MM-DD");
 
+    /* ================= ABSTRACT ================= */
     if (toggleMode === "Abstract") {
+      // ✅ already loaded once, don't reload on toggle back
+      if (abstractLoaded) return;
+
       OnlinePurchaseReportService.getReports({
         Fromdate: fromDate,
-        Todate: toDate,
+        Todate: toDate
       }).then((res) => {
         const rows = res.data.data || [];
         setRawAbstract(rows);
 
-        setAbstractColumns(
-          generateColumns(rows, ABSTRACT_INITIAL_COLUMNS)
-        );
+        let cols = generateColumns(rows, ABSTRACT_INITIAL_COLUMNS);
+
+        if (templateConfig?.abstract) {
+          cols = applyTemplateToColumns(cols, templateConfig.abstract);
+        }
+
+        setAbstractColumns(cols);
+        setAbstractLoaded(true); // ✅ mark loaded
       });
-    } else {
+    }
+
+    /* ================= EXPANDED ================= */
+    else {
+      // ✅ already loaded once, don't reload on toggle back
+      if (expandedLoaded) return;
+
       OnlinePurchaseReportItemService.getReportsitem({
         Fromdate: fromDate,
-        Todate: toDate,
+        Todate: toDate
       }).then((res) => {
         const rows = res.data.data || [];
         setRawExpanded(rows);
 
-        setExpandedColumns(
-          generateColumns(rows, EXPANDED_INITIAL_COLUMNS)
-        );
+        let cols = generateColumns(rows, EXPANDED_INITIAL_COLUMNS);
+
+        if (templateConfig?.expanded) {
+          cols = applyTemplateToColumns(cols, templateConfig.expanded);
+        }
+
+        setExpandedColumns(cols);
+        setExpandedLoaded(true); // ✅ mark loaded
       });
     }
-  }, [toggleMode, columnFilters["Ledger_Date"]]);
+  }, [
+    toggleMode,
+    columnFilters["Ledger_Date"],
+    templateConfig,
+    abstractLoaded,
+    expandedLoaded
+  ]);
 
+  /* ================= RESET ONLY WHEN FILTER / TEMPLATE CHANGE ================= */
+  useEffect(() => {
+    setAbstractLoaded(false);
+    setExpandedLoaded(false);
+  }, [columnFilters["Ledger_Date"], templateConfig]);
   /* ================= APPLY FILTERS ================= */
 
   const applyFilters = (rows: any[]) => {
@@ -555,6 +728,26 @@ const OnlinePurchaseReportPage: React.FC = () => {
     return [...baseColumns, ...dynamicCols];
   };
 
+  const applyTemplateToColumns = (
+    baseCols: ColumnConfig[],
+    templateCols: any[]
+  ) => {
+    const mapped = templateCols.map((t: any) => ({
+      key: t.key,
+      label: t.label,
+      enabled: t.enabled,
+      order: t.order,
+      type: baseCols.find(x => x.key === t.key)?.type,
+    }));
+
+    const missing = baseCols
+      .filter(b => !mapped.some((m: any) => m.key === b.key))
+      .map(b => ({ ...b, enabled: false }));
+
+    return [...mapped, ...missing];
+  };
+
+
   /* ================= RENDER ================= */
   return (
     <>
@@ -563,6 +756,22 @@ const OnlinePurchaseReportPage: React.FC = () => {
         onToggleChange={setToggleMode}
         onExportPDF={handleExportPDF}
         onExportExcel={handleExportExcel}
+        onReportChange={(template) => {
+          if (!template) {
+            setSelectedTemplateId(null);
+            setIsEditTemplate(false);
+            setReportName("");
+            setParentReportName("");
+            setTemplateConfig(null);
+            return;
+          }
+
+          loadTemplate(template.Report_Id);
+        }}
+        onQuickSave={(parentName) => {
+          setParentReportName(parentName);
+          setSaveDialogOpen(true);
+        }}
         settingsSlot={
           <Box display="flex" gap={1}>
             <Tooltip title="Column Settings">
@@ -609,6 +818,24 @@ const OnlinePurchaseReportPage: React.FC = () => {
         }
         onApply={() => setDrawerOpen(false)}
       />
+      {templateLoading && (
+        <Box
+          sx={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(255,255,255,0.6)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      )}
       <AppLayout fullWidth >
 
         <Box sx={{ mt: 1 }}>
@@ -904,6 +1131,38 @@ const OnlinePurchaseReportPage: React.FC = () => {
             </Box>
           ))}
       </Menu>
+
+
+      {/* *****TEMPLATE***** */}
+
+      <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
+        <DialogTitle>
+          {isEditTemplate ? "Edit Template" : "Create Template"}
+        </DialogTitle>
+
+        <DialogContent>
+          <TextField
+            fullWidth
+            size="small"
+            label="Report Name"
+            value={reportName}
+            onChange={(e) => setReportName(e.target.value)}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setSaveDialogOpen(false)}>
+            Cancel
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleQuickSave}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

@@ -24,6 +24,8 @@ import {
 } from "@mui/material";
 import dayjs from "dayjs";
 import SettingsIcon from "@mui/icons-material/Settings";
+import { SettingsService } from "../services/reportSettings.services";
+import { toast } from "react-toastify";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import GroupWorkIcon from "@mui/icons-material/GroupWork";
 import AppLayout, { useToggleMode } from "../Layout/appLayout";
@@ -149,7 +151,7 @@ const buildColumnsFromApi = (
                                     key.replace(/_/g, " ")
                                         .replace(/\b\w/g, c => c.toUpperCase()),
 
-       enabled: defaults.includes(key) || key === "invoice_no",
+        enabled: defaults.includes(key) || key === "invoice_no",
         isNumeric: NUMERIC_KEYS.includes(key),
         order: index,
     }));
@@ -217,6 +219,8 @@ const SalesOrderReport: React.FC = () => {
     const [groupDialogOpen, setGroupDialogOpen] = useState(false);
     const [abstractGrouping, setAbstractGrouping] = useState<string[]>([]);
     const [expandedGrouping, setExpandedGrouping] = useState<string[]>([]);
+    const [abstractLoaded, setAbstractLoaded] = useState(false);
+    const [expandedLoaded, setExpandedLoaded] = useState(false);
 
     const [abstractPendingGrouping, setAbstractPendingGrouping] = useState<string[]>([]);
     const [expandedPendingGrouping, setExpandedPendingGrouping] = useState<string[]>([]);
@@ -227,6 +231,19 @@ const SalesOrderReport: React.FC = () => {
     const [rangeFilter] = useState<Record<string, [number, number]>>({});
     const selectedValues =
         activeHeader ? filters.columnFilters[activeHeader!] ?? [] : [];
+    const [templateConfig, setTemplateConfig] = useState<{
+        abstract: ColumnConfig[];
+        expanded: ColumnConfig[];
+    } | null>(null);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+    const [isEditTemplate, setIsEditTemplate] = useState(false);
+    const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+    const [reportName, setReportName] = useState("");
+    const [parentReportName, setParentReportName] = useState("");
+    const [spConfig] = useState({
+        abstractSP: "Reporting_Online_Sales_Order_LOL_VW",
+        expandedSP: "Reporting_Online_Sales_Order_Item_LOL_VW"
+    });
 
     const [tempDateFilter, setTempDateFilter] = useState({
         from: today,
@@ -239,11 +256,16 @@ const SalesOrderReport: React.FC = () => {
     /* ================= LOAD DATA ================= */
 
     useEffect(() => {
-        setLoading(true);
         const service =
             toggleMode === "Expanded"
                 ? SaleOrderReportItem.getSaleOrderItem
                 : SaleOrderReport.getSaleOrder;
+
+        // ✅ prevent reload when switching toggle
+        if (toggleMode === "Abstract" && abstractLoaded) return;
+        if (toggleMode === "Expanded" && expandedLoaded) return;
+
+        setLoading(true);
 
         service({
             Fromdate: filters.Date.from,
@@ -255,19 +277,42 @@ const SalesOrderReport: React.FC = () => {
                     res.data?.data ||
                     [];
 
-                // ✅ normalize ALL rows FIRST
                 const apiRows = apiRowsRaw.map(normalizeRow);
 
                 const cols = buildColumnsFromApi(apiRows, toggleMode);
 
                 if (toggleMode === "Expanded") {
+
                     setExpandedRows(apiRows);
-                    setExpandedColumns(prev => (prev.length ? prev : cols));
+
+                    let finalCols = cols;
+
+                    if (templateConfig?.expanded?.length) {
+                        finalCols = applyTemplateToColumns(
+                            cols,
+                            templateConfig.expanded
+                        );
+                    }
+
+                    setExpandedColumns(finalCols);
+                    setExpandedLoaded(true); // ✅ mark loaded
                 } else {
+
                     const abstractData = buildAbstractData(apiRows);
 
                     setAbstractRows(abstractData);
-                    setAbstractColumns(prev => (prev.length ? prev : cols));
+
+                    let finalCols = cols;
+
+                    if (templateConfig?.abstract?.length) {
+                        finalCols = applyTemplateToColumns(
+                            cols,
+                            templateConfig.abstract
+                        );
+                    }
+
+                    setAbstractColumns(finalCols);
+                    setAbstractLoaded(true); 
                 }
 
                 setPage(1);
@@ -279,7 +324,24 @@ const SalesOrderReport: React.FC = () => {
                 setLoading(false);
             });
 
-    }, [toggleMode, filters.Date.from, filters.Date.to]);
+    }, [
+        toggleMode,
+        filters.Date.from,
+        filters.Date.to,
+        templateConfig,
+        abstractLoaded,
+        expandedLoaded
+    ]);
+
+    // ===== RESET ONLY WHEN DATE FILTER / TEMPLATE CHANGE =====
+    useEffect(() => {
+        setAbstractLoaded(false);
+        setExpandedLoaded(false);
+    }, [
+        filters.Date.from,
+        filters.Date.to,
+        templateConfig
+    ]);
 
     const appliedGroupBy =
         toggleMode === "Expanded"
@@ -515,6 +577,190 @@ const SalesOrderReport: React.FC = () => {
         );
     };
 
+
+    /* ================= TEMPLATE ================= */
+
+
+    const applyTemplateToColumns = (
+        liveColumns: ColumnConfig[],
+        templateColumns: any[]
+    ): ColumnConfig[] => {
+
+        const mapped = templateColumns.map((t: any, index: number) => {
+            const existing = liveColumns.find(c => c.key === t.key);
+
+            return {
+                key: t.key,
+                label: t.label || existing?.label || t.key,
+                enabled: t.enabled,
+                isNumeric: existing?.isNumeric || false,
+                order: t.order ?? index,
+            };
+        });
+
+        const missing = liveColumns
+            .filter(col => !mapped.some((m: any) => m.key === col.key))
+            .map((col, idx) => ({
+                ...col,
+                enabled: false,
+                order: mapped.length + idx
+            }));
+
+        return [...mapped, ...missing];
+    };
+
+
+    const loadTemplate = async (reportId: number) => {
+        try {
+            setLoading(true);
+
+            setSelectedTemplateId(reportId);
+            setIsEditTemplate(true);
+
+            const absRes = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 1
+            });
+
+            const expRes = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 2
+            });
+
+            const abstractCols = absRes.data?.data?.columns || [];
+            const expandedCols = expRes.data?.data?.columns || [];
+
+            setTemplateConfig({
+                abstract: abstractCols,
+                expanded: expandedCols
+            });
+
+            // ✅ Report Name Auto Fill
+            if (absRes.data?.data?.reportInfo?.Report_Name) {
+                setReportName(
+                    absRes.data.data.reportInfo.Report_Name
+                );
+            }
+
+            // ✅ Parent Report Auto Fill
+            if (absRes.data?.data?.reportInfo?.Parent_Report) {
+                setParentReportName(
+                    absRes.data.data.reportInfo.Parent_Report
+                );
+            }
+
+            // ✅ Apply Grouping From Template
+            const absGrouping = abstractCols
+                .filter((x: any) => x.groupBy > 0)
+                .sort((a: any, b: any) => a.groupBy - b.groupBy)
+                .map((x: any) => x.key);
+
+            const expGrouping = expandedCols
+                .filter((x: any) => x.groupBy > 0)
+                .sort((a: any, b: any) => a.groupBy - b.groupBy)
+                .map((x: any) => x.key);
+
+            setAbstractGrouping(absGrouping);
+            setExpandedGrouping(expGrouping);
+
+            setAbstractPendingGrouping(absGrouping);
+            setExpandedPendingGrouping(expGrouping);
+
+            setAbstractExpandedKeys([]);
+            setExpandedExpandedKeys([]);
+
+            // ✅ Force Reload Fresh Data
+            setAbstractLoaded(false);
+            setExpandedLoaded(false);
+
+            setAbstractRows([]);
+            setExpandedRows([]);
+
+            setAbstractColumns([]);
+            setExpandedColumns([]);
+
+            toast.success("Template Loaded");
+
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to Load Template");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+    const handleQuickSave = async () => {
+        try {
+            if (!reportName.trim()) {
+                toast.error("Enter Report Name");
+                return;
+            }
+
+            const abstractPayload = abstractColumns.map(col => ({
+                key: col.key,
+                label: col.label,
+                enabled: col.enabled,
+                order: col.order,
+                groupBy: abstractGrouping.includes(col.key)
+                    ? abstractGrouping.indexOf(col.key) + 1
+                    : 0,
+                dataType: "nvarchar"
+            }));
+
+            const expandedPayload = expandedColumns.map(col => ({
+                key: col.key,
+                label: col.label,
+                enabled: col.enabled,
+                order: col.order,
+                groupBy: expandedGrouping.includes(col.key)
+                    ? expandedGrouping.indexOf(col.key) + 1
+                    : 0,
+                dataType: "nvarchar"
+            }));
+
+            if (selectedTemplateId) {
+
+                await SettingsService.updateReport({
+                    reportId: selectedTemplateId,
+                    typeId: 1,
+                    columns: abstractPayload
+                });
+
+                await SettingsService.updateReport({
+                    reportId: selectedTemplateId,
+                    typeId: 2,
+                    columns: expandedPayload
+                });
+
+                toast.success("Template Updated Successfully");
+
+            } else {
+
+                await SettingsService.saveReportSettings({
+                    reportName,
+                    parentReport: parentReportName,
+                    abstractSP: spConfig.abstractSP,
+                    expandedSP: spConfig.expandedSP,
+                    abstractColumns: abstractPayload,
+                    expandedColumns: expandedPayload
+                });
+
+                toast.success("Template Saved Successfully");
+            }
+
+            setSaveDialogOpen(false);
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 400);
+
+        } catch (err: any) {
+            toast.error("Save Failed");
+        }
+    };
+
+
     /* ================= FILTER MENU ================= */
 
     const filterOptions = useMemo(() => {
@@ -741,6 +987,60 @@ const SalesOrderReport: React.FC = () => {
                 onToggleChange={setToggleMode}
                 onExportExcel={handleExportExcel}
                 onExportPDF={handleExportPDF}
+                onReportChange={(template) => {
+                    if (!template) {
+                        const todayDate = dayjs().format("YYYY-MM-DD");
+
+                        setIsEditTemplate(false);
+                        setSelectedTemplateId(null);
+                        setReportName("");
+                        setParentReportName("");
+                        setTemplateConfig(null);
+
+                        setToggleMode("Abstract");
+
+                        setFilters({
+                            Date: { from: todayDate, to: todayDate },
+                            columnFilters: {},
+                        });
+
+                        setAbstractGrouping([]);
+                        setExpandedGrouping([]);
+                        setAbstractPendingGrouping([]);
+                        setExpandedPendingGrouping([]);
+                        setAbstractExpandedKeys([]);
+                        setExpandedExpandedKeys([]);
+
+                        setAbstractColumns([]);
+                        setExpandedColumns([]);
+
+                        setAbstractRows([]);
+                        setExpandedRows([]);
+
+                        setAbstractLoaded(false);
+                        setExpandedLoaded(false);
+
+                        setPage(1);
+
+                        return;
+                    }
+
+                    setIsEditTemplate(true);
+                    setSelectedTemplateId(template.Report_Id);
+                    setReportName(template.Report_Name);
+
+                    loadTemplate(template.Report_Id);
+                }}
+
+                onQuickSave={(parentName) => {
+                    setParentReportName(parentName);
+
+                    if (!selectedTemplateId) {
+                        setReportName("");
+                    }
+
+                    setSaveDialogOpen(true);
+                }}
                 settingsSlot={
                     <Box display="flex" gap={1}>
                         {/* GROUP BY ICON */}
@@ -1216,6 +1516,45 @@ const SalesOrderReport: React.FC = () => {
                         }}
                     >
                         Apply
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            {/* ************************** SAVE TEMPLATE ************************* */}
+            <Dialog
+                open={saveDialogOpen}
+                onClose={() => setSaveDialogOpen(false)}
+            >
+                <DialogTitle>
+                    {isEditTemplate ? "Edit Template" : "Create Template"}
+                </DialogTitle>
+
+                <DialogContent sx={{ minWidth: 350 }}>
+                    <TextField
+                        fullWidth
+                        autoFocus
+                        label="Report Name"
+                        size="small"
+                        margin="dense"
+                        value={reportName}
+                        onChange={(e) =>
+                            setReportName(e.target.value)
+                        }
+                    />
+                </DialogContent>
+
+                <DialogActions>
+                    <Button
+                        onClick={() => setSaveDialogOpen(false)}
+                    >
+                        Cancel
+                    </Button>
+
+                    <Button
+                        variant="contained"
+                        onClick={handleQuickSave}
+                    >
+                        Save
                     </Button>
                 </DialogActions>
             </Dialog>

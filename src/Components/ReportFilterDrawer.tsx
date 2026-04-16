@@ -27,9 +27,7 @@ interface ReportFilterDrawerProps {
     onClose: () => void;
 
     fromDate: string;
-    toDate: string;
     onFromDateChange: (value: string) => void;
-    onToDateChange: (value: string) => void;
 
     // OLD (keep for compatibility)
     dropdownLabel?: string;
@@ -46,6 +44,9 @@ interface ReportFilterDrawerProps {
     onStockFilterChange?: (val: "hasValues" | "zero" | "all") => void;
 
     onApply: () => void;
+
+    toDate?: string;
+    onToDateChange?: (value: string) => void;
 }
 
 const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
@@ -124,15 +125,17 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                         sx={{ mb: 2 }}
                     />
 
-                    <TextField
-                        type="date"
-                        label="To Date"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        value={toDate}
-                        onChange={(e) => onToDateChange(e.target.value)}
-                        sx={{ mb: 2 }}
-                    />
+                    {toDate !== undefined && onToDateChange && (
+                        <TextField
+                            type="date"
+                            label="To Date"
+                            fullWidth
+                            InputLabelProps={{ shrink: true }}
+                            value={toDate}
+                            onChange={(e) => onToDateChange(e.target.value)}
+                            sx={{ mb: 2 }}
+                        />
+                    )}
 
                     {/* ✅ DYNAMIC FILTERS */}
 

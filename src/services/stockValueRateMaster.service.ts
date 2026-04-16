@@ -42,8 +42,8 @@ export const stockValueReportService = {
   // STOCK VALUE API
   getStockValues: (params?: { FromDate?: string }) =>
     axios.get<{ success: boolean; data: StockValue[] }>(
-       ` http://192.168.1.92:9001/api/reports/externalAPI/stockValue`,
-    //   `${getBaseURL()}api/reports/externalAPI/stockValue`,
+      //  ` http://192.168.1.92:9001/api/reports/externalAPI/stockValue`,
+      `${getBaseURL()}api/reports/externalAPI/stockValue`,
       { params }
     ),
 };

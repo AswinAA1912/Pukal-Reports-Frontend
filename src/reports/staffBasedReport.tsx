@@ -40,13 +40,11 @@ import {
     verticalListSortingStrategy,
     arrayMove,
 } from "@dnd-kit/sortable";
-import ArrowDropUpIcon from "@mui/icons-material/ArrowDropUp";
-import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import AppLayout, { useToggleMode } from "../Layout/appLayout";
+import AppLayout from "../Layout/appLayout";
 import PageHeader from "../Layout/PageHeader";
 import { SettingsService } from "../services/reportSettings.services";
 import ReportFilterDrawer from "../Components/ReportFilterDrawer";
@@ -56,9 +54,8 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
 import {
-    onlineSalesReportLOLService,
-    onlineSalesReportItemLOLService,
-} from "../services/OnlineSalesReport.service";
+    staffBasedReportService
+} from "../services/staffBasedReport.services";
 
 /* ================= TYPES ================= */
 
@@ -81,22 +78,12 @@ const NUMERIC_KEYS = [
     "Amount",
 ];
 
-const ABSTRACT_DEFAULT_KEYS = [
-    "Ledger_Date",
-    "invoice_no",
-    "Retailer_Name",
-    "Item_Count",
-    "Total_Invoice_value",
-];
-
-const EXPANDED_DEFAULT_KEYS = [
-    "Ledger_Date",
-    "invoice_no",
-    "Retailer_Name",
+const DEFAULT_KEYS = [
+    "Journal_no",
+    "Stock_Journal_date",
+    "Stock_Journal_Voucher_type",
     "Product_Name",
-    "Bill_Qty",
-    "Rate",
-    "Amount",
+    "Godown_Name",
 ];
 
 type SortableColumnRowProps = {
@@ -172,27 +159,28 @@ const SortableColumnRow = ({ column, onToggle, hasActiveFilter, }: SortableColum
     );
 };
 
-const CURRENCY_KEYS = ["Total_Invoice_value", "Amount", "Rate"];
+const CURRENCY_KEYS = ["Total_Invoice_value", "Amt", "Rate"];
 
 /* ================= HELPERS ================= */
 
 const buildColumnsFromApi = (
-    rows: any[],
-    mode: "Abstract" | "Expanded"
+    rows: any[]
 ): ColumnConfig[] => {
     if (!rows.length) return [];
-
-    const defaults =
-        mode === "Abstract"
-            ? ABSTRACT_DEFAULT_KEYS
-            : EXPANDED_DEFAULT_KEYS;
 
     return Object.keys(rows[0]).map((key, index) => ({
         key,
         label: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
-        enabled: defaults.includes(key),
+
+        // ✅ Only DEFAULT_KEYS enabled initially
+        enabled: DEFAULT_KEYS.includes(key),
+
         isNumeric: NUMERIC_KEYS.includes(key),
-        order: index,
+
+        // ✅ Enabled first, Disabled later
+        order: DEFAULT_KEYS.includes(key)
+            ? DEFAULT_KEYS.indexOf(key)
+            : DEFAULT_KEYS.length + index,
     }));
 };
 
@@ -204,29 +192,16 @@ const formatINR = (value: number) =>
 
 /* ================= COMPONENT ================= */
 
-const OnlineSalesReportLOL: React.FC = () => {
+const StaffBasedReport: React.FC = () => {
     const today = dayjs().format("YYYY-MM-DD");
 
-    const { toggleMode, setToggleMode } = useToggleMode();
+    const [rows, setRows] = useState<any[]>([]);
+    const rawRows = rows;
 
-    const [abstractRows, setAbstractRows] = useState<any[]>([]);
-    const [expandedRows, setExpandedRows] = useState<any[]>([]);
-    const rawRows =
-        toggleMode === "Expanded" ? expandedRows : abstractRows;
-    const [abstractColumns, setAbstractColumns] = useState<ColumnConfig[]>([]);
-    const [expandedColumns, setExpandedColumns] = useState<ColumnConfig[]>([]);
-    const columns =
-        toggleMode === "Expanded"
-            ? expandedColumns
-            : abstractColumns;
+    const [columns, setColumns] = useState<ColumnConfig[]>([]);
 
-    const setColumns =
-        toggleMode === "Expanded"
-            ? setExpandedColumns
-            : setAbstractColumns;
     const [page, setPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(100);
-
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [fromDate, setFromDate] = useState(today);
     const [toDate, setToDate] = useState(today);
@@ -237,8 +212,6 @@ const OnlineSalesReportLOL: React.FC = () => {
         useState<null | HTMLElement>(null);
     const [activeHeader, setActiveHeader] = useState<string | null>(null);
     const [searchText, setSearchText] = useState("");
-    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
-    const [isEditTemplate, setIsEditTemplate] = useState(false);
     type FiltersMap = {
         Date: { from: string; to: string };
         columnFilters: Record<string, string[]>;
@@ -249,7 +222,6 @@ const OnlineSalesReportLOL: React.FC = () => {
         columnFilters: {},
     });
     const [abstractDateKey, setAbstractDateKey] = useState<string | null>(null);
-    const [expandedDateKey, setExpandedDateKey] = useState<string | null>(null);
     type SortOrder = "asc" | "desc";
 
     const [sortConfig, setSortConfig] = useState<{
@@ -261,17 +233,11 @@ const OnlineSalesReportLOL: React.FC = () => {
     });
 
     const currentDateKey = `${filters.Date.from}_${filters.Date.to}`;
-
     const [groupDialogOpen, setGroupDialogOpen] = useState(false);
-
     const [abstractGrouping, setAbstractGrouping] = useState<string[]>([]);
-    const [expandedGrouping, setExpandedGrouping] = useState<string[]>([]);
-
     const [abstractPendingGrouping, setAbstractPendingGrouping] = useState<string[]>([]);
-    const [expandedPendingGrouping, setExpandedPendingGrouping] = useState<string[]>([]);
-
     const [abstractExpandedKeys, setAbstractExpandedKeys] = useState<string[]>([]);
-    const [expandedExpandedKeys, setExpandedExpandedKeys] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
 
     const serialRef = React.useRef(0);
 
@@ -281,133 +247,110 @@ const OnlineSalesReportLOL: React.FC = () => {
     } | null>(null);
     const [templateLoading, setTemplateLoading] = useState(false);
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+    const [isEditTemplate, setIsEditTemplate] = useState(false);
     const [reportName, setReportName] = useState("");
     const [parentReportName, setParentReportName] = useState("");
-    const grouping =
-        toggleMode === "Expanded" ? expandedGrouping : abstractGrouping;
-
+    const grouping = abstractGrouping;
     const [spConfig, setSpConfig] = useState({
         abstractSP: "",
         expandedSP: ""
     });
-
     const SP_MAP = {
-        Abstract: "Reporting_Online_Sales_LOL_VW",
-        Expanded: "Reporting_Online_Sales_Item_LOL_VW"
+        Abstract: "Reporting_Online_Stock_Journal_Item_VW",
     };
-
     const HEADER_HEIGHT = 36;
-
-    const setGrouping =
-        toggleMode === "Expanded" ? setExpandedGrouping : setAbstractGrouping;
-
-    const pendingGrouping =
-        toggleMode === "Expanded"
-            ? expandedPendingGrouping
-            : abstractPendingGrouping;
-
-    const setPendingGrouping =
-        toggleMode === "Expanded"
-            ? setExpandedPendingGrouping
-            : setAbstractPendingGrouping;
-
-    const expandedKeys =
-        toggleMode === "Expanded"
-            ? expandedExpandedKeys
-            : abstractExpandedKeys;
-
-    const setExpandedKeys =
-        toggleMode === "Expanded"
-            ? setExpandedExpandedKeys
-            : setAbstractExpandedKeys;
-
+    const setGrouping = setAbstractGrouping;
+    const pendingGrouping = abstractPendingGrouping;
+    const setPendingGrouping = setAbstractPendingGrouping;
+    const expandedKeys = abstractExpandedKeys;
+    const setExpandedKeys = setAbstractExpandedKeys;
     /* ================= LOAD DATA ================= */
 
     useEffect(() => {
-        const isTemplateApplied =
-            (toggleMode === "Abstract" && templateConfig?.abstract) ||
-            (toggleMode === "Expanded" && templateConfig?.expanded);
-
-        // ❌ SKIP CACHE ONLY IF NO TEMPLATE
-        const isResetState =
-            abstractRows.length === 0 && expandedRows.length === 0;
+        const isTemplateApplied = templateConfig?.abstract;
+        const isResetState = rows.length === 0;
 
         if (!isTemplateApplied && !isResetState) {
-            if (
-                toggleMode === "Abstract" &&
-                abstractRows.length > 0 &&
-                abstractDateKey === currentDateKey
-            ) {
-                return;
-            }
-
-            if (
-                toggleMode === "Expanded" &&
-                expandedRows.length > 0 &&
-                expandedDateKey === currentDateKey
-            ) {
+            if (rows.length > 0 && abstractDateKey === currentDateKey) {
                 return;
             }
         }
 
-        const service =
-            toggleMode === "Expanded"
-                ? onlineSalesReportItemLOLService.getReportsItemLOL
-                : onlineSalesReportLOLService.getReportsLOL;
+        const loadData = async () => {
+            try {
+                setLoading(true);
 
-        service({
-            Fromdate: filters.Date.from,
-            Todate: filters.Date.to,
-        }).then((res: any) => {
-            const apiRows = res.data.data || [];
+                const service =
+                    staffBasedReportService.getStaffBasedReport;
 
-            let cols = buildColumnsFromApi(apiRows, toggleMode);
+                const res = await service({
+                    Fromdate: filters.Date.from,
+                    Todate: filters.Date.to,
+                });
 
-            // ✅ APPLY TEMPLATE
-            if (toggleMode === "Abstract" && templateConfig?.abstract) {
-                cols = applyTemplateToColumns(cols, templateConfig.abstract);
-            }
+                const apiRows = res.data.data || [];
+                let cols = buildColumnsFromApi(apiRows);
 
-            if (toggleMode === "Expanded" && templateConfig?.expanded) {
-                cols = applyTemplateToColumns(cols, templateConfig.expanded);
-            }
+                // If template applied first time
+                if (templateConfig?.abstract) {
+                    cols = applyTemplateToColumns(cols, templateConfig.abstract);
+                }
 
-            if (toggleMode === "Expanded") {
-                setExpandedRows(apiRows);
-                setExpandedDateKey(currentDateKey);
-                setExpandedColumns(cols);
+                // 🔥 Preserve current user settings when columns already exist
+                if (columns.length > 0) {
+                    cols = cols.map(newCol => {
+                        const oldCol = columns.find(c => c.key === newCol.key);
 
-            } else {
-                setAbstractRows(apiRows);
+                        if (oldCol) {
+                            return {
+                                ...newCol,
+                                enabled: oldCol.enabled,
+                                order: oldCol.order,
+                                groupBy: oldCol.groupBy || 0
+                            };
+                        }
+
+                        return newCol;
+                    });
+
+                    // sort by old order
+                    cols.sort((a, b) => a.order - b.order);
+                }
+
+                setRows(apiRows);
                 setAbstractDateKey(currentDateKey);
-                setAbstractColumns(cols);
-
+                setColumns(cols);
+                setPage(1);
+            } catch (error) {
+                console.error(error);
+            } finally {
+                setLoading(false); // ✅ Stop loading
             }
+        };
 
-            setPage(1);
-        });
+        loadData();
 
     }, [
-        toggleMode,
         filters.Date.from,
         filters.Date.to,
-        templateConfig // 🔥 VERY IMPORTANT
+        templateConfig
     ]);
 
     useEffect(() => {
         setSpConfig({
             abstractSP: SP_MAP.Abstract,
-            expandedSP: SP_MAP.Expanded
+            expandedSP: ""
         });
     }, []);
 
     const handleResetSettings = () => {
         const todayDate = dayjs().format("YYYY-MM-DD");
 
-        // ✅ Clear template FIRST
+        // Clear template
         setTemplateConfig(null);
 
-        // ✅ Reset filters
+        // Reset filters
         setFromDate(todayDate);
         setToDate(todayDate);
 
@@ -416,63 +359,87 @@ const OnlineSalesReportLOL: React.FC = () => {
             columnFilters: {},
         });
 
-        // ✅ Reset grouping
-        // Reset BOTH modes
+        // Reset grouping
         setAbstractGrouping([]);
-        setExpandedGrouping([]);
-
         setAbstractPendingGrouping([]);
-        setExpandedPendingGrouping([]);
-
         setAbstractExpandedKeys([]);
-        setExpandedExpandedKeys([]);
 
-        // ✅ Reset sort
-        setSortConfig({ key: null, order: "asc" });
+        // Reset sort
+        setSortConfig({
+            key: null,
+            order: "asc",
+        });
 
-        // ✅ HARD RESET DATA (IMPORTANT)
-        setAbstractRows([]);
-        setExpandedRows([]);
+        // ✅ Reset columns to default enabled columns
+        setColumns((prev) =>
+            prev.map((col, index) => ({
+                ...col,
+                enabled: DEFAULT_KEYS.includes(col.key),
+                groupBy: 0,
+                order: DEFAULT_KEYS.includes(col.key)
+                    ? DEFAULT_KEYS.indexOf(col.key)
+                    : DEFAULT_KEYS.length + index,
+            }))
+                .sort((a, b) => a.order - b.order)
+        );
 
-        setAbstractColumns([]);
-        setExpandedColumns([]);
+        // Keep rows, no need to clear data
+        setAbstractDateKey(currentDateKey);
 
-        setAbstractDateKey(null);
-        setExpandedDateKey(null);
-
-        // ✅ Reset pagination
+        // Reset pagination
         setPage(1);
 
-        // ✅ Close menus
+        // Close menus
         setSettingsAnchor(null);
         setFilterAnchor(null);
     };
 
     /* ================= FILTERING ================= */
 
-    const filteredRows = useMemo(() => {
-        return rawRows.filter(row => {
-            const rowDate = dayjs(row.Ledger_Date);
+    /* ================= FILTERING ================= */
 
-            if (filters.Date.from && rowDate.isBefore(dayjs(filters.Date.from), "day"))
+    const filteredRows = useMemo(() => {
+        const filtered = rawRows.filter(row => {
+            const rowDate = dayjs(row.Stock_Journal_date);
+
+            if (
+                filters.Date.from &&
+                rowDate.isBefore(dayjs(filters.Date.from), "day")
+            )
                 return false;
 
-            if (filters.Date.to && rowDate.isAfter(dayjs(filters.Date.to), "day"))
+            if (
+                filters.Date.to &&
+                rowDate.isAfter(dayjs(filters.Date.to), "day")
+            )
                 return false;
 
             for (const [key, values] of Object.entries(filters.columnFilters)) {
                 if (!values || values.length === 0) continue;
 
-                const rowValue = String(row[key] ?? "").trim().toLowerCase();
+                const rowValue = String(row[key] ?? "")
+                    .trim()
+                    .toLowerCase();
 
-                const match = values.some(v =>
-                    String(v).trim().toLowerCase() === rowValue
+                const match = values.some(
+                    v =>
+                        String(v)
+                            .trim()
+                            .toLowerCase() === rowValue
                 );
 
                 if (!match) return false;
             }
 
             return true;
+        });
+
+        /* ✅ FIX: Always latest date to oldest date when date filter applied */
+        return filtered.sort((a, b) => {
+            return (
+                dayjs(b.Stock_Journal_date).valueOf() -
+                dayjs(a.Stock_Journal_date).valueOf()
+            );
         });
     }, [rawRows, filters]);
 
@@ -487,7 +454,7 @@ const OnlineSalesReportLOL: React.FC = () => {
             if (bVal == null) return -1;
 
             // Date handling
-            if (sortConfig.key === "Ledger_Date") {
+            if (sortConfig.key === "Stock_Journal_date") {
                 return sortConfig.order === "asc"
                     ? dayjs(aVal).valueOf() - dayjs(bVal).valueOf()
                     : dayjs(bVal).valueOf() - dayjs(aVal).valueOf();
@@ -637,7 +604,7 @@ const OnlineSalesReportLOL: React.FC = () => {
     useEffect(() => {
         if (sortConfig.key) return;
 
-        const hasLedgerDate = enabledColumns.some(c => c.key === "Ledger_Date");
+        const hasLedgerDate = enabledColumns.some(c => c.key === "Stock_Journal_date");
         const hasInvoiceNo = enabledColumns.some(c => c.key === "invoice_no");
 
         if (!hasLedgerDate && !hasInvoiceNo && enabledColumns.length > 0) {
@@ -648,20 +615,6 @@ const OnlineSalesReportLOL: React.FC = () => {
         }
     }, [enabledColumns, sortConfig.key]);
 
-    const handleSortClick = (
-        e: React.MouseEvent<HTMLElement>,
-        key: string
-    ) => {
-        e.stopPropagation();
-
-        setSortConfig(prev => ({
-            key,
-            order:
-                prev.key === key && prev.order === "asc"
-                    ? "desc"
-                    : "asc",
-        }));
-    };
     const sortFilterValues = (
         values: string[],
         key: string,
@@ -669,7 +622,7 @@ const OnlineSalesReportLOL: React.FC = () => {
     ) => {
         return [...values].sort((a, b) => {
             // Date column
-            if (key === "Ledger_Date") {
+            if (key === "Stock_Journal_date") {
                 return order === "asc"
                     ? dayjs(a).valueOf() - dayjs(b).valueOf()
                     : dayjs(b).valueOf() - dayjs(a).valueOf();
@@ -718,7 +671,7 @@ const OnlineSalesReportLOL: React.FC = () => {
         exportColumns.forEach(col => {
             let value = row[col.key];
 
-            if (col.key === "Ledger_Date") {
+            if (col.key === "Stock_Journal_date") {
                 value = dayjs(value).format("DD/MM/YYYY");
             }
 
@@ -734,12 +687,12 @@ const OnlineSalesReportLOL: React.FC = () => {
         XLSX.utils.book_append_sheet(
             workbook,
             worksheet,
-            toggleMode === "Expanded" ? "Expanded Report" : "Abstract Report"
+            "Staff Based Report"
         );
 
         XLSX.writeFile(
             workbook,
-            `Online_Sales_Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.xlsx`
+            `Staff_Based_Report_${dayjs().format("DDMMYYYY")}.xlsx`
         );
     };
 
@@ -747,7 +700,7 @@ const OnlineSalesReportLOL: React.FC = () => {
         const doc = new jsPDF("l", "mm", "a4");
 
         doc.text(
-            `Online Sales Report (${toggleMode})`,
+            "Staff Based Report",
             14,
             10
         );
@@ -761,7 +714,7 @@ const OnlineSalesReportLOL: React.FC = () => {
         });
 
         doc.save(
-            `Online_Sales_Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.pdf`
+            `Staff_Based_Report_${dayjs().format("DDMMYYYY")}.pdf`
         );
     };
 
@@ -773,36 +726,34 @@ const OnlineSalesReportLOL: React.FC = () => {
 
             setSelectedTemplateId(reportId);
 
-            const absRes = await SettingsService.getReportEditData({
+            const res = await SettingsService.getReportEditData({
                 reportId,
                 typeId: 1,
             });
 
-            const expRes = await SettingsService.getReportEditData({
-                reportId,
-                typeId: 2,
-            });
-
-            const abstractCols = absRes.data.data.columns || [];
-            const expandedCols = expRes.data.data.columns || [];
+            const templateCols = res.data.data.columns || [];
 
             setTemplateConfig({
-                abstract: abstractCols,
-                expanded: expandedCols,
+                abstract: templateCols,
+                expanded: [],
             });
 
-            if (absRes.data.data.reportInfo?.Report_Name) {
-                setReportName(absRes.data.data.reportInfo.Report_Name);
+            // autofill names
+            if (res.data.data.reportInfo?.Report_Name) {
+                setReportName(res.data.data.reportInfo.Report_Name);
             }
 
-            if (absRes.data.data.reportInfo?.Parent_Report) {
+            if (res.data.data.reportInfo?.Parent_Report) {
                 setParentReportName(
-                    absRes.data.data.reportInfo.Parent_Report
+                    res.data.data.reportInfo.Parent_Report
                 );
             }
 
-            setAbstractRows([]);
-            setExpandedRows([]);
+            // force reload data
+            setRows([]);
+            setColumns([]);
+            setAbstractDateKey(null);
+            setPage(1);
 
         } catch (err) {
             console.error(err);
@@ -853,16 +804,10 @@ const OnlineSalesReportLOL: React.FC = () => {
             .sort((a, b) => (a.groupBy! - b.groupBy!))
             .map(col => col.key);
 
-        if (toggleMode === "Expanded") {
-            setExpandedGrouping(autoGroupCols);
-            setExpandedPendingGrouping(autoGroupCols);
-            setExpandedExpandedKeys([]);
-        } else {
-            setAbstractGrouping(autoGroupCols);
-            setAbstractPendingGrouping(autoGroupCols);
-            setAbstractExpandedKeys([]);
-        }
-    }, [columns]);
+        setAbstractGrouping(autoGroupCols);
+        setAbstractPendingGrouping(autoGroupCols);
+        setAbstractExpandedKeys([]);
+    }, [columns, templateConfig]);
 
     const handleQuickSave = async () => {
         try {
@@ -876,15 +821,12 @@ const OnlineSalesReportLOL: React.FC = () => {
                 return;
             }
 
-            if (!abstractColumns.length || !expandedColumns.length) {
-                toast.error("Load both Abstract & Expanded once");
+            if (!columns.length) {
+                toast.error("Load report once");
                 return;
             }
 
-            /* =========================================
-               BUILD COMMON DATA
-            ========================================= */
-            const abstractPayload = abstractColumns.map(c => ({
+            const payloadColumns = columns.map(c => ({
                 key: c.key,
                 label: c.label,
                 enabled: c.enabled,
@@ -895,50 +837,22 @@ const OnlineSalesReportLOL: React.FC = () => {
                 dataType: "nvarchar"
             }));
 
-            const expandedPayload = expandedColumns.map(c => ({
-                key: c.key,
-                label: c.label,
-                enabled: c.enabled,
-                order: c.order,
-                groupBy: expandedGrouping.includes(c.key)
-                    ? expandedGrouping.indexOf(c.key) + 1
-                    : 0,
-                dataType: "nvarchar"
-            }));
-
-            /* =========================================
-               EDIT MODE
-               selectedTemplateId should exist
-            ========================================= */
             if (selectedTemplateId) {
-                // Abstract Update
                 await SettingsService.updateReport({
                     reportId: selectedTemplateId,
                     typeId: 1,
-                    columns: abstractPayload
-                });
-
-                // Expanded Update
-                await SettingsService.updateReport({
-                    reportId: selectedTemplateId,
-                    typeId: 2,
-                    columns: expandedPayload
+                    columns: payloadColumns
                 });
 
                 toast.success("Template Updated Successfully ✅");
-            }
-
-            /* =========================================
-               CREATE MODE
-            ========================================= */
-            else {
+            } else {
                 await SettingsService.saveReportSettings({
                     reportName,
                     parentReport: parentReportName,
                     abstractSP: spConfig.abstractSP,
-                    expandedSP: spConfig.expandedSP,
-                    abstractColumns: abstractPayload,
-                    expandedColumns: expandedPayload
+                    expandedSP: spConfig.abstractSP,
+                    abstractColumns: payloadColumns,
+                    expandedColumns: payloadColumns
                 });
 
                 toast.success("Template Saved Successfully ✅");
@@ -948,7 +862,7 @@ const OnlineSalesReportLOL: React.FC = () => {
 
             setTimeout(() => {
                 window.location.reload();
-            }, 500);
+            }, 400);
 
         } catch (err) {
             console.error(err);
@@ -961,8 +875,6 @@ const OnlineSalesReportLOL: React.FC = () => {
     return (
         <>
             <PageHeader
-                toggleMode={toggleMode}
-                onToggleChange={setToggleMode}
                 onExportPDF={handleExportPDF}
                 onExportExcel={handleExportExcel}
                 onReportChange={(template) => {
@@ -974,8 +886,6 @@ const OnlineSalesReportLOL: React.FC = () => {
                         setReportName("");
                         setParentReportName("");
                         setTemplateConfig(null);
-
-                        setToggleMode("Abstract");
 
                         setFromDate(todayDate);
                         setToDate(todayDate);
@@ -991,21 +901,14 @@ const OnlineSalesReportLOL: React.FC = () => {
                         });
 
                         setAbstractGrouping([]);
-                        setExpandedGrouping([]);
-
                         setAbstractPendingGrouping([]);
-                        setExpandedPendingGrouping([]);
-
                         setAbstractExpandedKeys([]);
-                        setExpandedExpandedKeys([]);
 
-                        setAbstractRows([]);
-                        setExpandedRows([]);
-                        setAbstractColumns([]);
-                        setExpandedColumns([]);
+                        setRows([]);
+                        setColumns([]);
                         setAbstractDateKey(null);
-                        setExpandedDateKey(null);
                         setPage(1);
+
                         setSettingsAnchor(null);
                         setFilterAnchor(null);
 
@@ -1018,15 +921,11 @@ const OnlineSalesReportLOL: React.FC = () => {
 
                     loadTemplate(template.Report_Id);
                 }}
-
                 onQuickSave={(parentName) => {
                     setParentReportName(parentName);
-
-                    /* New Template only */
                     if (!selectedTemplateId) {
                         setReportName("");
                     }
-
                     setSaveDialogOpen(true);
                 }}
                 settingsSlot={
@@ -1105,11 +1004,30 @@ const OnlineSalesReportLOL: React.FC = () => {
                     <TableContainer
                         component={Paper}
                         sx={{
-                            maxHeight: "calc(100vh - 100px)", "& th, & td": {
+                            maxHeight: "calc(100vh - 100px)",
+                            "& th, & td": {
                                 fontSize: "0.75rem",
                             },
+                            position: "relative",
                         }}
                     >
+                        {/* LOADING OVERLAY */}
+                        {loading && (
+                            <Box
+                                sx={{
+                                    position: "absolute",
+                                    inset: 0,
+                                    backgroundColor: "rgba(255,255,255,0.6)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    zIndex: 10,
+                                }}
+                            >
+                                <CircularProgress size={40} />
+                            </Box>
+                        )}
+
                         <Table size="small">
                             <TableHead
                                 sx={{
@@ -1144,26 +1062,6 @@ const OnlineSalesReportLOL: React.FC = () => {
                                                 <Box sx={{ display: "flex", alignItems: "center" }}>
                                                     {c.label}
                                                 </Box>
-
-                                                {/* SORT ICON (SORT CLICK) */}
-                                                <IconButton
-                                                    size="small"
-                                                    sx={{ color: "#fff", p: 0 }}
-                                                    onClick={(e) => handleSortClick(e, c.key)}
-                                                >
-                                                    {sortConfig.key === c.key ? (
-                                                        sortConfig.order === "asc" ? (
-                                                            <ArrowDropDownIcon fontSize="small" />
-                                                        ) : (
-                                                            <ArrowDropUpIcon fontSize="small" />
-                                                        )
-                                                    ) : (
-                                                        <ArrowDropDownIcon
-                                                            fontSize="small"
-                                                            sx={{ opacity: 0.3 }}
-                                                        />
-                                                    )}
-                                                </IconButton>
                                             </Box>
                                         </TableCell>
                                     ))}
@@ -1259,7 +1157,7 @@ const OnlineSalesReportLOL: React.FC = () => {
 
                                                 {enabledColumns.map(c => (
                                                     <TableCell key={c.key}>
-                                                        {c.key === "Ledger_Date"
+                                                        {c.key === "Stock_Journal_date"
                                                             ? dayjs(row[c.key]).format("DD/MM/YYYY")
                                                             : row[c.key]}
                                                     </TableCell>
@@ -1291,7 +1189,7 @@ const OnlineSalesReportLOL: React.FC = () => {
                     <Box p={2} sx={{ minWidth: 240 }}>
 
                         {/* ===== DATE FILTER ===== */}
-                        {activeHeader === "Ledger_Date" && (
+                        {activeHeader === "Stock_Journal_date" && (
                             <Box display="flex" flexDirection="column" gap={1}>
                                 <TextField
                                     type="date"
@@ -1330,7 +1228,7 @@ const OnlineSalesReportLOL: React.FC = () => {
                         )}
 
                         {/* ===== MULTISELECT FILTER (ALL OTHER COLUMNS) ===== */}
-                        {activeHeader !== "Ledger_Date" && (
+                        {activeHeader !== "Stock_Journal_date" && (
                             <>
                                 {/* SEARCH */}
                                 <TextField
@@ -1459,7 +1357,7 @@ const OnlineSalesReportLOL: React.FC = () => {
                                         key={c.key}
                                         column={c}
                                         hasActiveFilter={
-                                            c.key === "Ledger_Date"
+                                            c.key === "Stock_Journal_date"
                                                 ? filters.Date.from !== today || filters.Date.to !== today
                                                 : (filters.columnFilters[c.key]?.length ?? 0) > 0
                                         }
@@ -1492,7 +1390,7 @@ const OnlineSalesReportLOL: React.FC = () => {
                                         key={c.key}
                                         column={c}
                                         hasActiveFilter={
-                                            c.key === "Ledger_Date"
+                                            c.key === "Stock_Journal_date"
                                                 ? filters.Date.from !== today || filters.Date.to !== today
                                                 : (filters.columnFilters[c.key]?.length ?? 0) > 0
                                         }
@@ -1606,4 +1504,4 @@ const OnlineSalesReportLOL: React.FC = () => {
     );
 };
 
-export default OnlineSalesReportLOL;
+export default StaffBasedReport;

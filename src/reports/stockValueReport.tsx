@@ -190,50 +190,96 @@ const StockValueReport: React.FC = () => {
 
     }, [toggleMode]);
 
+    useEffect(() => {
+        if (Object.keys(filterLevels).length > 0) {
+            loadData();
+        }
+    }, [filterLevels]);
+
 
     /* ================= LOAD DATA ================= */
 
     const loadData = React.useCallback(async () => {
-        setLoading(true);
-
-        const api = isExpanded
-            ? godownwisestockvaluereportservice.getGodownwiseReports
-            : itemwisestockvaluereportservice.getItemwiseReports;
-
-        const payload: any = {
-            Fromdate: fromDate,
-            Todate: toDate,
-        };
-
-        Object.keys(selectedFilters).forEach((col) => {
-            const value = selectedFilters[col];
-
-            const filter = Object.values(filterLevels)
-                .flat()
-                .find((f: any) => f.columnName === col);
-
-            const label = filter?.options?.find((o: any) => o.value === value)?.label;
-
-            if (label) {
-                payload[col] = label;
-            }
-        });
-
         try {
-            const res = await api(payload);
-            setRawData(res.data?.data || []);
+            setLoading(true);
+
+            const payload: any = {
+                Fromdate: fromDate,
+                Todate: toDate,
+            };
+
+            /* =========================
+               ABSTRACT MODE
+            ========================= */
+            if (!isExpanded) {
+                Object.keys(selectedFilters).forEach((col) => {
+                    const value = selectedFilters[col];
+
+                    const filter = Object.values(filterLevels)
+                        .flat()
+                        .find((f: any) => f.columnName === col);
+
+                    const label = filter?.options?.find(
+                        (o: any) => String(o.value) === String(value)
+                    )?.label;
+
+                    payload[col] = label || value;
+                });
+
+                const res =
+                    await itemwisestockvaluereportservice.getItemwiseReports(payload);
+
+                setRawData(res.data?.data || []);
+            }
+
+            /* =========================
+               EXPANDED MODE
+            ========================= */
+            else {
+                const godownFilter = (filterLevels[1] || []).find(
+                    (f: any) =>
+                        f.columnName === "Godown_Id" ||
+                        f.columnName === "Godown_Name"
+                );
+
+                const godownId =
+                    selectedFilters["Godown_Id"] ||
+                    selectedFilters["Godown_Name"] ||
+                    selectedFilters[godownFilter?.columnName];
+
+                if (!godownId) {
+                    setRawData([]);
+                    setExpanded({});
+                    setPage(1);
+                    return;
+                }
+
+                payload.Godown_Id = godownId;
+
+                const res =
+                    await godownwisestockvaluereportservice.getGodownwiseReports(
+                        payload
+                    );
+
+                setRawData(res.data?.data || []);
+            }
+
+            setExpanded({});
+            setPage(1);
+
         } catch (err) {
-            console.error("Stock report load error:", err);
+            console.error("Stock Value report load error:", err);
             setRawData([]);
         } finally {
             setLoading(false);
         }
-    }, [isExpanded, selectedFilters, fromDate, toDate]);
-
-    useEffect(() => {
-
-        loadData();
-    }, [toggleMode, selectedFilters, fromDate, toDate]);
+    }, [
+        isExpanded,
+        selectedFilters,
+        fromDate,
+        toDate,
+        filterLevels
+    ]);
 
     useEffect(() => {
         setSelectedLevel2([]);
@@ -551,7 +597,7 @@ const StockValueReport: React.FC = () => {
         const { headers, data } = mapForExport(columns, rows);
 
         exportToPDF(
-            `Stock in Hand (${toggleMode})`,
+            `Stock Value (${toggleMode})`,
             headers,
             data
         );
@@ -564,7 +610,7 @@ const StockValueReport: React.FC = () => {
         const { headers, data } = mapForExport(columns, rows);
 
         exportToExcel(
-            `Stock in Hand (${toggleMode})`,
+            `Stock Value (${toggleMode})`,
             headers,
             data
         );
@@ -782,8 +828,8 @@ const StockValueReport: React.FC = () => {
                 }}
                 stockFilter={stockFilter}
                 onStockFilterChange={setStockFilter}
-                onApply={() => {
-                    loadData();
+                onApply={async () => {
+                    await loadData();
                     setDrawerOpen(false);
                 }}
             />

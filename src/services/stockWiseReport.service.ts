@@ -83,9 +83,14 @@ export const itemwisestockreportservice = {
 };
 
 export const godownwisestockreportservice = {
-    getGodownwiseReports: (params?: { Fromdate?: string; Todate?: string }) =>
+    getGodownwiseReports: (params?: {
+        Godown_Id: number | string;
+        Fromdate?: string;
+        Todate?: string;
+    }) =>
         axios.get<{ success: boolean; data: stockWiseReport[] }>(
-            `${getBaseURL()}api/reports/storageStock/godownWiseMobile`,
+            `http://192.168.1.91:9001/api/reports/storageStock/godownWiseMobile`,
+            // `${getBaseURL()}api/reports/storageStock/godownWiseMobile`,
             { params }
         ),
 };
