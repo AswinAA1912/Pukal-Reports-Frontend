@@ -264,6 +264,12 @@ const OnlinePurchaseReportPage: React.FC = () => {
         return;
       }
 
+      /* =========================================
+         GET LOGIN USER ID
+      ========================================= */
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      const createdBy = userData?.id || 0;
+
       const abstractPayload = abstractColumns.map((c) => ({
         key: c.key,
         label: c.label,
@@ -307,7 +313,8 @@ const OnlinePurchaseReportPage: React.FC = () => {
           abstractSP: spConfig.abstractSP,
           expandedSP: spConfig.expandedSP,
           abstractColumns: abstractPayload,
-          expandedColumns: expandedPayload
+          expandedColumns: expandedPayload,
+          createdBy
         });
 
         toast.success("Template Saved Successfully ✅");

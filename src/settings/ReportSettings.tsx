@@ -50,6 +50,9 @@ const ReportSettings: React.FC = () => {
 
     const reportId = searchParams.get("reportId");
     const typeId = searchParams.get("typeId");
+    const userData = localStorage.getItem("user");
+    const parsedUser = userData ? JSON.parse(userData) : null;
+    const createdBy = parsedUser?.id || 0;
 
     const navigate = useNavigate();
 
@@ -282,7 +285,8 @@ const ReportSettings: React.FC = () => {
                     abstractSP: selectedSetting.Abstract_SP,
                     expandedSP: selectedSetting.Expanded_SP,
                     abstractColumns: abstractColumns.filter(c => c.enabled),
-                    expandedColumns: columns.filter(c => c.enabled)
+                    expandedColumns: columns.filter(c => c.enabled),
+                    createdBy 
                 };
 
                 const res = await SettingsService.saveReport(payload);

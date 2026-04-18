@@ -37,6 +37,8 @@ import {
     useSortable
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { toast } from "react-toastify";
+import { SettingsService } from "../services/reportSettings.services";
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -137,7 +139,21 @@ const LedgerItemWiseDetails: React.FC = () => {
         Ledger_Id || ""
     );
     const [stockFilter, setStockFilter] = useState<"hasValues" | "zero" | "all">("hasValues");
+    const [templateConfig, setTemplateConfig] = useState<{
+        abstract: ColumnConfig[];
+        expanded: ColumnConfig[];
+    } | null>(null);
 
+    const [templateLoading, setTemplateLoading] = useState(false);
+    const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+    const [isEditTemplate, setIsEditTemplate] = useState(false);
+    const [reportName, setReportName] = useState("");
+    const [parentReportName, setParentReportName] = useState("");
+
+    const SP_MAP = {
+        Abstract: "Avg_Live_Sales_Report_4"
+    };
     /* ================= LOAD RETAILER ================= */
 
     useEffect(() => {
@@ -171,18 +187,30 @@ const LedgerItemWiseDetails: React.FC = () => {
 
                 setRows(apiRows);
 
-                if (!sessionStorage.getItem("ledgerColumns") && apiRows.length) {
-                    const cols = Object.keys(apiRows[0]).map((key, index) => ({
+                if (apiRows.length) {
+                    const baseCols = Object.keys(apiRows[0]).map((key, index) => ({
                         key,
-                        label: key
-                            .replace(/_/g, " ")
-                            .replace(/\b\w/g, c => c.toUpperCase()),
+                        label: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
                         enabled: DEFAULT_COLUMNS.includes(key),
                         isNumeric: NUMERIC_KEYS.includes(key),
                         order: index
                     }));
 
-                    setColumns(cols);
+                    if (templateConfig?.abstract?.length) {
+                        setColumns(
+                            applyTemplateToColumns(baseCols, templateConfig.abstract)
+                        );
+
+                        const grouped = templateConfig.abstract
+                            .filter((x: any) => x.groupBy > 0)
+                            .sort((a: any, b: any) => a.groupBy - b.groupBy)
+                            .map((x: any) => x.key);
+
+                        setGroupBy(grouped);
+
+                    } else {
+                        setColumns(baseCols);
+                    }
                 }
 
                 setPage(1);
@@ -347,6 +375,148 @@ const LedgerItemWiseDetails: React.FC = () => {
         return result;
     };
 
+    /* ================= LOAD TEMPLATE ================= */
+    const loadTemplate = async (reportId: number) => {
+        try {
+            setTemplateLoading(true);
+            setSelectedTemplateId(reportId);
+
+            const res = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 1,
+            });
+
+            const templateCols = res.data.data.columns || [];
+
+            setTemplateConfig({
+                abstract: templateCols,
+                expanded: [],
+            });
+
+            if (res.data.data.reportInfo?.Report_Name) {
+                setReportName(res.data.data.reportInfo.Report_Name);
+            }
+
+            if (res.data.data.reportInfo?.Parent_Report) {
+                setParentReportName(
+                    res.data.data.reportInfo.Parent_Report
+                );
+            }
+
+            setRows([]);
+            setColumns([]);
+
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to load template ❌");
+        } finally {
+            setTemplateLoading(false);
+        }
+    };
+
+    /* ================= APPLY TEMPLATE TO COLUMNS ================= */
+
+    const applyTemplateToColumns = (
+        baseCols: ColumnConfig[],
+        templateCols: any[]
+    ): ColumnConfig[] => {
+
+        const templateBased = templateCols.map(t => ({
+            key: t.key,
+            label: t.label || t.key,
+            enabled: t.enabled,
+            order: t.order ?? 0,
+            groupBy: t.groupBy ?? 0,
+            isNumeric: NUMERIC_KEYS.includes(t.key),
+        }));
+
+        const merged = templateBased.map(col => {
+            const base = baseCols.find(b => b.key === col.key);
+
+            return {
+                ...col,
+                isNumeric: base?.isNumeric ?? col.isNumeric,
+            };
+        });
+
+        const missing = baseCols
+            .filter(b => !templateBased.some(t => t.key === b.key))
+            .map(b => ({
+                ...b,
+                enabled: false,
+                groupBy: 0,
+            }));
+
+        return [...merged, ...missing];
+    };
+
+    /* ================= SAVE TEMPLATE ================= */
+    const handleQuickSave = async () => {
+        try {
+            if (!reportName.trim()) {
+                toast.error("Enter Report Name");
+                return;
+            }
+
+            /* =========================================
+               GET LOGIN USER ID
+            ========================================= */
+            const userData = JSON.parse(localStorage.getItem("user") || "{}");
+            const createdBy = userData?.id || 0;
+
+            const payloadColumns = columns.map((c) => ({
+                key: c.key,
+                label: c.label,
+                enabled: c.enabled,
+                order: c.order,
+                groupBy: groupBy.includes(c.key)
+                    ? groupBy.indexOf(c.key) + 1
+                    : 0,
+                dataType: "nvarchar"
+            }));
+
+            /* =========================================
+               EDIT MODE
+            ========================================= */
+            if (selectedTemplateId) {
+                await SettingsService.updateReport({
+                    reportId: selectedTemplateId,
+                    typeId: 1,
+                    columns: payloadColumns
+                });
+
+                toast.success("Template Updated Successfully ✅");
+            }
+
+            /* =========================================
+               CREATE MODE
+            ========================================= */
+            else {
+                await SettingsService.saveReportSettings({
+                    reportName,
+                    parentReport: parentReportName,
+                    abstractSP: SP_MAP.Abstract,
+                    expandedSP: SP_MAP.Abstract,
+                    abstractColumns: payloadColumns,
+                    expandedColumns: payloadColumns,
+                    createdBy 
+                });
+
+                toast.success("Template Saved Successfully ✅");
+            }
+
+            setSaveDialogOpen(false);
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 400);
+
+        } catch (err) {
+            console.error(err);
+            toast.error("Save Failed ❌");
+        }
+    };
+
     /* ================= PAGINATION ================= */
 
     const groupedRows = useMemo(() => {
@@ -476,6 +646,64 @@ const LedgerItemWiseDetails: React.FC = () => {
             <PageHeader
                 onExportExcel={handleExportExcel}
                 onExportPDF={handleExportPDF}
+                onReportChange={(template) => {
+                    const todayDate = dayjs().format("YYYY-MM-DD");
+
+                    // ✅ If Select Template chosen / cleared / null option
+                    if (!template || !template.Report_Id) {
+                        setIsEditTemplate(false);
+                        setSelectedTemplateId(null);
+                        setReportName("");
+                        setParentReportName("");
+                        setTemplateConfig(null);
+
+                        // Reset filters
+                        setFilters({
+                            Date: {
+                                from: Fromdate || todayDate,
+                                to: Todate || todayDate,
+                            },
+                            columnFilters: {},
+                        });
+
+                        // Reset grouping
+                        setGroupBy([]);
+                        setExpandedGroups([]);
+
+                        // Reset stock filter
+                        setStockFilter("hasValues");
+
+                        // Reset rows + columns
+                        setRows([]);
+                        setColumns([]);
+
+                        // Reset pagination
+                        setPage(1);
+
+                        // Close menus
+                        setSettingsAnchor(null);
+                        setFilterAnchor(null);
+
+                        return;
+                    }
+
+                    // ✅ Load selected template
+                    setIsEditTemplate(true);
+                    setSelectedTemplateId(template.Report_Id);
+                    setReportName(template.Report_Name);
+
+                    loadTemplate(template.Report_Id);
+                }}
+
+                onQuickSave={(parentName) => {
+                    setParentReportName(parentName);
+
+                    if (!selectedTemplateId) {
+                        setReportName("");
+                    }
+
+                    setSaveDialogOpen(true);
+                }}
                 settingsSlot={
                     <Box display="flex" gap={1}>
                         <Tooltip title="Group By">
@@ -605,7 +833,21 @@ const LedgerItemWiseDetails: React.FC = () => {
                         </Typography>
                     </Box>
                 </Box>
-
+                {templateLoading && (
+                    <Box
+                        sx={{
+                            position: "absolute",
+                            inset: 0,
+                            background: "rgba(255,255,255,.5)",
+                            zIndex: 10,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center"
+                        }}
+                    >
+                        <CircularProgress />
+                    </Box>
+                )}
                 <Box sx={{ overflow: "auto", mt: 0.5 }}>
                     <TableContainer
                         component={Paper}
@@ -998,6 +1240,45 @@ const LedgerItemWiseDetails: React.FC = () => {
                         }}
                     >
                         Apply
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            /* ================= TEMPLATE ================= */
+            <Dialog
+                open={saveDialogOpen}
+                onClose={() => setSaveDialogOpen(false)}
+            >
+                <DialogTitle>
+                    {isEditTemplate ? "Edit Template" : "Create Template"}
+                </DialogTitle>
+
+                <DialogContent>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="Report Name"
+                        value={reportName}
+                        onChange={(e) =>
+                            setReportName(e.target.value)
+                        }
+                    />
+                </DialogContent>
+
+                <DialogActions>
+                    <Button
+                        onClick={() =>
+                            setSaveDialogOpen(false)
+                        }
+                    >
+                        Cancel
+                    </Button>
+
+                    <Button
+                        variant="contained"
+                        onClick={handleQuickSave}
+                    >
+                        Save
                     </Button>
                 </DialogActions>
             </Dialog>

@@ -560,16 +560,18 @@ const OnlineSalesReportLOL: React.FC = () => {
         return result;
     };
 
-    const finalRows = useMemo(() => {
-        const rows = grouping.length
+    const paginatedSourceRows = useMemo(() => {
+        return grouping.length
             ? flattenRows(groupedRows)
             : sortedRows;
+    }, [groupedRows, sortedRows, grouping, expandedKeys]);
 
-        return rows.slice(
-            (page - 1) * rowsPerPage,
-            page * rowsPerPage
-        );
-    }, [groupedRows, sortedRows, grouping, expandedKeys, page, rowsPerPage]);
+    const finalRows = useMemo(() => {
+        const start = (page - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
+
+        return paginatedSourceRows.slice(start, end);
+    }, [paginatedSourceRows, page, rowsPerPage]);
 
     /* ================= PAGINATION ================= */
 
@@ -882,9 +884,15 @@ const OnlineSalesReportLOL: React.FC = () => {
             }
 
             /* =========================================
+               GET LOGIN USER ID
+            ========================================= */
+            const userData = JSON.parse(localStorage.getItem("user") || "{}");
+            const createdBy = userData?.id || 0;
+
+            /* =========================================
                BUILD COMMON DATA
             ========================================= */
-            const abstractPayload = abstractColumns.map(c => ({
+            const abstractPayload = abstractColumns.map((c) => ({
                 key: c.key,
                 label: c.label,
                 enabled: c.enabled,
@@ -895,7 +903,7 @@ const OnlineSalesReportLOL: React.FC = () => {
                 dataType: "nvarchar"
             }));
 
-            const expandedPayload = expandedColumns.map(c => ({
+            const expandedPayload = expandedColumns.map((c) => ({
                 key: c.key,
                 label: c.label,
                 enabled: c.enabled,
@@ -908,17 +916,14 @@ const OnlineSalesReportLOL: React.FC = () => {
 
             /* =========================================
                EDIT MODE
-               selectedTemplateId should exist
             ========================================= */
             if (selectedTemplateId) {
-                // Abstract Update
                 await SettingsService.updateReport({
                     reportId: selectedTemplateId,
                     typeId: 1,
                     columns: abstractPayload
                 });
 
-                // Expanded Update
                 await SettingsService.updateReport({
                     reportId: selectedTemplateId,
                     typeId: 2,
@@ -938,7 +943,8 @@ const OnlineSalesReportLOL: React.FC = () => {
                     abstractSP: spConfig.abstractSP,
                     expandedSP: spConfig.expandedSP,
                     abstractColumns: abstractPayload,
-                    expandedColumns: expandedPayload
+                    expandedColumns: expandedPayload,
+                    createdBy
                 });
 
                 toast.success("Template Saved Successfully ✅");
@@ -1191,9 +1197,7 @@ const OnlineSalesReportLOL: React.FC = () => {
 
                             <TableBody>
                                 {(() => {
-                                    serialRef.current = grouping.length
-                                        ? 0
-                                        : (page - 1) * rowsPerPage;
+                                    serialRef.current = (page - 1) * rowsPerPage;
 
                                     return finalRows.map((row: any, i) => {
                                         if (row.__group) {
@@ -1273,7 +1277,7 @@ const OnlineSalesReportLOL: React.FC = () => {
                     </TableContainer>
 
                     <CommonPagination
-                        totalRows={filteredRows.length}
+                        totalRows={paginatedSourceRows.length}
                         page={page}
                         rowsPerPage={rowsPerPage}
                         onPageChange={setPage}

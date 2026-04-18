@@ -762,11 +762,14 @@ const OnlineSalesReportPage: React.FC = () => {
       =============================== */
 
       if (!isEditTemplate || !selectedTemplateId) {
+        const userData = JSON.parse(localStorage.getItem("user") || "{}");
+
         const createPayload = {
           reportName: reportName.trim(),
           parentReport: parentReportName,
           abstractSP: spConfig.abstractSP,
           expandedSP: spConfig.expandedSP,
+          createdBy: Number(userData.id || 0),
 
           abstractColumns: abstractColumns.map((c) => ({
             key: c.key,
@@ -788,10 +791,14 @@ const OnlineSalesReportPage: React.FC = () => {
         };
 
         await SettingsService.saveReportSettings(createPayload);
+        console.log("CREATE PAYLOAD:", createPayload);
 
         toast.success("Template Saved ✅");
         setIsEditTemplate(true);
         setSaveDialogOpen(false);
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
         return;
       }
 

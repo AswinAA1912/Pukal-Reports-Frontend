@@ -691,74 +691,85 @@ const SalesOrderReport: React.FC = () => {
 
 
     const handleQuickSave = async () => {
-        try {
-            if (!reportName.trim()) {
-                toast.error("Enter Report Name");
-                return;
-            }
-
-            const abstractPayload = abstractColumns.map(col => ({
-                key: col.key,
-                label: col.label,
-                enabled: col.enabled,
-                order: col.order,
-                groupBy: abstractGrouping.includes(col.key)
-                    ? abstractGrouping.indexOf(col.key) + 1
-                    : 0,
-                dataType: "nvarchar"
-            }));
-
-            const expandedPayload = expandedColumns.map(col => ({
-                key: col.key,
-                label: col.label,
-                enabled: col.enabled,
-                order: col.order,
-                groupBy: expandedGrouping.includes(col.key)
-                    ? expandedGrouping.indexOf(col.key) + 1
-                    : 0,
-                dataType: "nvarchar"
-            }));
-
-            if (selectedTemplateId) {
-
-                await SettingsService.updateReport({
-                    reportId: selectedTemplateId,
-                    typeId: 1,
-                    columns: abstractPayload
-                });
-
-                await SettingsService.updateReport({
-                    reportId: selectedTemplateId,
-                    typeId: 2,
-                    columns: expandedPayload
-                });
-
-                toast.success("Template Updated Successfully");
-
-            } else {
-
-                await SettingsService.saveReportSettings({
-                    reportName,
-                    parentReport: parentReportName,
-                    abstractSP: spConfig.abstractSP,
-                    expandedSP: spConfig.expandedSP,
-                    abstractColumns: abstractPayload,
-                    expandedColumns: expandedPayload
-                });
-
-                toast.success("Template Saved Successfully");
-            }
-
-            setSaveDialogOpen(false);
-
-            setTimeout(() => {
-                window.location.reload();
-            }, 400);
-
-        } catch (err: any) {
-            toast.error("Save Failed");
+    try {
+        if (!reportName.trim()) {
+            toast.error("Enter Report Name");
+            return;
         }
-    };
+
+        /* =========================================
+           GET LOGIN USER ID
+        ========================================= */
+        const userData = JSON.parse(localStorage.getItem("user") || "{}");
+        const createdBy = userData?.id || 0;
+
+        const abstractPayload = abstractColumns.map((col) => ({
+            key: col.key,
+            label: col.label,
+            enabled: col.enabled,
+            order: col.order,
+            groupBy: abstractGrouping.includes(col.key)
+                ? abstractGrouping.indexOf(col.key) + 1
+                : 0,
+            dataType: "nvarchar"
+        }));
+
+        const expandedPayload = expandedColumns.map((col) => ({
+            key: col.key,
+            label: col.label,
+            enabled: col.enabled,
+            order: col.order,
+            groupBy: expandedGrouping.includes(col.key)
+                ? expandedGrouping.indexOf(col.key) + 1
+                : 0,
+            dataType: "nvarchar"
+        }));
+
+        /* ===== EDIT MODE ===== */
+        if (selectedTemplateId) {
+
+            await SettingsService.updateReport({
+                reportId: selectedTemplateId,
+                typeId: 1,
+                columns: abstractPayload
+            });
+
+            await SettingsService.updateReport({
+                reportId: selectedTemplateId,
+                typeId: 2,
+                columns: expandedPayload
+            });
+
+            toast.success("Template Updated Successfully");
+
+        }
+
+        /* ===== CREATE MODE ===== */
+        else {
+
+            await SettingsService.saveReportSettings({
+                reportName,
+                parentReport: parentReportName,
+                abstractSP: spConfig.abstractSP,
+                expandedSP: spConfig.expandedSP,
+                abstractColumns: abstractPayload,
+                expandedColumns: expandedPayload,
+                createdBy 
+            });
+
+            toast.success("Template Saved Successfully");
+        }
+
+        setSaveDialogOpen(false);
+
+        setTimeout(() => {
+            window.location.reload();
+        }, 400);
+
+    } catch (err: any) {
+        toast.error("Save Failed");
+    }
+};
 
 
     /* ================= FILTER MENU ================= */

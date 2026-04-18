@@ -10,9 +10,13 @@ import {
     TableCell,
     TableBody,
     IconButton,
-    CircularProgress
+    CircularProgress,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions
 } from "@mui/material";
-import { KeyboardArrowDown, KeyboardArrowUp, Edit } from "@mui/icons-material";
+import { KeyboardArrowDown, KeyboardArrowUp, Edit, Delete } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { SettingsService } from "../services/reportSettings.services";
 import { toast, ToastContainer } from "react-toastify";
@@ -31,6 +35,9 @@ type ReportItem = {
     Report_Id: number;
     Report_Name: string;
     templates: TemplateType[];
+    CreatedBy: number;
+    CreatedByName: string;
+    CreatedAt: string;
 };
 
 type GroupedReports = Record<string, ReportItem[]>;
@@ -41,6 +48,8 @@ const ReportList: React.FC = () => {
     const [grouped, setGrouped] = useState<GroupedReports>({});
     const [openRows, setOpenRows] = useState<Record<string, boolean>>({});
     const [loading, setLoading] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [selectedId, setSelectedId] = useState<number | null>(null);
 
     const navigate = useNavigate();
 
@@ -74,6 +83,49 @@ const ReportList: React.FC = () => {
 
     const handleEdit = (reportId: number, typeId: number) => {
         navigate(`/settings?reportId=${reportId}&typeId=${typeId}`);
+    };
+
+    const handleDeleteClick = (reportId: number) => {
+        setSelectedId(reportId);
+        setDeleteOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        try {
+            if (!selectedId) return;
+
+            await SettingsService.deleteReport(selectedId);
+
+            toast.success("Template Deleted Successfully");
+
+            setDeleteOpen(false);
+            setSelectedId(null);
+
+            fetchReports();
+
+        } catch (err) {
+            toast.error("Delete Failed");
+        }
+    };
+
+    const formatDateTime = (dateString: string) => {
+        if (!dateString) return "-";
+
+        const clean = dateString.replace("Z", "");
+
+        const date = new Date(clean);
+
+        const day = String(date.getDate()).padStart(2, "0");
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const year = date.getFullYear();
+
+        let hours = date.getHours();
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12 || 12;
+
+        return `${day}-${month}-${year} ${String(hours).padStart(2, "0")}.${minutes} ${ampm}`;
     };
 
     return (
@@ -120,6 +172,8 @@ const ReportList: React.FC = () => {
                                     <TableCell>Parent Report</TableCell>
                                     <TableCell>Template Name</TableCell>
                                     <TableCell>Type</TableCell>
+                                    <TableCell>Created By</TableCell>
+                                    <TableCell>Created At</TableCell>
                                     <TableCell align="center">Action</TableCell>
                                 </TableRow>
                             </TableHead>
@@ -148,7 +202,7 @@ const ReportList: React.FC = () => {
                                                 </IconButton>
                                             </TableCell>
 
-                                            <TableCell colSpan={4}>
+                                            <TableCell colSpan={6}>
                                                 <Typography fontWeight={600}>
                                                     {parent}
                                                 </Typography>
@@ -202,21 +256,43 @@ const ReportList: React.FC = () => {
                                                                 {type.Report_Type}
                                                             </Typography>
                                                         </TableCell>
+                                                        <TableCell>
+                                                            {report.CreatedByName || "-"}
+                                                        </TableCell>
+
+                                                        <TableCell>
+                                                            {formatDateTime(report.CreatedAt)}
+                                                        </TableCell>
 
                                                         {/* 5️⃣ Action */}
                                                         <TableCell align="center">
-                                                            <IconButton
-                                                                color="primary"
-                                                                onClick={() =>
-                                                                    handleEdit(report.Report_Id, type.Type_Id)
-                                                                }
-                                                                sx={{
-                                                                    backgroundColor: "#EEF2FF",
-                                                                    "&:hover": { backgroundColor: "#E0E7FF" }
-                                                                }}
-                                                            >
-                                                                <Edit fontSize="small" />
-                                                            </IconButton>
+                                                            <Box display="flex" justifyContent="center" gap={1}>
+                                                                <IconButton
+                                                                    color="primary"
+                                                                    onClick={() =>
+                                                                        handleEdit(report.Report_Id, type.Type_Id)
+                                                                    }
+                                                                    sx={{
+                                                                        backgroundColor: "#EEF2FF",
+                                                                        "&:hover": { backgroundColor: "#E0E7FF" }
+                                                                    }}
+                                                                >
+                                                                    <Edit fontSize="small" />
+                                                                </IconButton>
+
+                                                                <IconButton
+                                                                    color="error"
+                                                                    onClick={() =>
+                                                                        handleDeleteClick(report.Report_Id)
+                                                                    }
+                                                                    sx={{
+                                                                        backgroundColor: "#FEF2F2",
+                                                                        "&:hover": { backgroundColor: "#FEE2E2" }
+                                                                    }}
+                                                                >
+                                                                    <Delete fontSize="small" />
+                                                                </IconButton>
+                                                            </Box>
                                                         </TableCell>
                                                     </TableRow>
                                                 ))
@@ -229,6 +305,31 @@ const ReportList: React.FC = () => {
                     )}
                 </Paper>
             </Box>
+
+            <Dialog
+                open={deleteOpen}
+                onClose={() => setDeleteOpen(false)}
+            >
+                <DialogTitle>Delete Template</DialogTitle>
+
+                <DialogContent>
+                    Are you sure want to delete this template?
+                </DialogContent>
+
+                <DialogActions>
+                    <Button onClick={() => setDeleteOpen(false)}>
+                        Cancel
+                    </Button>
+
+                    <Button
+                        color="error"
+                        variant="contained"
+                        onClick={confirmDelete}
+                    >
+                        Delete
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
 };

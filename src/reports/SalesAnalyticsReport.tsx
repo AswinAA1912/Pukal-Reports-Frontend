@@ -575,23 +575,30 @@ const SalesReport: React.FC = () => {
         return result;
     };
 
-    const totalRowsForPagination = useMemo(() => {
+    // ================= PAGINATION SOURCE =================
+    const paginatedSourceRows = useMemo(() => {
         return appliedGroupBy.length
-            ? flattenRows(groupedRows).length
-            : filteredRows.length;
-    }, [groupedRows, filteredRows, appliedGroupBy, expandedKeys]);
-
-    const finalRows = useMemo(() => {
-        const rows = appliedGroupBy.length
             ? flattenRows(groupedRows)
             : filteredRows;
+    }, [groupedRows, filteredRows, appliedGroupBy, expandedKeys]);
 
-        return rows.slice(
-            (page - 1) * rowsPerPage,
-            page * rowsPerPage
-        );
+    // ================= FINAL ROWS =================
+    const finalRows = useMemo(() => {
+        const start = (page - 1) * rowsPerPage;
+        const end = start + rowsPerPage;
 
-    }, [groupedRows, filteredRows, page, rowsPerPage, appliedGroupBy, expandedKeys]);
+        return paginatedSourceRows.slice(start, end);
+    }, [paginatedSourceRows, page, rowsPerPage]);
+
+    // ================= TOTAL ROWS =================
+    const totalRowsForPagination = useMemo(() => {
+        return paginatedSourceRows.length;
+    }, [paginatedSourceRows]);
+
+    // ================= AUTO RESET PAGE =================
+    useEffect(() => {
+        setPage(1);
+    }, [appliedGroupBy, expandedKeys, rowsPerPage]);
 
     const enabledColumns = useMemo(
         () =>
@@ -964,6 +971,11 @@ const SalesReport: React.FC = () => {
                 toast.error("Load both Abstract & Expanded once");
                 return;
             }
+            /* =========================================
+           GET LOGIN USER ID
+        ========================================= */
+            const userData = JSON.parse(localStorage.getItem("user") || "{}");
+            const createdBy = userData?.id || 0;
 
             const abstractPayload = finalAbstractCols.map((c) => ({
                 key: c.key,
@@ -1014,7 +1026,8 @@ const SalesReport: React.FC = () => {
                     abstractSP: spConfig.abstractSP,
                     expandedSP: spConfig.expandedSP,
                     abstractColumns: abstractPayload,
-                    expandedColumns: expandedPayload
+                    expandedColumns: expandedPayload,
+                    createdBy
                 });
 
                 toast.success("Template Saved Successfully ✅");
@@ -1295,9 +1308,7 @@ const SalesReport: React.FC = () => {
                                 ) : (
 
                                     (() => {
-                                        serialRef.current = appliedGroupBy.length
-                                            ? 0
-                                            : (page - 1) * rowsPerPage;
+                                       serialRef.current = (page - 1) * rowsPerPage;
                                         return renderRows(finalRows);
                                     })()
 

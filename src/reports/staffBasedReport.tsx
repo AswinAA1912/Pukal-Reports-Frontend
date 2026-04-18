@@ -826,6 +826,13 @@ const StaffBasedReport: React.FC = () => {
                 return;
             }
 
+            /* =========================================
+           GET LOGIN USER ID
+        ========================================= */
+            const userData = JSON.parse(localStorage.getItem("user") || "{}");
+            const createdBy = userData?.id || 0;
+
+
             const payloadColumns = columns.map(c => ({
                 key: c.key,
                 label: c.label,
@@ -852,7 +859,8 @@ const StaffBasedReport: React.FC = () => {
                     abstractSP: spConfig.abstractSP,
                     expandedSP: spConfig.abstractSP,
                     abstractColumns: payloadColumns,
-                    expandedColumns: payloadColumns
+                    expandedColumns: payloadColumns,
+                    createdBy
                 });
 
                 toast.success("Template Saved Successfully ✅");
