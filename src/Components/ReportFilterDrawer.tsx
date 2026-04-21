@@ -150,16 +150,36 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                                     multiple
                                     options={filter.options || []}
                                     getOptionLabel={(option: any) => option.label}
+
+                                    filterOptions={(options, { inputValue }) => {
+                                        const search = inputValue
+                                            .toLowerCase()
+                                            .replace(/\s+/g, "")
+                                            .replace(/[^a-z0-9]/gi, "");
+
+                                        return options.filter((option: any) => {
+                                            const label = option.label
+                                                .toLowerCase()
+                                                .replace(/\s+/g, "")
+                                                .replace(/[^a-z0-9]/gi, "");
+
+                                            return label.includes(search);
+                                        });
+                                    }}
+
                                     value={
                                         filter.options?.filter((opt: any) =>
                                             (selectedFilters?.[filter.columnName] || []).includes(opt.value)
                                         ) || []
                                     }
+
                                     onChange={(_, newValue) => {
                                         const values = newValue.map((opt: any) => opt.value);
                                         onFilterChange?.(filter.columnName, values);
                                     }}
+
                                     disableCloseOnSelect
+
                                     renderInput={(params) => (
                                         <TextField
                                             {...params}
@@ -167,6 +187,7 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                                             placeholder="Search..."
                                         />
                                     )}
+
                                     sx={{ mb: 2 }}
                                 />
                             ))}

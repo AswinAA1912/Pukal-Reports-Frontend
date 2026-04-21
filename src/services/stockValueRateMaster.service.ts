@@ -34,7 +34,9 @@ export interface StockValueMerged {
 export const stockValueReportService = {
   // POS RATE API
   getPosRates: (params?: { FromDate?: string }) =>
-    axios.get<{ success: boolean; data: PosRate[] }>(
+    axios.get<{
+      success: boolean; data: { posRateMaster: PosRate[]; };
+    }>(
       `${getBaseURL()}api/masters/posRateMaster`,
       { params }
     ),

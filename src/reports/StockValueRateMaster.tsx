@@ -68,10 +68,12 @@ const StockValueRateMasterReport: React.FC = () => {
                     stockValueReportService.getStockValues({ FromDate: fromDate }),
                 ]);
 
-                setPosRates(posRes.data.data || []);
-                setStockValues(stockRes.data.data || []);
+                setPosRates(posRes.data?.data?.posRateMaster || []);
+                setStockValues(stockRes.data?.data || []);
             } catch (err) {
                 console.error("Error loading stock value report:", err);
+                setPosRates([]);
+                setStockValues([]);
             } finally {
                 setLoading(false);
             }

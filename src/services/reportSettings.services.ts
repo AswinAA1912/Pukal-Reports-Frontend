@@ -68,21 +68,21 @@ export const SettingsService = {
     // 🔹 3. Save Report Settings
     saveReport: (payload: SaveReportPayload) =>
         axios.post<{ success: boolean; message: string }>(
-            `http://192.168.1.92:9001/api/reports/settings/saveReport`,
-            // `${getBaseURL()}api/reports/settings/saveReport`,
+            // `http://192.168.1.92:9001/api/reports/settings/saveReport`,
+            `${getBaseURL()}api/reports/settings/saveReport`,
             payload
         ),
     saveReportSettings: (payload: any) =>
         axios.post<{ success: boolean; message: string }>(
-            `http://192.168.1.92:9001/api/reports/settings/saveReport`,
-            // `${getBaseURL()}api/reports/settings/saveReport`,
+            // `http://192.168.1.92:9001/api/reports/settings/saveReport`,
+            `${getBaseURL()}api/reports/settings/saveReport`,
             payload
         ),
 
     // 🔹 4. get Reports
     getReportList: () =>
-        axios.get(`http://192.168.1.92:9001/api/reports/settings/reportList`),
-    // axios.get(`${getBaseURL()}api/reports/settings/reportList`),
+        // axios.get(`http://192.168.1.92:9001/api/reports/settings/reportList`),
+    axios.get(`${getBaseURL()}api/reports/settings/reportList`),
 
     /* 🔹 5. Get Edit Data (IMPORTANT) */
     getReportEditData: (params: {
@@ -120,8 +120,8 @@ export const SettingsService = {
     },
     /* 🔹 7. Delete Report  */
     deleteReport(reportId: number) {
-         return axios.delete(`http://192.168.1.92:9001/api/reports/settings/deleteReport/${reportId}`);
-        // return axios.delete(`${getBaseURL()}api/reports/settings/deleteReport/${reportId}`);
+        //  return axios.delete(`http://192.168.1.92:9001/api/reports/settings/deleteReport/${reportId}`);
+        return axios.delete(`${getBaseURL()}api/reports/settings/deleteReport/${reportId}`);
     },
 
 
