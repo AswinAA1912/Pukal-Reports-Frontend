@@ -534,7 +534,11 @@ const StockValueReport: React.FC = () => {
     };
 
 
-    const flattenGroupsForExport = (groups: any[], parentKeys: Record<string, string> = {}, isExpandedMode = isExpanded): any[] => {
+    const flattenGroupsForExport = (
+        groups: any[],
+        parentKeys: Record<string, string> = {},
+        isExpandedMode = isExpanded
+    ): any[] => {
         const result: any[] = [];
 
         groups.forEach(g => {
@@ -550,13 +554,19 @@ const StockValueReport: React.FC = () => {
                 result.push(...flattenGroupsForExport(g.children, keys, isExpandedMode));
             } else {
                 g.rows.forEach((r: stockWiseReport) => {
+                    const rate = Number((r as any).CL_Rate || 0);
+                    const closingQty = Number(r.Bal_Qty || 0);
+                    const closingValue = closingQty * rate;
+
                     result.push({
                         ...keys,
                         Item: r.stock_item_name,
-                        Opening: r.OB_Bal_Qty,
-                        In: r.Pur_Qty,
-                        Out: r.Sal_Qty,
-                        Closing: r.Bal_Qty,
+                        Opening: Number(r.OB_Bal_Qty || 0).toFixed(2),
+                        In: Number(r.Pur_Qty || 0).toFixed(2),
+                        Out: Number(r.Sal_Qty || 0).toFixed(2),
+                        Rate: rate.toFixed(2),
+                        Closing: closingQty.toFixed(2),
+                        ClosingValue: closingValue.toFixed(2)
                     });
                 });
             }
@@ -576,7 +586,9 @@ const StockValueReport: React.FC = () => {
             { header: "Opening", key: "Opening" },
             { header: "In", key: "In" },
             { header: "Out", key: "Out" },
+            { header: "Rate", key: "Rate" },
             { header: "Closing", key: "Closing" },
+            { header: "Closing Value", key: "ClosingValue" },
         ];
 
         if (isExpanded) {
@@ -589,6 +601,7 @@ const StockValueReport: React.FC = () => {
 
         return [...groupCols, ...baseCols];
     };
+
 
     const handleExportPDF = () => {
         const rows = flattenGroupsForExport(finalGroups);

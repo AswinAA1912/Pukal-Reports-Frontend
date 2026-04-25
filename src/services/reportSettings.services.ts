@@ -33,11 +33,15 @@ export interface SaveReportPayload {
     createdBy: number;
 }
 
-export interface UpdateReportPayload {
+type UpdateReportPayload = {
     reportId: number;
     typeId: number;
-    columns: ColumnPayload[];
-}
+
+    columns?: any[];
+
+    abstractColumns?: any[];
+    expandedColumns?: any[];
+};
 
 export interface SaveReportByTypePayload {
     reportName: string;
@@ -82,7 +86,7 @@ export const SettingsService = {
     // 🔹 4. get Reports
     getReportList: () =>
         // axios.get(`http://192.168.1.92:9001/api/reports/settings/reportList`),
-    axios.get(`${getBaseURL()}api/reports/settings/reportList`),
+        axios.get(`${getBaseURL()}api/reports/settings/reportList`),
 
     /* 🔹 5. Get Edit Data (IMPORTANT) */
     getReportEditData: (params: {
