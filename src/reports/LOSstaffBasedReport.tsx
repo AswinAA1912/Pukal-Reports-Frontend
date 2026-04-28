@@ -74,11 +74,13 @@ type ColumnConfig = {
 /* ================= CONSTANTS ================= */
 
 const NUMERIC_KEYS = [
-    "Item_Count",
-    "Total_Invoice_value",
+    "Qty",
     "Rate",
-    "Bill_Qty",
+    "Amt",
     "Amount",
+    "Bill_Qty",
+    "Item_Count",
+    "Total_Invoice_value"
 ];
 
 const DEFAULT_KEYS = [
@@ -801,285 +803,268 @@ const LOSStaffBasedReport: React.FC = () => {
     /* =====================================================
     ✅ STAFF WISE ACCORDION VIEW
     ===================================================== */
-    const renderExpandedStaffRows = (
-        sourceRows: any[]
-    ) => {
+    const renderExpandedStaffRows = (sourceRows: any[]) => {
         const numericKeys = ["Qty", "Rate", "Amt"];
 
         const activeStaff = staffList.filter((staff) =>
             sourceRows.some((row) =>
                 staffFields.some(
                     (field) =>
-                        String(row[field] || "")
-                            .trim()
-                            .toLowerCase() ===
-                        String(
-                            staff.Cost_Center_Name
-                        )
-                            .trim()
-                            .toLowerCase()
+                        String(row[field] || "").trim().toLowerCase() ===
+                        String(staff.Cost_Center_Name).trim().toLowerCase()
                 )
             )
         );
 
-        return activeStaff.map(
-            (staff, staffIndex) => {
-                const staffName =
-                    staff.Cost_Center_Name;
+        return activeStaff.map((staff, staffIndex) => {
+            const staffName = staff.Cost_Center_Name;
 
-                const staffRows =
-                    sourceRows.filter((row) =>
-                        staffFields.some(
-                            (field) =>
-                                String(
-                                    row[field] || ""
-                                )
-                                    .trim()
-                                    .toLowerCase() ===
-                                staffName
-                                    .trim()
-                                    .toLowerCase()
-                        )
-                    );
+            const staffRows = sourceRows.filter((row) =>
+                staffFields.some(
+                    (field) =>
+                        String(row[field] || "").trim().toLowerCase() ===
+                        staffName.trim().toLowerCase()
+                )
+            );
 
-                /* =========================
-                   STAFF TOTALS
-                ========================= */
-                const totals: any = {};
+            /* =========================
+               STAFF TOTALS
+            ========================= */
+            const staffTotals: any = {};
 
-                numericKeys.forEach((key) => {
-                    totals[key] = staffRows.reduce(
-                        (sum, row) =>
-                            sum +
-                            Number(
-                                row[key] || 0
-                            ),
-                        0
-                    );
-                });
+            numericKeys.forEach((key) => {
+                staffTotals[key] = staffRows.reduce(
+                    (sum, row) => sum + Number(row[key] || 0),
+                    0
+                );
+            });
 
-                return (
-                    <Accordion
-                        key={`${staffName}-${staffIndex}`}
-                        sx={{
-                            backgroundColor:
-                                "#F8FAFC",
-                            boxShadow: "none",
-                            border:
-                                "1px solid #E2E8F0",
-                            mb: 0.5,
-                            "&:before": {
-                                display:
-                                    "none",
-                            },
-                        }}
-                    >
-                        <AccordionSummary
-                            expandIcon={
-                                <ExpandMoreIcon />
-                            }
-                        >
-                            <Typography
-                                fontWeight={700}
-                            >
-                                {staffIndex + 1}.{" "}
-                                {staffName}
-                            </Typography>
-                        </AccordionSummary>
+            /* =========================
+               GROUP BY WORKED AS
+            ========================= */
+            const workedGroups: any = {};
 
-                        <AccordionDetails
-                            sx={{ p: 0 }}
-                        >
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        {/* OUTSIDE S.NO */}
-                                        <TableCell
-                                            sx={{
-                                                fontWeight: 700,
-                                                bgcolor:
-                                                    "#1E3A8A",
-                                                color:
-                                                    "#fff",
-                                            }}
-                                        >
-                                            S.No
-                                        </TableCell>
+            staffRows.forEach((row) => {
+                const workedField =
+                    staffFields.find(
+                        (f) =>
+                            String(row[f] || "").trim().toLowerCase() ===
+                            staffName.trim().toLowerCase()
+                    ) || "Others";
 
-                                        <TableCell
-                                            sx={{
-                                                fontWeight: 700,
-                                                bgcolor:
-                                                    "#1E3A8A",
-                                                color:
-                                                    "#fff",
-                                            }}
-                                        >
-                                            Worked As
-                                        </TableCell>
+                if (!workedGroups[workedField]) {
+                    workedGroups[workedField] = [];
+                }
 
-                                        {enabledColumns.map(
-                                            (
-                                                col
-                                            ) => (
-                                                <TableCell
-                                                    key={
-                                                        col.key
-                                                    }
-                                                    sx={{
-                                                        fontWeight: 700,
-                                                        bgcolor:
-                                                            "#1E3A8A",
-                                                        color:
-                                                            "#fff",
-                                                    }}
-                                                >
-                                                    {
-                                                        col.label
-                                                    }
-                                                </TableCell>
-                                            )
-                                        )}
-                                    </TableRow>
-                                </TableHead>
+                workedGroups[workedField].push(row);
+            });
 
-                                <TableBody>
-                                    {/* TOTAL ROW */}
-                                    <TableRow
+            return (
+                <Accordion
+                    key={`${staffName}-${staffIndex}`}
+                    sx={{
+                        backgroundColor: "#F8FAFC",
+                        boxShadow: "none",
+                        border: "1px solid #E2E8F0",
+                        mb: 0.5,
+                        "&:before": { display: "none" },
+                    }}
+                >
+                    {/* STAFF HEADER */}
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography fontWeight={700}>
+                            {staffIndex + 1}. {staffName} (
+                            {staffTotals.Qty.toFixed(2)} Tons)
+                        </Typography>
+                    </AccordionSummary>
+
+                    <AccordionDetails sx={{ p: 0 }}>
+                        {/* WORKED AS GROUPING */}
+                        {Object.entries(workedGroups).map(
+                            ([workedAs, rows]: any, workIndex) => {
+                                const totals: any = {};
+
+                                numericKeys.forEach((key) => {
+                                    totals[key] = rows.reduce(
+                                        (sum: number, r: any) =>
+                                            sum + Number(r[key] || 0),
+                                        0
+                                    );
+                                });
+
+                                return (
+                                    <Accordion
+                                        key={workedAs}
                                         sx={{
-                                            bgcolor:
-                                                "#E0E7FF",
+                                            boxShadow: "none",
+                                            borderTop:
+                                                "1px solid #E5E7EB",
+                                            "&:before": {
+                                                display: "none",
+                                            },
                                         }}
                                     >
-                                        <TableCell
-                                            colSpan={
-                                                2
+                                        {/* WORKED AS HEADER */}
+                                        <AccordionSummary
+                                            expandIcon={
+                                                <ExpandMoreIcon />
                                             }
-                                            sx={{
-                                                fontWeight: 700,
-                                            }}
                                         >
-                                            Total
-                                        </TableCell>
+                                            <Typography
+                                                fontWeight={600}
+                                            >
+                                                {workIndex + 1}.{" "}
+                                                {workedAs.replace(
+                                                    /_/g,
+                                                    " "
+                                                )}{" "}
+                                                (
+                                                {totals.Qty.toFixed(
+                                                    2
+                                                )} Tons)
+                                            </Typography>
+                                        </AccordionSummary>
 
-                                        {enabledColumns.map(
-                                            (
-                                                col
-                                            ) => (
-                                                <TableCell
-                                                    key={
-                                                        col.key
-                                                    }
-                                                    sx={{
-                                                        fontWeight: 700,
-                                                    }}
-                                                >
-                                                    {numericKeys.includes(
-                                                        col.key
-                                                    )
-                                                        ? totals[
-                                                            col
-                                                                .key
-                                                        ].toFixed(
-                                                            2
-                                                        )
-                                                        : ""}
-                                                </TableCell>
-                                            )
-                                        )}
-                                    </TableRow>
+                                        <AccordionDetails
+                                            sx={{ p: 0 }}
+                                        >
+                                            <Table size="small">
+                                                <TableHead>
+                                                    <TableRow>
+                                                        <TableCell
+                                                            sx={{
+                                                                fontWeight: 700,
+                                                                bgcolor:
+                                                                    "#1E3A8A",
+                                                                color:
+                                                                    "#fff",
+                                                            }}
+                                                        >
+                                                            S.No
+                                                        </TableCell>
 
-                                    {/* DATA ROWS */}
-                                    {staffRows.map(
-                                        (
-                                            row,
-                                            i
-                                        ) => {
-                                            const workedField =
-                                                staffFields.find(
-                                                    (
-                                                        f
-                                                    ) =>
-                                                        String(
-                                                            row[
-                                                            f
-                                                            ] ||
-                                                            ""
-                                                        )
-                                                            .trim()
-                                                            .toLowerCase() ===
-                                                        staffName
-                                                            .trim()
-                                                            .toLowerCase()
-                                                ) ||
-                                                "";
-
-                                            return (
-                                                <TableRow
-                                                    key={
-                                                        i
-                                                    }
-                                                >
-                                                    {/* INNER S.NO */}
-                                                    <TableCell>
-                                                        {i +
-                                                            1}
-                                                    </TableCell>
-
-                                                    <TableCell>
-                                                        {workedField.replace(
-                                                            /_/g,
-                                                            " "
+                                                        {enabledColumns.map(
+                                                            (
+                                                                col
+                                                            ) => (
+                                                                <TableCell
+                                                                    key={
+                                                                        col.key
+                                                                    }
+                                                                    sx={{
+                                                                        fontWeight: 700,
+                                                                        bgcolor:
+                                                                            "#1E3A8A",
+                                                                        color:
+                                                                            "#fff",
+                                                                    }}
+                                                                >
+                                                                    {
+                                                                        col.label
+                                                                    }
+                                                                </TableCell>
+                                                            )
                                                         )}
-                                                    </TableCell>
+                                                    </TableRow>
+                                                </TableHead>
 
-                                                    {enabledColumns.map(
-                                                        (
-                                                            col
-                                                        ) => (
+                                                <TableBody>
+                                                    {/* TOTAL */}
+                                                    <TableRow
+                                                        sx={{
+                                                            bgcolor:
+                                                                "#E0E7FF",
+                                                        }}
+                                                    >
+                                                        <TableCell
+                                                            sx={{
+                                                                fontWeight: 700,
+                                                            }}
+                                                        >
+                                                            Total
+                                                        </TableCell>
+
+                                                        {enabledColumns.map((col) => (
                                                             <TableCell
+                                                                key={col.key}
+                                                                sx={{ fontWeight: 700 }}
+                                                            >
+                                                                {["Qty", "Rate", "Amt"].includes(col.key)
+                                                                    ? Number(totals[col.key] || 0).toFixed(2)
+                                                                    : ""}
+                                                            </TableCell>
+                                                        ))}
+                                                    </TableRow>
+
+                                                    {/* DATA */}
+                                                    {rows.map(
+                                                        (
+                                                            row: any,
+                                                            i: number
+                                                        ) => (
+                                                            <TableRow
                                                                 key={
-                                                                    col.key
+                                                                    i
                                                                 }
                                                             >
-                                                                {col.key ===
-                                                                    "Stock_Journal_date"
-                                                                    ? dayjs(
-                                                                        row[
-                                                                        col.key
-                                                                        ]
-                                                                    ).format(
-                                                                        "DD/MM/YYYY"
+                                                                <TableCell>
+                                                                    {i +
+                                                                        1}
+                                                                </TableCell>
+
+                                                                {enabledColumns.map(
+                                                                    (
+                                                                        col
+                                                                    ) => (
+                                                                        <TableCell
+                                                                            key={
+                                                                                col.key
+                                                                            }
+                                                                        >
+                                                                            {col.key ===
+                                                                                "Stock_Journal_date"
+                                                                                ? dayjs(
+                                                                                    row[
+                                                                                    col
+                                                                                        .key
+                                                                                    ]
+                                                                                ).format(
+                                                                                    "DD/MM/YYYY"
+                                                                                )
+                                                                                : numericKeys.includes(
+                                                                                    col.key
+                                                                                )
+                                                                                    ? Number(
+                                                                                        row[
+                                                                                        col
+                                                                                            .key
+                                                                                        ] ||
+                                                                                        0
+                                                                                    ).toFixed(
+                                                                                        2
+                                                                                    )
+                                                                                    : row[
+                                                                                    col
+                                                                                        .key
+                                                                                    ] ??
+                                                                                    ""}
+                                                                        </TableCell>
                                                                     )
-                                                                    : numericKeys.includes(
-                                                                        col.key
-                                                                    )
-                                                                        ? Number(
-                                                                            row[
-                                                                            col.key
-                                                                            ] ||
-                                                                            0
-                                                                        ).toFixed(
-                                                                            2
-                                                                        )
-                                                                        : row[
-                                                                        col.key
-                                                                        ] ??
-                                                                        ""}
-                                                            </TableCell>
+                                                                )}
+                                                            </TableRow>
                                                         )
                                                     )}
-                                                </TableRow>
-                                            );
-                                        }
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </AccordionDetails>
-                    </Accordion>
-                );
-            }
-        );
+                                                </TableBody>
+                                            </Table>
+                                        </AccordionDetails>
+                                    </Accordion>
+                                );
+                            }
+                        )}
+                    </AccordionDetails>
+                </Accordion>
+            );
+        });
     };
 
     /* ================= EXPORT HELPERS ================= */
@@ -1776,9 +1761,11 @@ const LOSStaffBasedReport: React.FC = () => {
                                         {enabledColumns.map((c) => (
                                             <TableCell key={c.key}>
                                                 {c.isNumeric
-                                                    ? CURRENCY_KEYS.includes(c.key)
-                                                        ? formatINR(getTotal(c.key))
-                                                        : getTotal(c.key)
+                                                    ? c.key === "Qty"
+                                                        ? Number(getTotal(c.key)).toFixed(2)
+                                                        : CURRENCY_KEYS.includes(c.key)
+                                                            ? formatINR(getTotal(c.key))
+                                                            : Number(getTotal(c.key)).toFixed(2)
                                                     : ""}
                                             </TableCell>
                                         ))}
@@ -1836,7 +1823,11 @@ const LOSStaffBasedReport: React.FC = () => {
 
                                                                 return (
                                                                     <TableCell key={c.key}>
-                                                                        {formatINR(total)}
+                                                                        {c.key === "Qty"
+                                                                            ? total.toFixed(2)
+                                                                            : CURRENCY_KEYS.includes(c.key)
+                                                                                ? formatINR(total)
+                                                                                : total.toFixed(2)}
                                                                     </TableCell>
                                                                 );
                                                             }

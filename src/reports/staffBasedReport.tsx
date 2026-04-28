@@ -52,6 +52,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
+import { SettingsService } from "../services/reportSettings.services";
 import {
     costCenterListService, staffBasedReportService
 } from "../services/staffBasedReport.services";
@@ -225,9 +226,14 @@ const StaffBasedReport: React.FC = () => {
     const serialRef = React.useRef(0);
 
     const [templateConfig, setTemplateConfig] = useState<{
-        abstract: ColumnConfig[];
         expanded: ColumnConfig[];
     } | null>(null);
+
+    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+    const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+    const [reportName, setReportName] = useState("");
+    const [parentReportName, setParentReportName] = useState("");
+    const [isEditTemplate, setIsEditTemplate] = useState(false);
 
     const grouping =
         toggleMode === "Expanded" ? expandedGrouping : abstractGrouping;
@@ -261,7 +267,17 @@ const StaffBasedReport: React.FC = () => {
 
     useEffect(() => {
         loadStaffBasedReport();
-    }, [toggleMode, filters.Date.from, filters.Date.to]);
+    }, [filters.Date.from, filters.Date.to]);
+
+    useEffect(() => {
+        if (toggleMode === "Expanded" && expandedRows.length === 0) {
+            loadStaffBasedReport();
+        }
+
+        if (toggleMode === "Abstract" && abstractRows.length === 0) {
+            loadStaffBasedReport();
+        }
+    }, [toggleMode]);
 
     const loadStaffBasedReport = async () => {
         try {
@@ -348,7 +364,7 @@ const StaffBasedReport: React.FC = () => {
                 const defaultEnabled = [
                     "Staff_Name",
                     "Godown_Name",
-                    "Qty",              // ✅ add Qty enabled by default
+                    "Qty",
                     "Others1",
                     "Others2",
                     "Others3",
@@ -447,7 +463,7 @@ const StaffBasedReport: React.FC = () => {
                     },
                     {
                         key: "Qty",
-                        label: "Total Qty",   // ✅ nearby Godown Name
+                        label: "Total Qty",
                         enabled: true,
                         order: 3,
                         isNumeric: true
@@ -470,7 +486,13 @@ const StaffBasedReport: React.FC = () => {
                 ];
 
                 setExpandedRows(rows);
-                setExpandedColumns(cols);
+                let finalCols = cols;
+
+                if (templateConfig?.expanded) {
+                    finalCols = applyTemplateToColumns(cols, templateConfig.expanded);
+                }
+
+                setExpandedColumns(finalCols);
             }
 
             setPage(1);
@@ -880,6 +902,232 @@ const StaffBasedReport: React.FC = () => {
         }
     }, [columns]);
 
+    const applyTemplateToColumns = (
+        baseCols: ColumnConfig[],
+        templateCols: any[]
+    ): ColumnConfig[] => {
+
+        const mapped = templateCols.map((t: any) => ({
+            key: t.key,
+            label: t.label,
+            enabled: t.enabled,
+            order: t.order,
+            groupBy: t.groupBy || 0,
+            isNumeric: baseCols.find(b => b.key === t.key)?.isNumeric
+        }));
+
+        const missing = baseCols
+            .filter(b => !mapped.some((m: any) => m.key === b.key))
+            .map(b => ({
+                ...b,
+                enabled: false
+            }));
+
+        return [...mapped, ...missing];
+    };
+
+    const loadTemplate = async (reportId: number) => {
+        try {
+            setLoading(true);
+
+            const res = await SettingsService.getReportEditData({
+                reportId,
+                typeId: 2,
+            });
+
+            console.log("Template Response:", res.data);
+
+            const data =
+                res?.data?.data ||
+                res?.data ||
+                {};
+
+            const templateCols =
+                data?.columns ||
+                data?.Columns ||
+                [];
+
+            /* ==========================
+               TEMPLATE CONFIG
+            ========================== */
+            setTemplateConfig({
+                expanded: templateCols,
+            });
+
+            setSelectedTemplateId(reportId);
+            setIsEditTemplate(true);
+
+            /* ==========================
+               REPORT NAME AUTO FILL
+            ========================== */
+            const autoReportName =
+                data?.Report_Name ||
+                data?.ReportName ||
+                data?.report_name ||
+                data?.reportName ||
+                data?.Name ||
+                data?.name ||
+                "";
+
+            if (autoReportName) {
+                setReportName(autoReportName);
+            }
+
+            /* ==========================
+               EXPANDED MODE
+            ========================== */
+            setToggleMode("Expanded");
+
+            setExpandedRows([]);
+            setExpandedColumns([]);
+
+            setTimeout(() => {
+                loadStaffBasedReport();
+            }, 0);
+
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to load template");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleQuickSave = async () => {
+        try {
+            /* ===============================
+               VALIDATION
+            =============================== */
+            if (toggleMode !== "Expanded") {
+                toast.info("Templates can be saved only in Expanded mode");
+                return;
+            }
+
+            if (!reportName.trim()) {
+                toast.error("Enter Report Name");
+                return;
+            }
+
+            if (!parentReportName.trim()) {
+                toast.error("Parent Report missing");
+                return;
+            }
+
+            if (!expandedColumns.length) {
+                toast.error("Expanded columns not loaded");
+                return;
+            }
+
+            /* ===============================
+               LOGIN USER
+            =============================== */
+            const userData = JSON.parse(
+                localStorage.getItem("user") || "{}"
+            );
+
+            const createdBy = userData?.id || 0;
+
+            /* ===============================
+               ABSTRACT PAYLOAD
+               (backend requires valid data)
+            =============================== */
+            const abstractPayload = (
+                abstractColumns.length
+                    ? abstractColumns
+                    : [
+                        {
+                            key: "Staff_Name",
+                            label: "Staff Name",
+                            enabled: true,
+                            order: 1,
+                            groupBy: 0,
+                            isNumeric: false,
+                        },
+                    ]
+            ).map((c) => ({
+                key: c.key,
+                label: c.label,
+                enabled: c.enabled,
+                order: c.order,
+                groupBy: 0,
+                dataType: "nvarchar",
+            }));
+
+            /* ===============================
+               EXPANDED PAYLOAD
+            =============================== */
+            const expandedPayload = expandedColumns.map((c) => ({
+                key: c.key,
+                label: c.label,
+                enabled: c.enabled,
+                order: c.order,
+                groupBy: expandedGrouping.includes(c.key)
+                    ? expandedGrouping.indexOf(c.key) + 1
+                    : 0,
+                dataType: "nvarchar",
+            }));
+
+            /* ===============================
+               EDIT TEMPLATE
+            =============================== */
+            if (selectedTemplateId) {
+                await SettingsService.updateReport({
+                    reportId: selectedTemplateId,
+                    typeId: 1,
+                    columns: abstractPayload,
+                });
+
+                await SettingsService.updateReport({
+                    reportId: selectedTemplateId,
+                    typeId: 2,
+                    columns: expandedPayload,
+                });
+
+                toast.success("Template Updated Successfully ✅");
+            }
+
+            /* ===============================
+               CREATE TEMPLATE
+            =============================== */
+            else {
+                await SettingsService.saveReportSettings({
+                    reportName: reportName.trim(),
+                    parentReport: parentReportName.trim(),
+
+                    // backend required SP names
+                    abstractSP:
+                        "Reporting_Online_Stock_Journal_VW",
+
+                    expandedSP:
+                        "Reporting_Online_Stock_Journal_Item_VW",
+
+                    abstractColumns: abstractPayload,
+                    expandedColumns: expandedPayload,
+
+                    createdBy,
+                });
+
+                toast.success("Template Saved Successfully ✅");
+            }
+
+            /* ===============================
+               CLOSE / REFRESH
+            =============================== */
+            setSaveDialogOpen(false);
+
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } catch (err: any) {
+            console.error(err);
+
+            toast.error(
+                err?.response?.data?.message ||
+                "Save Failed ❌"
+            );
+        }
+    };
+
     /* ================= RENDER ================= */
 
     return (
@@ -889,9 +1137,51 @@ const StaffBasedReport: React.FC = () => {
                 onToggleChange={setToggleMode}
                 onExportPDF={handleExportPDF}
                 onExportExcel={handleExportExcel}
+                onReportChange={(template) => {
+
+                    if (!template) {
+                        setTemplateConfig(null);
+                        setSelectedTemplateId(null);
+                        setReportName("");
+                        setParentReportName("");
+                        setIsEditTemplate(false);
+
+                        /* RESET MODE */
+                        setToggleMode("Abstract");
+
+                        /* RESET ALL PAGE SETTINGS */
+                        handleResetSettings();
+
+                        /* RELOAD INITIAL DATA */
+                        setTimeout(() => {
+                            loadStaffBasedReport();
+                        }, 0);
+
+                        return;
+                    }
+
+                    /* ===============================
+                       TEMPLATE SELECTED
+                    =============================== */
+                    setIsEditTemplate(true);
+                    setSelectedTemplateId(template.Report_Id);
+                    setReportName(template.Report_Name || "");
+
+                    loadTemplate(template.Report_Id);
+                }}
+
+                onQuickSave={(parentName) => {
+                    if (toggleMode !== "Expanded") {
+                        toast.info("Templates only available in Expanded mode");
+                        return;
+                    }
+
+                    setParentReportName(parentName);
+                    setSaveDialogOpen(true);
+                }}
+
                 settingsSlot={
                     <Box display="flex" gap={1}>
-                        {/* GROUP BY ICON */}
                         <Tooltip title="Group By">
                             <IconButton
                                 size="small"
@@ -911,19 +1201,21 @@ const StaffBasedReport: React.FC = () => {
                         </Tooltip>
 
                         <Tooltip title="Table Settings">
-                            <IconButton size="small"
+                            <IconButton
+                                size="small"
                                 onClick={(e) => setSettingsAnchor(e.currentTarget)}
                                 sx={{
-                                    height: 24, width: 24,
+                                    height: 24,
+                                    width: 24,
                                     backgroundColor: "#fff",
                                     borderRadius: 0.5,
-                                }} >
+                                }}
+                            >
                                 <SettingsIcon fontSize="small" />
                             </IconButton>
                         </Tooltip>
                     </Box>
                 }
-
             />
 
             <ReportFilterDrawer
@@ -1410,6 +1702,32 @@ const StaffBasedReport: React.FC = () => {
                         }}
                     >
                         Apply
+                    </Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
+                <DialogTitle>
+                    {isEditTemplate ? "Edit Template" : "Create Template"}
+                </DialogTitle>
+
+                <DialogContent>
+                    <TextField
+                        fullWidth
+                        size="small"
+                        label="Report Name"
+                        value={reportName}
+                        onChange={(e) => setReportName(e.target.value)}
+                    />
+                </DialogContent>
+
+                <DialogActions>
+                    <Button onClick={() => setSaveDialogOpen(false)}>
+                        Cancel
+                    </Button>
+
+                    <Button variant="contained" onClick={handleQuickSave}>
+                        Save
                     </Button>
                 </DialogActions>
             </Dialog>
