@@ -16,12 +16,12 @@ import {
 } from "@mui/material";
 import dayjs from "dayjs";
 import { useSearchParams } from "react-router-dom";
-import AppLayout from "../Layout/appLayout";
-import PageHeader from "../Layout/PageHeader";
-import { exportToPDF } from "../utils/exportToPDF";
-import { exportToExcel } from "../utils/exportToExcel";
-import { mapForExport } from "../utils/exportMapper";
-import { itemTransactionService } from "../services/stockWiseReport.service";
+import AppLayout from "../../Layout/appLayout";
+import PageHeader from "../../Layout/PageHeader";
+import { exportToPDF } from "../../utils/exportToPDF";
+import { exportToExcel } from "../../utils/exportToExcel";
+import { mapForExport } from "../../utils/exportMapper";
+import { godownItemTransactionService } from "../../services/stockWiseReport.service";
 
 /* ================= UTIL ================= */
 const formatDate = (d?: string) =>
@@ -38,10 +38,7 @@ const buildLedgerRows = (transactions: any[]) => {
     );
 
     return sorted.map((row, index) => {
-        const inQty = Number(row.In_Qty || 0);
-        const outQty = Number(row.Out_Qty || 0);
-
-        running += inQty - outQty;
+        running += Number(row.In_Qty || 0) - Number(row.Out_Qty || 0);
 
         const next = sorted[index + 1];
         const isLastOfDate =
@@ -51,25 +48,21 @@ const buildLedgerRows = (transactions: any[]) => {
 
         return {
             ...row,
-            closing:
-                row.invoice_no === "OB"
-                    ? running
-                    : isLastOfDate
-                        ? running
-                        : null,
+            closing: isLastOfDate ? running : null,
         };
     });
 };
 
 /* ================= COMPONENT ================= */
-const ItemWiseTransaction = () => {
-
+const GodownItemWiseTransaction = () => {
     const [searchParams] = useSearchParams();
 
     const fromDate = searchParams.get("fromDate") || "";
     const toDate = searchParams.get("toDate") || "";
     const ProductId = searchParams.get("ProductId") || "";
+    const Godown_Id = searchParams.get("Godown_Id") || "";
     const productName = searchParams.get("productName") || "";
+    const godownName = searchParams.get("godownName") || "";
 
     /* -------- DATA -------- */
     const [rows, setRows] = useState<any[]>([]);
@@ -79,19 +72,20 @@ const ItemWiseTransaction = () => {
     const [filters, setFilters] = useState({
         Date: { from: fromDate, to: toDate },
     });
-    const [tempDate, setTempDate] = useState(filters.Date);
-    const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
     const [activeHeader, setActiveHeader] = useState<
         "voucher_name" | "invoice_no" | "Retailer_Name" | "Date" | null
     >(null);
+
     const [searchText, setSearchText] = useState("");
 
-    /* -------- COLUMN FILTERS -------- */
     const [columnFilters, setColumnFilters] = useState({
         voucher_name: "",
         invoice_no: "",
         Retailer_Name: "",
     });
+
+    const [tempDate, setTempDate] = useState(filters.Date);
+    const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
 
     const EXPORT_COLUMNS = [
         { label: "Date", key: "Ledger_Date" },
@@ -105,19 +99,21 @@ const ItemWiseTransaction = () => {
 
     /* ================= LOAD DATA ================= */
     useEffect(() => {
-        if (!ProductId) return;
+        if (!ProductId || !Godown_Id) return;
 
         setLoading(true);
-        itemTransactionService
-            .getItemTransactions({
+        godownItemTransactionService
+            .getGodownItemTransactions({
                 fromDate: filters.Date.from,
                 toDate: filters.Date.to,
-                Product_Id: Number(ProductId)
+                Product_Id: Number(ProductId),
+                Godown_Id: Number(Godown_Id),
             })
             .then(res => setRows(res.data.data || []))
             .finally(() => setLoading(false));
-    }, [filters.Date, ProductId]);
+    }, [filters.Date, ProductId, Godown_Id]);
 
+    /* ================= FILTERED ROWS ================= */
     const filteredRows = useMemo(() => {
         return rows.filter(r => {
             if (
@@ -142,6 +138,7 @@ const ItemWiseTransaction = () => {
         });
     }, [rows, columnFilters]);
 
+    /* ================= LEDGER ROWS ================= */
     const ledgerRows = useMemo(
         () => buildLedgerRows(filteredRows),
         [filteredRows]
@@ -176,20 +173,17 @@ const ItemWiseTransaction = () => {
         const rows: any[] = [];
 
         groupedRows.forEach(g => {
-            // normal rows
             g.items.forEach(r => {
                 rows.push({
+                    ...r,
                     Ledger_Date: dayjs(r.Ledger_Date).format("DD/MM/YYYY"),
-                    voucher_name: r.voucher_name || "",
-                    invoice_no: r.invoice_no || "",
-                    Retailer_Name: r.Retailer_Name || "",
                     In_Qty: Number(r.In_Qty || 0),
                     Out_Qty: Number(r.Out_Qty || 0),
                     closing: r.closing ?? "",
                 });
             });
 
-            // daily total row
+            // TOTAL ROW (STRING DATE — SAFE)
             rows.push({
                 Ledger_Date: `TOTAL (${dayjs(g.date).format("DD/MM/YYYY")})`,
                 voucher_name: "",
@@ -228,14 +222,11 @@ const ItemWiseTransaction = () => {
         ];
     };
 
-    useEffect(() => {
-        setTempDate(filters.Date);
-    }, [filters.Date]);
-
+    /* ================= EXPORT ================= */
     const handleExportPDF = () => {
         const { headers, data } = mapForExport(EXPORT_COLUMNS, exportRows);
         exportToPDF(
-            `Item Transaction - ${productName}`,
+            `Godownwise Item Transactions - ${productName}`,
             headers,
             data
         );
@@ -244,7 +235,7 @@ const ItemWiseTransaction = () => {
     const handleExportExcel = () => {
         const { headers, data } = mapForExport(EXPORT_COLUMNS, exportRows);
         exportToExcel(
-            `Item Transaction - ${productName}`,
+            `Godownwise Item Transactions - ${productName}`,
             headers,
             data
         );
@@ -261,7 +252,7 @@ const ItemWiseTransaction = () => {
             <AppLayout fullWidth>
                 <Box px={2} pb={1}>
                     <Typography variant="h6" align="center">
-                        {productName}
+                        {productName} — {godownName}
                     </Typography>
                     <Typography variant="body2" align="center" color="text.secondary">
                         From {formatDate(filters.Date.from)} To{" "}
@@ -293,27 +284,26 @@ const ItemWiseTransaction = () => {
                             >
                                 <TableRow>
                                     <TableCell
-                                        sx={{ color: "#fff", fontWeight: 600, cursor: "pointer" }}
+                                        sx={{ color: "#fff", cursor: "pointer", fontWeight: 600 }}
                                         onClick={e => openHeaderFilter(e, "Date")}
                                     >
                                         Date
                                     </TableCell>
                                     <TableCell
-                                        sx={{ color: "#fff", fontWeight: 600, cursor: "pointer" }}
+                                        sx={{ color: "#fff", cursor: "pointer", fontWeight: 600 }}
                                         onClick={e => openHeaderFilter(e, "voucher_name")}
                                     >
                                         Voucher Type
                                     </TableCell>
 
                                     <TableCell
-                                        sx={{ color: "#fff", fontWeight: 600, cursor: "pointer" }}
+                                        sx={{ color: "#fff", cursor: "pointer", fontWeight: 600 }}
                                         onClick={e => openHeaderFilter(e, "invoice_no")}
                                     >
                                         Voucher No
                                     </TableCell>
-
                                     <TableCell
-                                        sx={{ color: "#fff", fontWeight: 600, cursor: "pointer" }}
+                                        sx={{ color: "#fff", cursor: "pointer", fontWeight: 600 }}
                                         onClick={e => openHeaderFilter(e, "Retailer_Name")}
                                     >
                                         Retailer
@@ -346,21 +336,8 @@ const ItemWiseTransaction = () => {
                                                 <TableCell align="right" sx={{ color: "red" }}>
                                                     {Number(r.Out_Qty || 0).toFixed(2)}
                                                 </TableCell>
-                                                <TableCell
-                                                    align="right"
-                                                    sx={{
-                                                        fontWeight: 600,
-                                                        color:
-                                                            r.closing > 0
-                                                                ? "green"
-                                                                : r.closing < 0
-                                                                    ? "red"
-                                                                    : "inherit",
-                                                    }}
-                                                >
-                                                    {r.closing !== null && r.closing !== undefined
-                                                        ? Number(r.closing).toFixed(2)
-                                                        : ""}
+                                                <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                                    {r.closing ?? ""}
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -415,7 +392,7 @@ const ItemWiseTransaction = () => {
                         },
                     }}
                 >
-                    {/* ===== DATE FILTER ===== */}
+                    {/* DATE FILTER */}
                     {activeHeader === "Date" && (
                         <Box p={2} display="flex" flexDirection="column" gap={1}>
                             <TextField
@@ -445,55 +422,52 @@ const ItemWiseTransaction = () => {
                         </Box>
                     )}
 
-                    {/* ===== COLUMN FILTER ===== */}
-                    {activeHeader &&
-                        activeHeader !== "Date" && (
-                            <Box p={2} sx={{ minWidth: 220 }}>
-                                <TextField
-                                    size="small"
-                                    fullWidth
-                                    placeholder="Search"
-                                    value={searchText}
-                                    onChange={e => setSearchText(e.target.value)}
-                                    sx={{ mb: 1 }}
-                                />
+                    {/* COLUMN FILTER */}
+                    {activeHeader && activeHeader !== "Date" && (
+                        <Box p={2} sx={{ minWidth: 220 }}>
+                            <TextField
+                                size="small"
+                                fullWidth
+                                placeholder="Search"
+                                value={searchText}
+                                onChange={e => setSearchText(e.target.value)}
+                                sx={{ mb: 1 }}
+                            />
 
-                                {getUniqueValues(activeHeader).map(val => (
-                                    <Button
-                                        key={val}
-                                        fullWidth
-                                        sx={{ justifyContent: "flex-start" }}
-                                        onClick={() => {
-                                            setColumnFilters(p => ({
-                                                ...p,
-                                                [activeHeader]: val,
-                                            }));
-                                            setFilterAnchor(null);
-                                        }}
-                                    >
-                                        {val}
-                                    </Button>
-                                ))}
-
+                            {getUniqueValues(activeHeader).map(val => (
                                 <Button
+                                    key={val}
                                     fullWidth
-                                    color="inherit"
                                     onClick={() => {
                                         setColumnFilters(p => ({
                                             ...p,
-                                            [activeHeader]: "",
+                                            [activeHeader]: val,
                                         }));
                                         setFilterAnchor(null);
                                     }}
                                 >
-                                    All
+                                    {val}
                                 </Button>
-                            </Box>
-                        )}
+                            ))}
+
+                            <Button
+                                fullWidth
+                                onClick={() => {
+                                    setColumnFilters(p => ({
+                                        ...p,
+                                        [activeHeader]: "",
+                                    }));
+                                    setFilterAnchor(null);
+                                }}
+                            >
+                                All
+                            </Button>
+                        </Box>
+                    )}
                 </Menu>
             </AppLayout>
         </>
     );
 };
 
-export default ItemWiseTransaction;
+export default GodownItemWiseTransaction;

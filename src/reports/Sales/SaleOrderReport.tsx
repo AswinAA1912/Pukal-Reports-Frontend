@@ -24,14 +24,14 @@ import {
 } from "@mui/material";
 import dayjs from "dayjs";
 import SettingsIcon from "@mui/icons-material/Settings";
+import { SettingsService } from "../../services/reportSettings.services";
+import { toast } from "react-toastify";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import GroupWorkIcon from "@mui/icons-material/GroupWork";
-import AppLayout, { useToggleMode } from "../Layout/appLayout";
-import { SettingsService } from "../services/reportSettings.services";
-import { toast } from "react-toastify";
-import PageHeader from "../Layout/PageHeader";
-import ReportFilterDrawer from "../Components/ReportFilterDrawer";
-import CommonPagination from "../Components/CommonPagination";
+import AppLayout, { useToggleMode } from "../../Layout/appLayout";
+import PageHeader from "../../Layout/PageHeader";
+import ReportFilterDrawer from "../../Components/ReportFilterDrawer";
+import CommonPagination from "../../Components/CommonPagination";
 import { DndContext, closestCenter, } from "@dnd-kit/core";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -44,7 +44,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import { PurchaseOrderReport, PurchaseOrderReportItem } from "../services/purchaseOrderReport.service";
+import { SaleOrderReport, SaleOrderReportItem } from "../../services/saleOrderReport.service";
 
 const ABSTRACT_DEFAULT_KEYS = [
     "invoice_no",
@@ -174,9 +174,10 @@ const normalizeRow = (row: any) => {
     return newRow;
 };
 
+
 /* ================= COMPONENT ================= */
 
-const PurchaseOrder: React.FC = () => {
+const SalesOrderReport: React.FC = () => {
     const today = dayjs().format("YYYY-MM-DD");
     const { toggleMode, setToggleMode } = useToggleMode();
 
@@ -218,6 +219,8 @@ const PurchaseOrder: React.FC = () => {
     const [groupDialogOpen, setGroupDialogOpen] = useState(false);
     const [abstractGrouping, setAbstractGrouping] = useState<string[]>([]);
     const [expandedGrouping, setExpandedGrouping] = useState<string[]>([]);
+    const [abstractLoaded, setAbstractLoaded] = useState(false);
+    const [expandedLoaded, setExpandedLoaded] = useState(false);
 
     const [abstractPendingGrouping, setAbstractPendingGrouping] = useState<string[]>([]);
     const [expandedPendingGrouping, setExpandedPendingGrouping] = useState<string[]>([]);
@@ -228,27 +231,19 @@ const PurchaseOrder: React.FC = () => {
     const [rangeFilter] = useState<Record<string, [number, number]>>({});
     const selectedValues =
         activeHeader ? filters.columnFilters[activeHeader!] ?? [] : [];
-
     const [templateConfig, setTemplateConfig] = useState<{
         abstract: ColumnConfig[];
         expanded: ColumnConfig[];
     } | null>(null);
     const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
     const [isEditTemplate, setIsEditTemplate] = useState(false);
-
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
     const [reportName, setReportName] = useState("");
     const [parentReportName, setParentReportName] = useState("");
-
-    const [spConfig, setSpConfig] = useState({
-        abstractSP: "",
-        expandedSP: ""
+    const [spConfig] = useState({
+        abstractSP: "Reporting_Online_Sales_Order_LOL_VW",
+        expandedSP: "Reporting_Online_Sales_Order_Item_LOL_VW"
     });
-
-    const SP_MAP = {
-        Abstract: "Reporting_Online_Purchase_Order_VW",
-        Expanded: "Reporting_Online_Purchase_Order_Item_VW"
-    };
 
     const [tempDateFilter, setTempDateFilter] = useState({
         from: today,
@@ -261,21 +256,22 @@ const PurchaseOrder: React.FC = () => {
     /* ================= LOAD DATA ================= */
 
     useEffect(() => {
-        let mounted = true;
-        setLoading(true);
-
         const service =
             toggleMode === "Expanded"
-                ? PurchaseOrderReportItem.getPurchaseOrderItem
-                : PurchaseOrderReport.getPurchaseOrder;
+                ? SaleOrderReportItem.getSaleOrderItem
+                : SaleOrderReport.getSaleOrder;
+
+        // ✅ prevent reload when switching toggle
+        if (toggleMode === "Abstract" && abstractLoaded) return;
+        if (toggleMode === "Expanded" && expandedLoaded) return;
+
+        setLoading(true);
 
         service({
             Fromdate: filters.Date.from,
             Todate: filters.Date.to,
         })
-            .then((res) => {
-                if (!mounted) return;
-
+            .then(res => {
                 const apiRowsRaw =
                     res.data?.data?.data ||
                     res.data?.data ||
@@ -283,77 +279,65 @@ const PurchaseOrder: React.FC = () => {
 
                 const apiRows = apiRowsRaw.map(normalizeRow);
 
-                const freshColumns = buildColumnsFromApi(apiRows, toggleMode);
-
-                const applyTemplateColumns = (
-                    incomingCols: ColumnConfig[],
-                    templateCols?: ColumnConfig[]
-                ) => {
-                    if (!templateCols?.length) return incomingCols;
-
-                    return incomingCols.map((col) => {
-                        const matched = templateCols.find(
-                            (t) => t.key === col.key
-                        );
-
-                        return matched
-                            ? {
-                                ...col,
-                                enabled: matched.enabled,
-                                order: matched.order,
-                            }
-                            : col;
-                    });
-                };
+                const cols = buildColumnsFromApi(apiRows, toggleMode);
 
                 if (toggleMode === "Expanded") {
+
                     setExpandedRows(apiRows);
 
-                    setExpandedColumns((prev) => {
-                        // already modified by user → keep it
-                        if (prev.length > 0) return prev;
+                    let finalCols = cols;
 
-                        return applyTemplateColumns(
-                            freshColumns,
-                            templateConfig?.expanded
+                    if (templateConfig?.expanded?.length) {
+                        finalCols = applyTemplateToColumns(
+                            cols,
+                            templateConfig.expanded
                         );
-                    });
-                }
-                else {
+                    }
+
+                    setExpandedColumns(finalCols);
+                    setExpandedLoaded(true); // ✅ mark loaded
+                } else {
+
                     const abstractData = buildAbstractData(apiRows);
 
                     setAbstractRows(abstractData);
 
-                    setAbstractColumns((prev) => {
-                        // already modified by user → keep it
-                        if (prev.length > 0) return prev;
+                    let finalCols = cols;
 
-                        return applyTemplateColumns(
-                            freshColumns,
-                            templateConfig?.abstract
+                    if (templateConfig?.abstract?.length) {
+                        finalCols = applyTemplateToColumns(
+                            cols,
+                            templateConfig.abstract
                         );
-                    });
-                }
+                    }
 
-                setSpConfig({
-                    abstractSP: SP_MAP.Abstract,
-                    expandedSP: SP_MAP.Expanded
-                });
+                    setAbstractColumns(finalCols);
+                    setAbstractLoaded(true); 
+                }
 
                 setPage(1);
             })
-            .catch((err) => {
-                console.error("Purchase Order Report API Error:", err);
+            .catch(err => {
+                console.error("Sale Order Report API Error:", err);
             })
             .finally(() => {
-                if (mounted) setLoading(false);
+                setLoading(false);
             });
 
-        return () => {
-            mounted = false;
-        };
     }, [
         toggleMode,
+        filters.Date.from,
+        filters.Date.to,
+        templateConfig,
+        abstractLoaded,
+        expandedLoaded
+    ]);
+
+    // ===== RESET ONLY WHEN DATE FILTER / TEMPLATE CHANGE =====
+    useEffect(() => {
+        setAbstractLoaded(false);
+        setExpandedLoaded(false);
+    }, [
         filters.Date.from,
         filters.Date.to,
         templateConfig
@@ -555,7 +539,7 @@ const PurchaseOrder: React.FC = () => {
 
         XLSX.writeFile(
             wb,
-            `Purchase Order Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.xlsx`
+            `Sale Order Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.xlsx`
         );
     };
 
@@ -579,7 +563,7 @@ const PurchaseOrder: React.FC = () => {
             })
         );
 
-        doc.text(`Purchase Order Report (${toggleMode})`, 14, 10);
+        doc.text(`Sale Order Report (${toggleMode})`, 14, 10);
 
         autoTable(doc, {
             startY: 15,
@@ -589,11 +573,13 @@ const PurchaseOrder: React.FC = () => {
         });
 
         doc.save(
-            `Purchase Order Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.pdf`
+            `Sale Order Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.pdf`
         );
     };
 
+
     /* ================= TEMPLATE ================= */
+
 
     const applyTemplateToColumns = (
         liveColumns: ColumnConfig[],
@@ -628,7 +614,6 @@ const PurchaseOrder: React.FC = () => {
         try {
             setLoading(true);
 
-            // ✅ keep selected template state
             setSelectedTemplateId(reportId);
             setIsEditTemplate(true);
 
@@ -645,137 +630,147 @@ const PurchaseOrder: React.FC = () => {
             const abstractCols = absRes.data?.data?.columns || [];
             const expandedCols = expRes.data?.data?.columns || [];
 
-            /* ✅ set report name */
+            setTemplateConfig({
+                abstract: abstractCols,
+                expanded: expandedCols
+            });
+
+            // ✅ Report Name Auto Fill
             if (absRes.data?.data?.reportInfo?.Report_Name) {
                 setReportName(
                     absRes.data.data.reportInfo.Report_Name
                 );
             }
 
+            // ✅ Parent Report Auto Fill
             if (absRes.data?.data?.reportInfo?.Parent_Report) {
                 setParentReportName(
                     absRes.data.data.reportInfo.Parent_Report
                 );
             }
 
-            /* ✅ RESTORE GROUPING ORDER */
-            const abstractGrouping = [...abstractCols]
-                .filter((x: any) => Number(x.groupBy) > 0)
-                .sort((a: any, b: any) => Number(a.groupBy) - Number(b.groupBy))
+            // ✅ Apply Grouping From Template
+            const absGrouping = abstractCols
+                .filter((x: any) => x.groupBy > 0)
+                .sort((a: any, b: any) => a.groupBy - b.groupBy)
                 .map((x: any) => x.key);
 
-            const expandedGrouping = [...expandedCols]
-                .filter((x: any) => Number(x.groupBy) > 0)
-                .sort((a: any, b: any) => Number(a.groupBy) - Number(b.groupBy))
+            const expGrouping = expandedCols
+                .filter((x: any) => x.groupBy > 0)
+                .sort((a: any, b: any) => a.groupBy - b.groupBy)
                 .map((x: any) => x.key);
 
-            setTemplateConfig({
-                abstract: abstractCols,
-                expanded: expandedCols
-            });
+            setAbstractGrouping(absGrouping);
+            setExpandedGrouping(expGrouping);
 
-            setAbstractColumns(prev =>
-                applyTemplateToColumns(prev.length ? prev : [], abstractCols)
-            );
+            setAbstractPendingGrouping(absGrouping);
+            setExpandedPendingGrouping(expGrouping);
 
-            setExpandedColumns(prev =>
-                applyTemplateToColumns(prev.length ? prev : [], expandedCols)
-            );
-
-            /* ✅ APPLY GROUPING */
-            setAbstractGrouping(abstractGrouping);
-            setExpandedGrouping(expandedGrouping);
-
-            setAbstractPendingGrouping(abstractGrouping);
-            setExpandedPendingGrouping(expandedGrouping);
-
-            /* collapse expanded rows */
             setAbstractExpandedKeys([]);
             setExpandedExpandedKeys([]);
+
+            // ✅ Force Reload Fresh Data
+            setAbstractLoaded(false);
+            setExpandedLoaded(false);
+
+            setAbstractRows([]);
+            setExpandedRows([]);
+
+            setAbstractColumns([]);
+            setExpandedColumns([]);
 
             toast.success("Template Loaded");
 
         } catch (error) {
+            console.error(error);
             toast.error("Failed to Load Template");
         } finally {
             setLoading(false);
         }
     };
 
-    const handleQuickSave = async () => {
-        try {
-            if (!reportName.trim()) {
-                toast.error("Enter Report Name");
-                return;
-            }
 
-            /* =========================================
+    const handleQuickSave = async () => {
+    try {
+        if (!reportName.trim()) {
+            toast.error("Enter Report Name");
+            return;
+        }
+
+        /* =========================================
            GET LOGIN USER ID
         ========================================= */
-            const userData = JSON.parse(localStorage.getItem("user") || "{}");
-            const createdBy = userData?.id || 0;
+        const userData = JSON.parse(localStorage.getItem("user") || "{}");
+        const createdBy = userData?.id || 0;
 
+        const abstractPayload = abstractColumns.map((col) => ({
+            key: col.key,
+            label: col.label,
+            enabled: col.enabled,
+            order: col.order,
+            groupBy: abstractGrouping.includes(col.key)
+                ? abstractGrouping.indexOf(col.key) + 1
+                : 0,
+            dataType: "nvarchar"
+        }));
 
-            const abstractPayload = abstractColumns.map(col => ({
-                key: col.key,
-                label: col.label,
-                enabled: col.enabled,
-                order: col.order,
-                groupBy: abstractGrouping.includes(col.key)
-                    ? abstractGrouping.indexOf(col.key) + 1
-                    : 0,
-                dataType: "nvarchar"
-            }));
+        const expandedPayload = expandedColumns.map((col) => ({
+            key: col.key,
+            label: col.label,
+            enabled: col.enabled,
+            order: col.order,
+            groupBy: expandedGrouping.includes(col.key)
+                ? expandedGrouping.indexOf(col.key) + 1
+                : 0,
+            dataType: "nvarchar"
+        }));
 
-            const expandedPayload = expandedColumns.map(col => ({
-                key: col.key,
-                label: col.label,
-                enabled: col.enabled,
-                order: col.order,
-                groupBy: expandedGrouping.includes(col.key)
-                    ? expandedGrouping.indexOf(col.key) + 1
-                    : 0,
-                dataType: "nvarchar"
-            }));
+        /* ===== EDIT MODE ===== */
+        if (selectedTemplateId) {
 
-            if (selectedTemplateId) {
-                await SettingsService.updateReport({
-                    reportId: selectedTemplateId,
-                    typeId: 1,
-                    columns: abstractPayload
-                });
+            await SettingsService.updateReport({
+                reportId: selectedTemplateId,
+                typeId: 1,
+                columns: abstractPayload
+            });
 
-                await SettingsService.updateReport({
-                    reportId: selectedTemplateId,
-                    typeId: 2,
-                    columns: expandedPayload
-                });
+            await SettingsService.updateReport({
+                reportId: selectedTemplateId,
+                typeId: 2,
+                columns: expandedPayload
+            });
 
-                toast.success("Template Updated Successfully");
-            } else {
-                await SettingsService.saveReportSettings({
-                    reportName,
-                    parentReport: parentReportName,
-                    abstractSP: spConfig.abstractSP,
-                    expandedSP: spConfig.expandedSP,
-                    abstractColumns: abstractPayload,
-                    expandedColumns: expandedPayload,
-                    createdBy
-                });
+            toast.success("Template Updated Successfully");
 
-                toast.success("Template Saved Successfully");
-            }
-
-            setSaveDialogOpen(false);
-
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
-
-        } catch (err: any) {
-            toast.error("Save Failed");
         }
-    };
+
+        /* ===== CREATE MODE ===== */
+        else {
+
+            await SettingsService.saveReportSettings({
+                reportName,
+                parentReport: parentReportName,
+                abstractSP: spConfig.abstractSP,
+                expandedSP: spConfig.expandedSP,
+                abstractColumns: abstractPayload,
+                expandedColumns: expandedPayload,
+                createdBy 
+            });
+
+            toast.success("Template Saved Successfully");
+        }
+
+        setSaveDialogOpen(false);
+
+        setTimeout(() => {
+            window.location.reload();
+        }, 400);
+
+    } catch (err: any) {
+        toast.error("Save Failed");
+    }
+};
+
 
     /* ================= FILTER MENU ================= */
 
@@ -1029,6 +1024,13 @@ const PurchaseOrder: React.FC = () => {
 
                         setAbstractColumns([]);
                         setExpandedColumns([]);
+
+                        setAbstractRows([]);
+                        setExpandedRows([]);
+
+                        setAbstractLoaded(false);
+                        setExpandedLoaded(false);
+
                         setPage(1);
 
                         return;
@@ -1040,6 +1042,7 @@ const PurchaseOrder: React.FC = () => {
 
                     loadTemplate(template.Report_Id);
                 }}
+
                 onQuickSave={(parentName) => {
                     setParentReportName(parentName);
 
@@ -1570,4 +1573,4 @@ const PurchaseOrder: React.FC = () => {
     );
 };
 
-export default PurchaseOrder;
+export default SalesOrderReport;

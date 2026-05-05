@@ -28,10 +28,10 @@ import { toast } from "react-toastify";
 import SettingsIcon from "@mui/icons-material/Settings";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
 import GroupWorkIcon from "@mui/icons-material/GroupWork";
-import AppLayout, { useToggleMode } from "../Layout/appLayout";
-import PageHeader from "../Layout/PageHeader";
-import ReportFilterDrawer from "../Components/ReportFilterDrawer";
-import CommonPagination from "../Components/CommonPagination";
+import AppLayout, { useToggleMode } from "../../Layout/appLayout";
+import PageHeader from "../../Layout/PageHeader";
+import ReportFilterDrawer from "../../Components/ReportFilterDrawer";
+import CommonPagination from "../../Components/CommonPagination";
 import { DndContext, closestCenter, } from "@dnd-kit/core";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -45,8 +45,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import { SalesReportLedgerService, SalesReportItemService, } from "../services/SalesReport.service";
-import { SettingsService } from "../services/reportSettings.services";
+import { SalesReportLedgerService, SalesReportItemService, } from "../../services/SalesReport.service";
+import { SettingsService } from "../../services/reportSettings.services";
 
 const ABSTRACT_DEFAULT_KEYS = [
     "Y1",

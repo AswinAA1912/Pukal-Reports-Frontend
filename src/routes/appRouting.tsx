@@ -6,25 +6,26 @@ import AppLayout from "../Layout/appLayout";
 import Login from "../auth/login";
 import GlobalLoader from "../Components/loadingScreen";
 import Dashboard from "./dashboard";
-import SalesInvoiceReportPage from "../reports/salesinvoicereport";
-import OnlineSalesReportPage from "../reports/OnlineSalesReport";
-import UnitEconomicsReportPage from "../reports/unitEconomicsReport";
-import StockInHandReport from "../reports/stockinhandReport";
-import ItemWiseTransaction from "../reports/ItemTransactionList";
-import GodownItemWiseTransaction from "../reports/GodownItemTransactionList";
-import OnlineSalesReportLOL from "../reports/onlineSalesReportLOL";
-import SalesReport from "../reports/SalesAnalyticsReport";
-import LedgerWiseItemDetails from "../reports/LedgerWiseItemDetails";
+import SalesInvoiceReportPage from "../reports/Sales/salesinvoicereport";
+import OnlineSalesReportPage from "../reports/Sales/OnlineSalesReport";
+import UnitEconomicsReportPage from "../reports/Sales/unitEconomicsReport";
+import StockInHandReport from "../reports/Stock/stockinhandReport";
+import ItemWiseTransaction from "../reports/Stock/ItemTransactionList";
+import GodownItemWiseTransaction from "../reports/Stock/GodownItemTransactionList";
+import OnlineSalesReportLOL from "../reports/Sales/onlineSalesReportLOL";
+import SalesReport from "../reports/Sales/SalesAnalyticsReport";
+import LedgerWiseItemDetails from "../reports/Stock/LedgerWiseItemDetails";
 import SalesAnalyticsReportPage from "../reports/GraphicalAnalyticsReport";
-import OnlinePurchaseReportPage from "../reports/onlinePurchaseReport";
-import SalesOrderReport from "../reports/SaleOrderReport";
-import PurchaseOrder from "../reports/PurchaseOrderReport";
+import OnlinePurchaseReportPage from "../reports/Purchase/onlinePurchaseReport";
+import SalesOrderReport from "../reports/Sales/SaleOrderReport";
+import PurchaseOrder from "../reports/Purchase/PurchaseOrderReport";
 import ReportSettings from "../settings/ReportSettings";
 import ReportList from "../settings/ReportList";
-import StockValueReport from "../reports/stockValueReport";
-import StockValueRateMasterReport from "../reports/StockValueRateMaster";
-import StaffBasedReport from "../reports/staffBasedReport";
-import LOSStaffBasedReport from "../reports/LOSstaffBasedReport";
+import StockValueReport from "../reports/Stock/stockValueReport";
+import StockValueRateMasterReport from "../reports/Stock/StockValueRateMaster";
+import StaffBasedReport from "../reports/StaffBased/staffBasedReport";
+import LOSStaffBasedReport from "../reports/StaffBased/LOSstaffBasedReport";
+import ExpensesReport from "../reports/Expenses/ExpensesReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -336,6 +337,17 @@ const AppRouting: React.FC<AppRoutingProps> = ({
                 fullWidth
               >
                 <StaffBasedReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/expense"
+          element={
+            <RequireAuth>
+              <AppLayout fullWidth>
+                <ExpensesReport />
               </AppLayout>
             </RequireAuth>
           }

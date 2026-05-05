@@ -118,7 +118,7 @@ const Dashboard: React.FC = () => {
         sx={{
           display: "flex",
           flexDirection: isMobile ? "column" : "row",
-          height: isMobile ? "auto" : `calc(100vh - ${HEADER_HEIGHT}px)`,
+          height: isMobile ? "auto" : `calc(115vh - ${HEADER_HEIGHT}px)`,
           width: "100%",
           overflow: "hidden",
           backgroundColor: "#cfe6ec",

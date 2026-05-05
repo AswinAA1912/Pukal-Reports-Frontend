@@ -90,6 +90,7 @@ export const godownwisestockvaluereportservice = {
         Todate?: string;
     }) =>
         axios.get<{ success: boolean; data: stockWiseReport[] }>(
+            // `http://192.168.1.5:9001/api/reports/storageStock/stockValueGodown`,
             `${getBaseURL()}api/reports/storageStock/stockValueGodown`,
             { params }
         ),

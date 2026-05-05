@@ -18,43 +18,42 @@ import {
   Switch,
   Dialog,
   DialogActions,
-  DialogTitle,
-  DialogContent
+  DialogContent,
+  DialogTitle
 } from "@mui/material";
 import CircularProgress from "@mui/material/CircularProgress";
 import dayjs from "dayjs";
+import { toast } from "react-toastify";
 import SettingsIcon from "@mui/icons-material/Settings";
 import FilterAltIcon from "@mui/icons-material/FilterAlt";
-import ReportFilterDrawer from "../Components/ReportFilterDrawer";
-import AppLayout, { useToggleMode } from "../Layout/appLayout";
-import PageHeader from "../Layout/PageHeader";
-import { toast } from "react-toastify";
-import CommonPagination from "../Components/CommonPagination";
+import ReportFilterDrawer from "../../Components/ReportFilterDrawer";
+import AppLayout, { useToggleMode } from "../../Layout/appLayout";
+import PageHeader from "../../Layout/PageHeader";
+import CommonPagination from "../../Components/CommonPagination";
 import {
-  OnlineSalesReportService,
-  OnlineSalesReportItemService,
-} from "../services/OnlineSalesReport.service";
+  OnlinePurchaseReportService,
+  OnlinePurchaseReportItemService
+} from "../../services/OnlinePurchaseReport.service";
 import { DndContext, closestCenter, } from "@dnd-kit/core";
 import {
   SortableContext, useSortable,
   verticalListSortingStrategy, arrayMove,
 } from "@dnd-kit/sortable";
-import { SettingsService } from "../services/reportSettings.services";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import { exportToPDF } from "../utils/exportToPDF";
-import { exportToExcel } from "../utils/exportToExcel";
+import { SettingsService } from "../../services/reportSettings.services";
+import { exportToPDF } from "../../utils/exportToPDF";
+import { exportToExcel } from "../../utils/exportToExcel";
 
 type ColumnConfig = {
   key: string;
   label: string;
   enabled: boolean;
   order: number;
-  groupBy?: number;
   type?: "date" | "number" | "text";
 };
 
-const OnlineSalesReportPage: React.FC = () => {
+const OnlinePurchaseReportPage: React.FC = () => {
   const { toggleMode, setToggleMode } = useToggleMode();
 
   const [rawAbstract, setRawAbstract] = useState<any[]>([]);
@@ -77,11 +76,21 @@ const OnlineSalesReportPage: React.FC = () => {
       to: today,
     },
   });
-
   const [templateConfig, setTemplateConfig] = useState<{
     abstract: ColumnConfig[];
     expanded: ColumnConfig[];
   } | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [reportName, setReportName] = useState("");
+  const [parentReportName, setParentReportName] = useState("");
+
+  const spConfig = {
+    abstractSP: "Reporting_Online_Purchase_VW",
+    expandedSP: "Reporting_Online_Purchase_Item_VW"
+  };
+  const [abstractLoaded, setAbstractLoaded] = useState(false);
+  const [expandedLoaded, setExpandedLoaded] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [isEditTemplate, setIsEditTemplate] = useState(false);
 
@@ -92,7 +101,6 @@ const OnlineSalesReportPage: React.FC = () => {
     { key: "Retailer_Name", label: "Customer", enabled: true, order: 3 },
     { key: "Item_Count", label: "Count", enabled: true, order: 4, type: "number" },
     { key: "Total_Invoice_value", label: "Amount", enabled: true, order: 5, type: "number" },
-    { key: "Created_on", label: "Created On", enabled: true, order: 6, type: "date" },
   ];
 
   const EXPANDED_INITIAL_COLUMNS: ColumnConfig[] = [
@@ -104,7 +112,6 @@ const OnlineSalesReportPage: React.FC = () => {
     { key: "Bill_Qty", label: "Quantity", enabled: true, order: 5, type: "number" },
     { key: "Rate", label: "Rate", enabled: true, order: 6, type: "number" },
     { key: "Total_Invoice_value", label: "Amount", enabled: true, order: 7, type: "number" },
-    { key: "Created_on", label: "Created On", enabled: true, order: 8, type: "date" },
   ];
 
   const [abstractColumns, setAbstractColumns] = useState<ColumnConfig[]>(ABSTRACT_INITIAL_COLUMNS);
@@ -117,126 +124,11 @@ const OnlineSalesReportPage: React.FC = () => {
 
   const activeCol = columns.find(c => c.key === activeHeader);
 
-  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-  const [reportName, setReportName] = useState("");
-  const [parentReportName, setParentReportName] = useState("");
-  const [templateLoading, setTemplateLoading] = useState(false);
-  const spConfig = {
-    abstractSP: "Reporting_Online_Sales_VW",
-    expandedSP: "Reporting_Online_Sales_Item_VW"
-  };
-
   const setColumns =
     toggleMode === "Abstract"
       ? setAbstractColumns
       : setExpandedColumns;
 
-  const loadTemplate = async (
-    reportId: number,
-    templateName?: string
-  ) => {
-    try {
-      setTemplateLoading(true);
-
-      // ✅ mark selected template as edit mode
-      setSelectedTemplateId(reportId);
-      setIsEditTemplate(true);
-
-      // ✅ preload existing template name
-      if (templateName) {
-        setReportName(templateName);
-      }
-
-      const absRes = await SettingsService.getReportEditData({
-        reportId,
-        typeId: 1
-      });
-
-      const expRes = await SettingsService.getReportEditData({
-        reportId,
-        typeId: 2
-      });
-
-      const abstractCols = absRes?.data?.data?.columns || [];
-      const expandedCols = expRes?.data?.data?.columns || [];
-
-      setTemplateConfig({
-        abstract: abstractCols,
-        expanded: expandedCols
-      });
-
-      // ✅ Apply template immediately
-      setAbstractColumns(
-        applyTemplateToColumns(
-          ABSTRACT_INITIAL_COLUMNS,
-          abstractCols
-        )
-      );
-
-      setExpandedColumns(
-        applyTemplateToColumns(
-          EXPANDED_INITIAL_COLUMNS,
-          expandedCols
-        )
-      );
-
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load template ❌");
-    } finally {
-      setTemplateLoading(false);
-    }
-  };
-
-  const applyTemplateToColumns = (
-    baseCols: ColumnConfig[],
-    templateCols: ColumnConfig[]
-  ): ColumnConfig[] => {
-
-    // 🔥 STEP 1: Create all columns from backend template
-    const templateBasedCols: ColumnConfig[] = templateCols.map((t) => ({
-      key: t.key,
-      label: t.label || t.key,
-      enabled: t.enabled,
-      order: t.order ?? 0,
-      groupBy: t.groupBy ?? 0,
-    }));
-
-    // 🔥 STEP 2: Ensure S.NO always exists
-    const snoCol: ColumnConfig = {
-      key: "sno",
-      label: "S.No",
-      enabled: true,
-      order: 0,
-    };
-
-    // 🔥 STEP 3: Merge base columns (for types etc.)
-    const merged = templateBasedCols.map((col) => {
-      const base = baseCols.find(
-        (b) => b.key.toLowerCase() === col.key.toLowerCase()
-      );
-
-      return {
-        ...col,
-        type: base?.type, // preserve type
-      };
-    });
-
-    // 🔥 STEP 4: Add missing base columns as disabled
-    const missingBase = baseCols
-      .filter(
-        (b) =>
-          !templateBasedCols.some(
-            (t) => t.key.toLowerCase() === b.key.toLowerCase()
-          ) && b.key !== "sno"
-      )
-      .map((b) => ({
-        ...b,
-        enabled: false,
-      }));
-
-    return [snoCol, ...merged, ...missingBase];
-  };
 
   const enabledColumns = useMemo(
     () =>
@@ -263,8 +155,6 @@ const OnlineSalesReportPage: React.FC = () => {
             return toggleMode === "Abstract"
               ? row.Total_Invoice_value
               : row.Amount;
-          case "Created_on":
-            return formatISTDateTime(row.Created_on);
           default:
             return row[c.key] ?? "";
         }
@@ -272,7 +162,7 @@ const OnlineSalesReportPage: React.FC = () => {
     );
 
     exportToPDF(
-      `Online Sales Report (${toggleMode})`,
+      `Online Purchase Report (${toggleMode})`,
       headers,
       data
     );
@@ -295,8 +185,6 @@ const OnlineSalesReportPage: React.FC = () => {
             return toggleMode === "Abstract"
               ? row.Total_Invoice_value
               : row.Amount;
-          case "Created_on":
-            return formatISTDateTime(row.Created_on);
           default:
             return row[c.key] ?? "";
         }
@@ -304,7 +192,7 @@ const OnlineSalesReportPage: React.FC = () => {
     );
 
     exportToExcel(
-      `Online Sales Report (${toggleMode})`,
+      `Online Purchase Report (${toggleMode})`,
       headers,
       data
     );
@@ -317,58 +205,198 @@ const OnlineSalesReportPage: React.FC = () => {
     }).format(value);
   };
 
-  const mergeColumns = (
-    newCols: ColumnConfig[],
-    currentCols: ColumnConfig[]
-  ) => {
-    return newCols.map(col => {
-      const existing = currentCols.find(c => c.key === col.key);
+  /* ================= TEMPLATE ================= */
 
-      return {
-        ...col,
-        enabled: existing ? existing.enabled : col.enabled,
-        order: existing ? existing.order : col.order,
-        groupBy: existing ? existing.groupBy : col.groupBy,
-      };
-    });
+  const loadTemplate = async (reportId: number) => {
+    try {
+      setTemplateLoading(true);
+
+      setSelectedTemplateId(reportId);
+      setIsEditTemplate(true);
+
+      const absRes = await SettingsService.getReportEditData({
+        reportId,
+        typeId: 1
+      });
+
+      const expRes = await SettingsService.getReportEditData({
+        reportId,
+        typeId: 2
+      });
+
+      const abstractCols = absRes.data.data.columns || [];
+      const expandedCols = expRes.data.data.columns || [];
+
+      setTemplateConfig({
+        abstract: abstractCols,
+        expanded: expandedCols
+      });
+
+      setAbstractColumns(
+        applyTemplateToColumns(ABSTRACT_INITIAL_COLUMNS, abstractCols)
+      );
+
+      setExpandedColumns(
+        applyTemplateToColumns(EXPANDED_INITIAL_COLUMNS, expandedCols)
+      );
+
+      if (absRes.data.data.reportInfo?.Report_Name) {
+        setReportName(absRes.data.data.reportInfo.Report_Name);
+      }
+
+      if (absRes.data.data.reportInfo?.Parent_Report) {
+        setParentReportName(
+          absRes.data.data.reportInfo.Parent_Report
+        );
+      }
+
+    } catch (err) {
+      toast.error("Failed to load template ❌");
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
+  const handleQuickSave = async () => {
+    try {
+      if (!reportName.trim()) {
+        toast.error("Enter Report Name");
+        return;
+      }
+
+      /* =========================================
+         GET LOGIN USER ID
+      ========================================= */
+      const userData = JSON.parse(localStorage.getItem("user") || "{}");
+      const createdBy = userData?.id || 0;
+
+      const abstractPayload = abstractColumns.map((c) => ({
+        key: c.key,
+        label: c.label,
+        enabled: c.enabled,
+        order: c.order,
+        groupBy: 0,
+        dataType: "nvarchar"
+      }));
+
+      const expandedPayload = expandedColumns.map((c) => ({
+        key: c.key,
+        label: c.label,
+        enabled: c.enabled,
+        order: c.order,
+        groupBy: 0,
+        dataType: "nvarchar"
+      }));
+
+      /* ===== EDIT MODE ===== */
+      if (selectedTemplateId) {
+        await SettingsService.updateReport({
+          reportId: selectedTemplateId,
+          typeId: 1,
+          columns: abstractPayload
+        });
+
+        await SettingsService.updateReport({
+          reportId: selectedTemplateId,
+          typeId: 2,
+          columns: expandedPayload
+        });
+
+        toast.success("Template Updated Successfully ✅");
+      }
+
+      /* ===== CREATE MODE ===== */
+      else {
+        await SettingsService.saveReportSettings({
+          reportName,
+          parentReport: parentReportName,
+          abstractSP: spConfig.abstractSP,
+          expandedSP: spConfig.expandedSP,
+          abstractColumns: abstractPayload,
+          expandedColumns: expandedPayload,
+          createdBy
+        });
+
+        toast.success("Template Saved Successfully ✅");
+      }
+
+      setSaveDialogOpen(false);
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+
+    } catch (err: any) {
+      toast.error("Save Failed ❌");
+    }
   };
 
   /* ================= LOAD DATA ================= */
   useEffect(() => {
-    const fromDate = columnFilters?.Ledger_Date?.from || dayjs().format("YYYY-MM-DD");
-    const toDate = columnFilters?.Ledger_Date?.to || dayjs().format("YYYY-MM-DD");
+    const fromDate =
+      columnFilters?.Ledger_Date?.from || dayjs().format("YYYY-MM-DD");
 
+    const toDate =
+      columnFilters?.Ledger_Date?.to || dayjs().format("YYYY-MM-DD");
+
+    /* ================= ABSTRACT ================= */
     if (toggleMode === "Abstract") {
-      OnlineSalesReportService.getReports({ Fromdate: fromDate, Todate: toDate })
-        .then((res) => {
-          const rows = res.data.data || [];
-          setRawAbstract(rows);
+      // ✅ already loaded once, don't reload on toggle back
+      if (abstractLoaded) return;
 
-          let cols = generateColumns(rows, ABSTRACT_INITIAL_COLUMNS);
+      OnlinePurchaseReportService.getReports({
+        Fromdate: fromDate,
+        Todate: toDate
+      }).then((res) => {
+        const rows = res.data.data || [];
+        setRawAbstract(rows);
 
-          if (templateConfig?.abstract) {
-            cols = applyTemplateToColumns(cols, templateConfig.abstract);
-          }
+        let cols = generateColumns(rows, ABSTRACT_INITIAL_COLUMNS);
 
-          setAbstractColumns(prev => mergeColumns(cols, prev));
-        });
-    } else {
-      OnlineSalesReportItemService.getReportsitem({ Fromdate: fromDate, Todate: toDate })
-        .then((res) => {
-          const rows = res.data.data || [];
-          setRawExpanded(rows);
+        if (templateConfig?.abstract) {
+          cols = applyTemplateToColumns(cols, templateConfig.abstract);
+        }
 
-          let cols = generateColumns(rows, EXPANDED_INITIAL_COLUMNS);
-
-          if (templateConfig?.expanded) {
-            cols = applyTemplateToColumns(cols, templateConfig.expanded);
-          }
-
-          setExpandedColumns(prev => mergeColumns(cols, prev));
-        });
+        setAbstractColumns(cols);
+        setAbstractLoaded(true); // ✅ mark loaded
+      });
     }
-  }, [toggleMode, columnFilters["Ledger_Date"], templateConfig]);
 
+    /* ================= EXPANDED ================= */
+    else {
+      // ✅ already loaded once, don't reload on toggle back
+      if (expandedLoaded) return;
+
+      OnlinePurchaseReportItemService.getReportsitem({
+        Fromdate: fromDate,
+        Todate: toDate
+      }).then((res) => {
+        const rows = res.data.data || [];
+        setRawExpanded(rows);
+
+        let cols = generateColumns(rows, EXPANDED_INITIAL_COLUMNS);
+
+        if (templateConfig?.expanded) {
+          cols = applyTemplateToColumns(cols, templateConfig.expanded);
+        }
+
+        setExpandedColumns(cols);
+        setExpandedLoaded(true); // ✅ mark loaded
+      });
+    }
+  }, [
+    toggleMode,
+    columnFilters["Ledger_Date"],
+    templateConfig,
+    abstractLoaded,
+    expandedLoaded
+  ]);
+
+  /* ================= RESET ONLY WHEN FILTER / TEMPLATE CHANGE ================= */
+  useEffect(() => {
+    setAbstractLoaded(false);
+    setExpandedLoaded(false);
+  }, [columnFilters["Ledger_Date"], templateConfig]);
   /* ================= APPLY FILTERS ================= */
 
   const applyFilters = (rows: any[]) => {
@@ -404,19 +432,15 @@ const OnlineSalesReportPage: React.FC = () => {
     });
   };
 
-  const filteredAbstract = useMemo(() => {
-    const filtered = applyFilters(rawAbstract);
-    return filtered.sort((a, b) =>
-      dayjs(b.Ledger_Date).valueOf() - dayjs(a.Ledger_Date).valueOf()
-    );
-  }, [rawAbstract, columnFilters]);
+  const filteredAbstract = useMemo(
+    () => applyFilters(rawAbstract),
+    [rawAbstract, columnFilters]
+  );
 
-  const filteredExpanded = useMemo(() => {
-    const filtered = applyFilters(rawExpanded);
-    return filtered.sort((a, b) =>
-      dayjs(b.Ledger_Date).valueOf() - dayjs(a.Ledger_Date).valueOf()
-    );
-  }, [rawExpanded, columnFilters]);
+  const filteredExpanded = useMemo(
+    () => applyFilters(rawExpanded),
+    [rawExpanded, columnFilters]
+  );
 
 
   /* ================= PAGINATION ================= */
@@ -465,29 +489,6 @@ const OnlineSalesReportPage: React.FC = () => {
     setActiveHeader(columnKey);
     setSearchText("");
     setFilterAnchor(e.currentTarget);
-  };
-
-  const formatISTDateTime = (dateString: string) => {
-    if (!dateString) return "";
-
-    const date = new Date(dateString);
-
-    const ist = new Date(
-      date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-    );
-
-    const day = String(ist.getDate()).padStart(2, "0");
-    const month = String(ist.getMonth() + 1).padStart(2, "0");
-    const year = ist.getFullYear();
-
-    let hours = ist.getHours();
-    const minutes = String(ist.getMinutes()).padStart(2, "0");
-
-    const ampm = hours >= 12 ? "p.m." : "a.m.";
-
-    hours = hours % 12 || 12;
-
-    return `${day}-${month}-${year} ${String(hours).padStart(2, "0")}.${minutes} ${ampm}`;
   };
 
   /* ================= TABLE ================= */
@@ -628,13 +629,6 @@ const OnlineSalesReportPage: React.FC = () => {
                         </TableCell>
                       );
 
-                    case "Created_on":
-                      return (
-                        <TableCell key={col.key}>
-                          {formatISTDateTime(row.Created_on)}
-                        </TableCell>
-                      );
-
                     default:
                       return <TableCell key={col.key}>{row[col.key]}</TableCell>;
                   }
@@ -741,110 +735,25 @@ const OnlineSalesReportPage: React.FC = () => {
     return [...baseColumns, ...dynamicCols];
   };
 
-  const handleQuickSave = async () => {
-    try {
-      /* ===============================
-         VALIDATION
-      =============================== */
+  const applyTemplateToColumns = (
+    baseCols: ColumnConfig[],
+    templateCols: any[]
+  ) => {
+    const mapped = templateCols.map((t: any) => ({
+      key: t.key,
+      label: t.label,
+      enabled: t.enabled,
+      order: t.order,
+      type: baseCols.find(x => x.key === t.key)?.type,
+    }));
 
-      if (!reportName.trim()) {
-        toast.error("Enter Report Name");
-        return;
-      }
+    const missing = baseCols
+      .filter(b => !mapped.some((m: any) => m.key === b.key))
+      .map(b => ({ ...b, enabled: false }));
 
-      if (!parentReportName.trim()) {
-        toast.error("Parent Report Missing");
-        return;
-      }
-
-      /* ===============================
-         CREATE NEW TEMPLATE
-      =============================== */
-
-      if (!isEditTemplate || !selectedTemplateId) {
-        const userData = JSON.parse(localStorage.getItem("user") || "{}");
-
-        const createPayload = {
-          reportName: reportName.trim(),
-          parentReport: parentReportName,
-          abstractSP: spConfig.abstractSP,
-          expandedSP: spConfig.expandedSP,
-          createdBy: Number(userData.id || 0),
-
-          abstractColumns: abstractColumns.map((c) => ({
-            key: c.key,
-            label: c.label,
-            enabled: c.enabled,
-            order: c.order,
-            groupBy: c.groupBy ?? 0,
-            dataType: "nvarchar"
-          })),
-
-          expandedColumns: expandedColumns.map((c) => ({
-            key: c.key,
-            label: c.label,
-            enabled: c.enabled,
-            order: c.order,
-            groupBy: c.groupBy ?? 0,
-            dataType: "nvarchar"
-          }))
-        };
-
-        await SettingsService.saveReportSettings(createPayload);
-        console.log("CREATE PAYLOAD:", createPayload);
-
-        toast.success("Template Saved ✅");
-        setIsEditTemplate(true);
-        setSaveDialogOpen(false);
-        setTimeout(() => {
-          window.location.reload();
-        }, 500);
-        return;
-      }
-
-      /* ===============================
-         EDIT EXISTING TEMPLATE
-         Using existing service only
-      =============================== */
-
-      await SettingsService.updateReport({
-        reportId: selectedTemplateId,
-        typeId: 1,
-        columns: abstractColumns.map((c) => ({
-          key: c.key,
-          label: c.label,
-          enabled: c.enabled,
-          order: c.order,
-          groupBy: c.groupBy ?? 0
-        }))
-      });
-
-      await SettingsService.updateReport({
-        reportId: selectedTemplateId,
-        typeId: 2,
-        columns: expandedColumns.map((c) => ({
-          key: c.key,
-          label: c.label,
-          enabled: c.enabled,
-          order: c.order,
-          groupBy: c.groupBy ?? 0
-        }))
-      });
-
-      toast.success("Template Saved Successfully ✅");
-      setSaveDialogOpen(false);
-
-      setSaveDialogOpen(false);
-
-      setTimeout(() => {
-        window.location.reload();
-      }, 500);
-
-    } catch (error) {
-      console.error(error);
-      toast.error("Error saving ❌");
-    }
+    return [...mapped, ...missing];
   };
+
 
   /* ================= RENDER ================= */
   return (
@@ -859,28 +768,15 @@ const OnlineSalesReportPage: React.FC = () => {
             setSelectedTemplateId(null);
             setIsEditTemplate(false);
             setReportName("");
+            setParentReportName("");
             setTemplateConfig(null);
-
-            setAbstractColumns(ABSTRACT_INITIAL_COLUMNS);
-            setExpandedColumns(EXPANDED_INITIAL_COLUMNS);
-
-            setToggleMode("Abstract");
-
             return;
           }
 
-          loadTemplate(
-            template.Report_Id,
-            template.Report_Name
-          );
+          loadTemplate(template.Report_Id);
         }}
         onQuickSave={(parentName) => {
           setParentReportName(parentName);
-
-          if (!isEditTemplate) {
-            setReportName("");
-          }
-
           setSaveDialogOpen(true);
         }}
         settingsSlot={
@@ -1243,6 +1139,7 @@ const OnlineSalesReportPage: React.FC = () => {
           ))}
       </Menu>
 
+
       {/* *****TEMPLATE***** */}
 
       <Dialog open={saveDialogOpen} onClose={() => setSaveDialogOpen(false)}>
@@ -1277,4 +1174,4 @@ const OnlineSalesReportPage: React.FC = () => {
   );
 };
 
-export default OnlineSalesReportPage;
+export default OnlinePurchaseReportPage;

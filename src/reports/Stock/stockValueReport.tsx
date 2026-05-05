@@ -14,26 +14,33 @@ import {
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import dayjs from "dayjs";
-import AppLayout, { useToggleMode } from "../Layout/appLayout";
-import PageHeader from "../Layout/PageHeader";
-import CommonPagination from "../Components/CommonPagination";
-import ReportFilterDrawer from "../Components/ReportFilterDrawer";
-import { exportToPDF } from "../utils/exportToPDF";
-import { exportToExcel } from "../utils/exportToExcel";
-import { mapForExport } from "../utils/exportMapper";
+import AppLayout, { useToggleMode } from "../../Layout/appLayout";
+import PageHeader from "../../Layout/PageHeader";
+import CommonPagination from "../../Components/CommonPagination";
+import ReportFilterDrawer from "../../Components/ReportFilterDrawer";
+import { exportToPDF } from "../../utils/exportToPDF";
+import { exportToExcel } from "../../utils/exportToExcel";
+import { mapForExport } from "../../utils/exportMapper";
 import {
-    itemwisestockreportservice,
-    godownwisestockreportservice,
+    itemwisestockvaluereportservice,
+    godownwisestockvaluereportservice,
     stockGroupingService,
     StockGroupConfig,
     stockWiseReport,
-} from "../services/stockWiseReport.service";
+} from "../../services/stockValueReport.service";
 
 
 /* ================= UTIL ================= */
 
 const sum = (rows: stockWiseReport[], key: keyof stockWiseReport) =>
     rows.reduce((s, r) => s + Number(r[key] || 0), 0);
+
+const getClosingValue = (row: stockWiseReport) =>
+    (Number(row.Bal_Qty || 0) * Number((row as any).CL_Rate || 0));
+
+const sumClosingValue = (rows: stockWiseReport[]) =>
+    rows.reduce((s, r) => s + getClosingValue(r), 0);
+
 
 /* ================= COMPONENT ================= */
 
@@ -42,7 +49,7 @@ type Level2Meta = {
     type: number;
 };
 
-const StockInHandReport: React.FC = () => {
+const StockValueReport: React.FC = () => {
     const today = dayjs().format("YYYY-MM-DD");
     const { toggleMode, setToggleMode } = useToggleMode();
     const isExpanded = toggleMode === "Expanded";
@@ -60,7 +67,7 @@ const StockInHandReport: React.FC = () => {
     const [filterLevels, setFilterLevels] = useState<Record<number, any[]>>({});
     const [selectedFilters, setSelectedFilters] = useState<Record<string, any>>({});
     const [loading, setLoading] = useState(false);
-
+    const [selectedLevel2, setSelectedLevel2] = useState<string[]>([]);
 
     /* ===== LEVEL 2 META (FROM CONFIG) ===== */
 
@@ -96,81 +103,64 @@ const StockInHandReport: React.FC = () => {
 
 
     useEffect(() => {
-        const reportName =
-            isExpanded ? "StockInhand-Godown" : "StockInhand";
+        const reportName = isExpanded
+            ? "StockInhand-Godown"
+            : "StockInhand";
 
-        const loadConfig = async () => {
-            try {
-                setLoading(true);
-
-                const res =
-                    await stockGroupingService.getGroupingConfig(reportName);
-
+        stockGroupingService
+            .getGroupingConfig(reportName)
+            .then((res) => {
                 const cfg = res.data.data || [];
 
-                const groups = cfg
-                    .filter((g) => g.isGroupFilter)
-                    .sort(
-                        (a, b) =>
-                            (a.Level_Id ?? 0) - (b.Level_Id ?? 0)
-                    );
-
-                setGroupConfig(groups);
-
-                const filtersOnly = cfg.filter(
-                    (g) => g.isGroupFilter === false
+                // GROUPING
+                setGroupConfig(
+                    cfg
+                        .filter(g => g.isGroupFilter)
+                        .sort((a, b) => (a.Level_Id ?? 0) - (b.Level_Id ?? 0))
                 );
+
+                // LEVEL 1 FILTER
+                // ✅ GROUP ALL FILTERS BY LEVEL
+                const filtersOnly = cfg.filter(g => g.isGroupFilter === false);
 
                 const grouped: Record<number, any[]> = {};
 
                 filtersOnly.forEach((f) => {
                     const lvl = f.FilterLevel || 1;
-
                     if (!grouped[lvl]) grouped[lvl] = [];
-
                     grouped[lvl].push(f);
                 });
 
                 setFilterLevels(grouped);
 
+                // reset selected values
+                setSelectedFilters({});
+
+                // LEVEL 2 FILTER (CASCADING META)
                 const lvl2 = cfg.filter(
-                    (g) =>
-                        g.FilterLevel === 2 &&
-                        g.isGroupFilter === false
+                    g => g.FilterLevel === 2 && g.isGroupFilter === false
                 );
 
-                const meta = lvl2
-                    .filter((l) => l.filterType)
-                    .map((l) => ({
+                const meta: Level2Meta[] = lvl2
+                    .filter(l => l.filterType)
+                    .map(l => ({
                         columnName: l.columnName,
                         type: Number(l.filterType),
                     }));
 
                 setLevel2Meta(meta);
 
-                setLevel2TypeOrder(
-                    Array.from(
-                        new Set(meta.map((m) => m.type))
-                    ).sort((a, b) => a - b)
-                );
+                const orderedTypes = Array.from(
+                    new Set(meta.map(m => m.type))
+                ).sort((a, b) => a - b);
 
+                setLevel2TypeOrder(orderedTypes);
                 setSelectedLevel2ByType({});
+            });
 
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        loadConfig();
+        // optional cleanup not required
     }, [toggleMode]);
 
-    useEffect(() => {
-        if (Object.keys(filterLevels).length > 0) {
-            loadData();
-        }
-    }, [filterLevels]);
 
     useEffect(() => {
         setModeState(prev => ({
@@ -191,10 +181,23 @@ const StockInHandReport: React.FC = () => {
         if (state) {
             setExpanded(state.expanded || {});
             setPage(state.page || 1);
-            setSelectedFilters(state.selectedFilters || {});
+            setSelectedFilters(state.selectedFilters || "");
             setSelectedLevel2ByType(state.selectedLevel2ByType || {});
         }
+
+        // ✅ ALWAYS CALL API WHEN MODE CHANGES
+        loadData();
+
     }, [toggleMode]);
+
+    useEffect(() => {
+        if (Object.keys(filterLevels).length > 0) {
+            loadData();
+        }
+    }, [filterLevels]);
+
+
+    /* ================= LOAD DATA ================= */
 
     const loadData = React.useCallback(async () => {
         try {
@@ -224,7 +227,7 @@ const StockInHandReport: React.FC = () => {
                 });
 
                 const res =
-                    await itemwisestockreportservice.getItemwiseReports(payload);
+                    await itemwisestockvaluereportservice.getItemwiseReports(payload);
 
                 setRawData(res.data?.data || []);
             }
@@ -254,7 +257,7 @@ const StockInHandReport: React.FC = () => {
                 payload.Godown_Id = godownId;
 
                 const res =
-                    await godownwisestockreportservice.getGodownwiseReports(
+                    await godownwisestockvaluereportservice.getGodownwiseReports(
                         payload
                     );
 
@@ -265,7 +268,7 @@ const StockInHandReport: React.FC = () => {
             setPage(1);
 
         } catch (err) {
-            console.error("Stock report load error:", err);
+            console.error("Stock Value report load error:", err);
             setRawData([]);
         } finally {
             setLoading(false);
@@ -279,9 +282,10 @@ const StockInHandReport: React.FC = () => {
     ]);
 
     useEffect(() => {
+        setSelectedLevel2([]);
         setExpanded({});
         setPage(1);
-    }, [toggleMode]);
+    }, [selectedFilters, toggleMode]);
 
     useEffect(() => {
         const saved = sessionStorage.getItem("stockInHandState");
@@ -289,10 +293,10 @@ const StockInHandReport: React.FC = () => {
         if (!saved) return;
         const state = JSON.parse(saved);
 
-        setRawData(state.rawData || []); 41
+        setRawData(state.rawData || []);
         setExpanded(state.expanded || {});
         setPage(state.page || 1);
-        setSelectedFilters(state.selectedFilters || {});
+        setSelectedFilters(state.selectedFilters || "");
         setSelectedLevel2ByType(state.selectedLevel2ByType || {});
         setToggleMode(state.toggleMode || "Abstract");
         setFromDate(state.fromDate || today);
@@ -366,49 +370,10 @@ const StockInHandReport: React.FC = () => {
         stockFilter
     ]);
 
-    const handleTransactionClick = (
-        row: stockWiseReport,
-        mode: "ABSTRACT" | "EXPANDED"
-    ) => {
-
-        const path =
-            mode === "EXPANDED"
-                ? "/stockinhand/godown-item-transaction"
-                : "/stockinhand/item-transaction";
-
-        // ✅ Save report state
-        sessionStorage.setItem(
-            "stockInHandState",
-            JSON.stringify({
-                expanded,
-                page,
-                selectedFilters,
-                selectedLevel2ByType,
-                toggleMode,
-                fromDate,
-                toDate
-            })
-        );
-
-        const params = new URLSearchParams({
-            ProductId: String(row.Product_Id ?? ""),
-            productName: row.stock_item_name ?? "",
-            fromDate,
-            toDate,
-            Godown_Id: mode === "EXPANDED" ? String(row.Godown_Id ?? "") : "",
-            godownName: mode === "EXPANDED" ? String(row.Godown_Name ?? "") : ""
-        });
-
-        const url = `${window.location.origin}${path}?${params.toString()}`;
-
-        // ✅ open new tab
-        window.open(url, "_blank", "noopener,noreferrer");
-    };
-
     useEffect(() => {
-    setExpanded({});
-    setPage(1);
-}, [selectedLevel2ByType]);
+        setExpanded({});
+        setPage(1);
+    }, [selectedLevel2]);
 
     /* ================= GROUPING ================= */
 
@@ -569,7 +534,11 @@ const StockInHandReport: React.FC = () => {
     };
 
 
-    const flattenGroupsForExport = (groups: any[], parentKeys: Record<string, string> = {}, isExpandedMode = isExpanded): any[] => {
+    const flattenGroupsForExport = (
+        groups: any[],
+        parentKeys: Record<string, string> = {},
+        isExpandedMode = isExpanded
+    ): any[] => {
         const result: any[] = [];
 
         groups.forEach(g => {
@@ -585,13 +554,19 @@ const StockInHandReport: React.FC = () => {
                 result.push(...flattenGroupsForExport(g.children, keys, isExpandedMode));
             } else {
                 g.rows.forEach((r: stockWiseReport) => {
+                    const rate = Number((r as any).CL_Rate || 0);
+                    const closingQty = Number(r.Bal_Qty || 0);
+                    const closingValue = closingQty * rate;
+
                     result.push({
                         ...keys,
                         Item: r.stock_item_name,
-                        Opening: r.OB_Bal_Qty,
-                        In: r.Pur_Qty,
-                        Out: r.Sal_Qty,
-                        Closing: r.Bal_Qty,
+                        Opening: Number(r.OB_Bal_Qty || 0).toFixed(2),
+                        In: Number(r.Pur_Qty || 0).toFixed(2),
+                        Out: Number(r.Sal_Qty || 0).toFixed(2),
+                        Rate: rate.toFixed(2),
+                        Closing: closingQty.toFixed(2),
+                        ClosingValue: closingValue.toFixed(2)
                     });
                 });
             }
@@ -611,7 +586,9 @@ const StockInHandReport: React.FC = () => {
             { header: "Opening", key: "Opening" },
             { header: "In", key: "In" },
             { header: "Out", key: "Out" },
+            { header: "Rate", key: "Rate" },
             { header: "Closing", key: "Closing" },
+            { header: "Closing Value", key: "ClosingValue" },
         ];
 
         if (isExpanded) {
@@ -625,6 +602,7 @@ const StockInHandReport: React.FC = () => {
         return [...groupCols, ...baseCols];
     };
 
+
     const handleExportPDF = () => {
         const rows = flattenGroupsForExport(finalGroups);
         const columns = getExportColumns();
@@ -632,7 +610,7 @@ const StockInHandReport: React.FC = () => {
         const { headers, data } = mapForExport(columns, rows);
 
         exportToPDF(
-            `Stock in Hand (${toggleMode})`,
+            `Stock Value (${toggleMode})`,
             headers,
             data
         );
@@ -645,7 +623,7 @@ const StockInHandReport: React.FC = () => {
         const { headers, data } = mapForExport(columns, rows);
 
         exportToExcel(
-            `Stock in Hand (${toggleMode})`,
+            `Stock Value (${toggleMode})`,
             headers,
             data
         );
@@ -658,6 +636,13 @@ const StockInHandReport: React.FC = () => {
         rows.slice((page - 1) * rowsPerPage, page * rowsPerPage);
 
     /* ================= ITEM TABLE ================= */
+    const formatINR = (value: number) => {
+        return value.toLocaleString("en-IN", {
+            style: "currency",
+            currency: "INR",
+            minimumFractionDigits: 2,
+        });
+    };
 
     const renderItemTable = (rows: stockWiseReport[]) => {
         const pageRows = paginated(rows);
@@ -667,6 +652,7 @@ const StockInHandReport: React.FC = () => {
         const totalIn = sum(rows, "Pur_Qty");
         const totalOut = sum(rows, "Sal_Qty");
         const totalClosing = sum(rows, "Bal_Qty");
+        const totalClosingValue = sumClosingValue(rows);
 
         return (
             <Table size="small">
@@ -684,7 +670,13 @@ const StockInHandReport: React.FC = () => {
                             Out
                         </TableCell>
                         <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">
+                            Rate
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">
                             Closing
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 600 }} align="right">
+                            Closing Value
                         </TableCell>
                     </TableRow>
                 </TableHead>
@@ -706,48 +698,61 @@ const StockInHandReport: React.FC = () => {
                             {formatTotalQtyWithBag(totalOut, rows, "Sal_Qty")}
                         </TableCell>
 
+                        {/* CL RATE */}
+                        <TableCell align="right">-</TableCell>
+
                         <TableCell align="right">
                             {formatTotalQtyWithBag(totalClosing, rows, "Bal_Qty")}
+                        </TableCell>
+
+                        <TableCell align="right">
+                            {formatINR(totalClosingValue)}
                         </TableCell>
                     </TableRow>
 
                     {/* ✅ ITEM ROWS */}
-                    {pageRows.map((r, i) => (
-                        <TableRow key={i}>
-                            <TableCell>
-                                {(page - 1) * rowsPerPage + i + 1}
-                            </TableCell>
-                            <TableCell
-                                sx={{
-                                    cursor: "pointer",
-                                    color: "#1D4ED8",
-                                    fontWeight: 600,
-                                    "&:hover": { textDecoration: "underline" }
-                                }}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleTransactionClick(
-                                        r,
-                                        isExpanded ? "EXPANDED" : "ABSTRACT"
-                                    );
-                                }}
-                            >
-                                {r.stock_item_name}
-                            </TableCell>
-                            <TableCell align="right">
-                                {formatQtyWithBag(r.OB_Bal_Qty, r)}
-                            </TableCell>
-                            <TableCell align="right">
-                                {formatQtyWithBag(r.Pur_Qty, r)}
-                            </TableCell>
-                            <TableCell align="right">
-                                {formatQtyWithBag(r.Sal_Qty, r)}
-                            </TableCell>
-                            <TableCell align="right">
-                                {formatQtyWithBag(r.Bal_Qty, r)}
-                            </TableCell>
-                        </TableRow>
-                    ))}
+                    {pageRows.map((r, i) => {
+                        const clRate = Number((r as any).CL_Rate || 0);
+                        const closingValue = Number(r.Bal_Qty || 0) * clRate;
+
+                        return (
+                            <TableRow key={i}>
+                                <TableCell>
+                                    {(page - 1) * rowsPerPage + i + 1}
+                                </TableCell>
+
+                                <TableCell sx={{ fontWeight: 600 }}>
+                                    {r.stock_item_name}
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatQtyWithBag(r.OB_Bal_Qty, r)}
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatQtyWithBag(r.Pur_Qty, r)}
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatQtyWithBag(r.Sal_Qty, r)}
+                                </TableCell>
+
+                                {/* ✅ NEW: CL RATE */}
+                                <TableCell align="right">
+                                    {formatINR(clRate)}
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatQtyWithBag(r.Bal_Qty, r)}
+                                </TableCell>
+
+                                {/* ✅ NEW: CLOSING VALUE */}
+                                <TableCell align="right">
+                                    {formatINR(closingValue)}
+                                </TableCell>
+                            </TableRow>
+                        );
+                    })}
                 </TableBody>
             </Table>
         );
@@ -783,6 +788,9 @@ const StockInHandReport: React.FC = () => {
                                 g.rows,
                                 "Bal_Qty"
                             )}
+                        </TableCell>
+                        <TableCell align="right">
+                            {formatINR(sumClosingValue(g.rows))}
                         </TableCell>
                     </TableRow>
 
@@ -975,6 +983,9 @@ const StockInHandReport: React.FC = () => {
                                         <TableCell sx={{ color: "#fff" }} align="right">
                                             Balance
                                         </TableCell>
+                                        <TableCell sx={{ color: "#fff" }} align="right">
+                                            Closing Value
+                                        </TableCell>
                                     </TableRow>
                                 </TableHead>
 
@@ -1001,4 +1012,4 @@ const StockInHandReport: React.FC = () => {
     );
 };
 
-export default StockInHandReport;
+export default StockValueReport;

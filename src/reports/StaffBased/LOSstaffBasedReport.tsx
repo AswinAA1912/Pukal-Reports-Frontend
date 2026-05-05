@@ -47,18 +47,18 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { CSS } from "@dnd-kit/utilities";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import AppLayout from "../Layout/appLayout";
-import PageHeader from "../Layout/PageHeader";
-import { SettingsService } from "../services/reportSettings.services";
-import ReportFilterDrawer from "../Components/ReportFilterDrawer";
-import CommonPagination from "../Components/CommonPagination";
+import AppLayout from "../../Layout/appLayout";
+import PageHeader from "../../Layout/PageHeader";
+import { SettingsService } from "../../services/reportSettings.services";
+import ReportFilterDrawer from "../../Components/ReportFilterDrawer";
+import CommonPagination from "../../Components/CommonPagination";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
 import {
     staffBasedReportService, costCenterListService
-} from "../services/staffBasedReport.services";
+} from "../../services/staffBasedReport.services";
 
 /* ================= TYPES ================= */
 
