@@ -33,7 +33,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-import { onlinePaymentReportService } from "../../services/expesnseReport.service";
+import { onlinePaymentReportService } from "../../services/expenseReport.service";
 
 const formatINR = (v: number) =>
     new Intl.NumberFormat("en-IN", {
@@ -338,7 +338,7 @@ const ExpensesReport = () => {
 
             <AppLayout fullWidth>
                 <Box p={1} sx={{
-                    overflow: "hidden",  
+                    overflow: "hidden",
                 }}>
 
                     {data && section && (
@@ -539,7 +539,9 @@ const ExpensesReport = () => {
                                                                                 >
                                                                                     {col.key === "debit_amount"
                                                                                         ? formatINR(row[col.key])
-                                                                                        : row[col.key]}
+                                                                                        : col.key === "payment_date"
+                                                                                            ? dayjs(row[col.key]).format("DD-MM-YYYY")
+                                                                                            : row[col.key]}
                                                                                 </TableCell>
                                                                             ))}
                                                                         </TableRow>
