@@ -267,17 +267,11 @@ const StaffBasedReport: React.FC = () => {
 
     useEffect(() => {
         loadStaffBasedReport();
-    }, [filters.Date.from, filters.Date.to]);
-
-    useEffect(() => {
-        if (toggleMode === "Expanded" && expandedRows.length === 0) {
-            loadStaffBasedReport();
-        }
-
-        if (toggleMode === "Abstract" && abstractRows.length === 0) {
-            loadStaffBasedReport();
-        }
-    }, [toggleMode]);
+    }, [
+        filters.Date.from,
+        filters.Date.to,
+        toggleMode
+    ]);
 
     const loadStaffBasedReport = async () => {
         try {
@@ -307,7 +301,47 @@ const StaffBasedReport: React.FC = () => {
                     current = current.add(1, "day");
                 }
 
-                const rows = staffList.map((staff, index) => {
+                const staffFields = [
+                    "Others1",
+                    "Others2",
+                    "Others3",
+                    "Others4",
+                    "Others5",
+                    "Load_Man",
+                    "Checker",
+                    "Delivery_Man",
+                    "Others6",
+                    "Driver"
+                ];
+
+                /* ===============================
+                   BUILD FAST LOOKUP MAP
+                ================================ */
+                const qtyMap: Record<string, number> = {};
+
+                reportRows.forEach((row: any) => {
+                    const dateKey = dayjs(row.Stock_Journal_date).format("DD.MM");
+                    const qty = Number(row.Qty || 0);
+
+                    const processedStaffs = new Set<string>();
+
+                    staffFields.forEach((field) => {
+                        const staff = String(row[field] || "").trim();
+
+                        if (!staff || processedStaffs.has(staff)) return;
+
+                        processedStaffs.add(staff);
+
+                        const mapKey = `${staff}_${dateKey}`;
+
+                        qtyMap[mapKey] = (qtyMap[mapKey] || 0) + qty;
+                    });
+                });
+
+                /* ===============================
+                   BUILD ABSTRACT ROWS
+                ================================ */
+                const rows = staffList.map((staff: any, index: number) => {
                     const obj: any = {
                         SNo: index + 1,
                         Staff_Name: staff.Cost_Center_Name
@@ -316,19 +350,17 @@ const StaffBasedReport: React.FC = () => {
                     let total = 0;
 
                     dates.forEach((dateCol) => {
-                        const qty = reportRows
-                            .filter(
-                                (x) =>
-                                    x.Others1 === staff.Cost_Center_Name &&
-                                    dayjs(x.Stock_Journal_date).format("DD.MM") === dateCol
-                            )
-                            .reduce((sum, r) => sum + Number(r.Qty || 0), 0);
+                        const mapKey = `${staff.Cost_Center_Name}_${dateCol}`;
+
+                        const qty = qtyMap[mapKey] || 0;
 
                         obj[dateCol] = qty;
+
                         total += qty;
                     });
 
                     obj.Total = total;
+
                     return obj;
                 });
 
@@ -418,16 +450,20 @@ const StaffBasedReport: React.FC = () => {
                 reportRows.forEach((row: any) => {
                     const qty = Number(row.Qty || 0);
 
+                    const processedStaffs = new Set<string>();
+
                     staffFields.forEach((field) => {
                         const staff = String(row[field] || "").trim();
 
-                        if (!staff) return;
+                        if (!staff || processedStaffs.has(staff)) return;
+
+                        processedStaffs.add(staff);
 
                         if (!staffMap[staff]) {
                             staffMap[staff] = {
                                 Staff_Name: staff,
                                 Godown_Name: row.Godown_Name || "",
-                                Qty: 0, // ✅ initialize total qty
+                                Qty: 0,
                             };
 
                             allColumns.forEach((c) => {
@@ -439,7 +475,7 @@ const StaffBasedReport: React.FC = () => {
                         }
 
                         staffMap[staff][field] += qty;
-                        staffMap[staff]["Qty"] += qty; // ✅ total qty per staff
+                        staffMap[staff]["Qty"] += qty;
                     });
                 });
 
