@@ -250,49 +250,206 @@ const ExpensesReport = () => {
         });
     };
 
-    /* ================= EXPORT ================= */
+    /* ================= EXPORT EXCEL ================= */
 
     const exportExcel = () => {
-        if (!data) return;
 
-        const rows: any[] = [];
+        try {
 
-        ["Direct", "Indirect"].forEach((type: any) => {
-            data[type].groups.forEach((g: any) =>
-                g.children.forEach((l: any) =>
-                    rows.push(...l.rows)
-                )
+            if (!section) {
+                toast.error("No data available");
+                return;
+            }
+
+            const rows: any[] = [];
+
+            section.groups.forEach((group: any) => {
+
+                /* GROUP HEADER */
+                rows.push({
+                    TYPE: group.name,
+                    VALUE: formatINR(group.total)
+                });
+
+                group.subGroups.forEach((sub: any) => {
+
+                    /* SUB GROUP HEADER */
+                    rows.push({
+                        TYPE: "   " + sub.name,
+                        VALUE: formatINR(sub.total)
+                    });
+
+                    /* COLUMN HEADER */
+                    const headerRow: any = {};
+
+                    enabledCols.forEach((col: any) => {
+                        headerRow[col.label] = col.label;
+                    });
+
+                    rows.push(headerRow);
+
+                    /* TABLE ROWS */
+                    sub.ledgers.forEach((row: any) => {
+
+                        const exportRow: any = {};
+
+                        enabledCols.forEach((col: any) => {
+
+                            exportRow[col.label] =
+                                col.key === "debit_amount"
+                                    ? Number(row[col.key] || 0)
+                                    : col.key === "payment_date"
+                                        ? dayjs(row[col.key]).format("DD-MM-YYYY")
+                                        : row[col.key];
+
+                        });
+
+                        rows.push(exportRow);
+
+                    });
+
+                    /* EMPTY SPACE */
+                    rows.push({});
+
+                });
+
+                rows.push({});
+
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+
+            const workbook = XLSX.utils.book_new();
+
+            XLSX.utils.book_append_sheet(
+                workbook,
+                worksheet,
+                `${activeType} Expenses`
             );
-        });
 
-        const sheet = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, sheet, "Expenses");
-        XLSX.writeFile(wb, "Expenses.xlsx");
+            XLSX.writeFile(
+                workbook,
+                `${activeType}_Expenses_Report.xlsx`
+            );
+
+            toast.success("Excel Exported ✅");
+
+        } catch (err) {
+            console.error(err);
+            toast.error("Excel Export Failed ❌");
+        }
     };
 
+
+
+    /* ================= EXPORT PDF ================= */
+
     const exportPDF = () => {
-        if (!data) return;
 
-        const doc = new jsPDF();
-        const rows: any[] = [];
+        try {
 
-        ["Direct", "Indirect"].forEach((type: any) => {
-            data[type].groups.forEach((g: any) =>
-                g.children.forEach((l: any) =>
-                    l.rows.forEach((r: any) => {
-                        rows.push(enabledCols.map(c => r[c.key]));
-                    })
-                )
+            if (!section) {
+                toast.error("No data available");
+                return;
+            }
+
+            const doc = new jsPDF("l", "mm", "a4");
+
+            let startY = 10;
+
+            /* TITLE */
+            doc.setFontSize(14);
+
+            doc.text(
+                `${activeType} Expenses Report`,
+                14,
+                startY
             );
-        });
 
-        autoTable(doc, {
-            head: [enabledCols.map(c => c.label)],
-            body: rows,
-        });
+            startY += 10;
 
-        doc.save("Expenses.pdf");
+            section.groups.forEach((group: any) => {
+
+                /* GROUP TITLE */
+                doc.setFontSize(12);
+
+                doc.text(
+                    `${group.name} - ${formatINR(group.total)}`,
+                    14,
+                    startY
+                );
+
+                startY += 6;
+
+                group.subGroups.forEach((sub: any) => {
+
+                    /* SUB GROUP TITLE */
+                    doc.setFontSize(10);
+
+                    doc.text(
+                        `${sub.name} - ${formatINR(sub.total)}`,
+                        18,
+                        startY
+                    );
+
+                    startY += 4;
+
+                    /* TABLE */
+                    autoTable(doc, {
+                        startY,
+                        head: [
+                            enabledCols.map((c: any) => c.label)
+                        ],
+
+                        body: sub.ledgers.map((row: any) =>
+                            enabledCols.map((col: any) => {
+
+                                if (col.key === "debit_amount") {
+                                    return formatINR(row[col.key] || 0);
+                                }
+
+                                if (col.key === "payment_date") {
+                                    return dayjs(row[col.key])
+                                        .format("DD-MM-YYYY");
+                                }
+
+                                return row[col.key] ?? "";
+
+                            })
+                        ),
+
+                        styles: {
+                            fontSize: 8,
+                            cellPadding: 2,
+                        },
+
+                        headStyles: {
+                            fontStyle: "bold",
+                        },
+
+                        margin: {
+                            left: 18,
+                            right: 14
+                        }
+                    });
+
+                    startY =
+                        (doc as any).lastAutoTable.finalY + 10;
+
+                });
+
+            });
+
+            doc.save(
+                `${activeType}_Expenses_Report.pdf`
+            );
+
+            toast.success("PDF Exported ✅");
+
+        } catch (err) {
+            console.error(err);
+            toast.error("PDF Export Failed ❌");
+        }
     };
 
     const activeType = toggleMode === "Abstract" ? "Direct" : "Indirect";
