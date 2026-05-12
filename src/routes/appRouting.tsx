@@ -26,6 +26,7 @@ import StockValueRateMasterReport from "../reports/Stock/StockValueRateMaster";
 import StaffBasedReport from "../reports/StaffBased/staffBasedReport";
 import LOSStaffBasedReport from "../reports/StaffBased/LOSstaffBasedReport";
 import ExpensesReport from "../reports/Expenses/ExpensesReport";
+import CostingReport from "../reports/Expenses/CostingReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -348,6 +349,17 @@ const AppRouting: React.FC<AppRoutingProps> = ({
             <RequireAuth>
               <AppLayout fullWidth>
                 <ExpensesReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/costing"
+          element={
+            <RequireAuth>
+              <AppLayout fullWidth>
+                <CostingReport />
               </AppLayout>
             </RequireAuth>
           }

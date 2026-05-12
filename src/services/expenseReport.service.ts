@@ -167,8 +167,8 @@ export const CostingReportService = {
             success: boolean;
             data: any;
         }>(
-            // `${getBaseURL()}api/reports/externalAPI/costing`,
-            `http://192.168.1.5:9001/api/reports/externalAPI/costing`,
+            `${getBaseURL()}api/reports/externalAPI/costing`,
+            // `http://192.168.1.5:9001/api/reports/externalAPI/costing`,
             { params }
         );
 
