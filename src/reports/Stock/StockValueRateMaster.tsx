@@ -96,6 +96,7 @@ const StockValueRateMasterReport: React.FC = () => {
             return {
                 POS_Brand_Name: p.POS_Brand_Name || "Others",
                 Product_Name: p.Product_Name,
+                Min_Rate: p.Min_Rate,
                 Rate: p.Rate,
                 CL_Rate: clRate,
             };
@@ -181,7 +182,7 @@ const StockValueRateMasterReport: React.FC = () => {
 
     /* ================= EXPORT ================= */
     const handleExportPDF = () => {
-        const headers = ["S.No", "Product Name", "Rate", "CL Rate"];
+        const headers = ["S.No", "Product Name", "Min Rate", "Rate", "CL Rate"];
 
         const data: any[] = [];
         let sno = 1;
@@ -228,6 +229,7 @@ const StockValueRateMasterReport: React.FC = () => {
             data.push([
                 sno++,
                 row.Product_Name,
+                formatINR(row.Min_Rate),
                 formatINR(row.Rate),
                 formatINR(row.CL_Rate),
             ]);
@@ -326,6 +328,7 @@ const StockValueRateMasterReport: React.FC = () => {
                                             >
                                                 Product Name
                                             </TableCell>
+                                            <TableCell sx={{ color: "#fff" }}>Min Rate</TableCell>
                                             <TableCell sx={{ color: "#fff" }}>Rate</TableCell>
                                             <TableCell sx={{ color: "#fff" }}>CL Rate</TableCell>
                                         </TableRow>
@@ -349,7 +352,7 @@ const StockValueRateMasterReport: React.FC = () => {
                                                             }}
                                                         >
                                                             <TableCell
-                                                                colSpan={4}
+                                                                colSpan={5}
                                                                 sx={{
                                                                     fontWeight: 800,
                                                                     color: "#000000",
@@ -368,6 +371,8 @@ const StockValueRateMasterReport: React.FC = () => {
                                                         </TableCell>
 
                                                         <TableCell>{row.Product_Name}</TableCell>
+
+                                                        <TableCell>{formatINR(row.Min_Rate)}</TableCell>
 
                                                         <TableCell>{formatINR(row.Rate)}</TableCell>
 

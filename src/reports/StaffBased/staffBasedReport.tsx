@@ -266,11 +266,26 @@ const StaffBasedReport: React.FC = () => {
     /* ================= LOAD DATA ================= */
 
     useEffect(() => {
+
+        // prevent initial loop
+        if (
+            toggleMode === "Expanded" &&
+            expandedColumns.length === 0
+        ) {
+            loadStaffBasedReport();
+            return;
+        }
+
         loadStaffBasedReport();
+
     }, [
         filters.Date.from,
         filters.Date.to,
-        toggleMode
+        filters.columnFilters,
+        toggleMode,
+
+        // IMPORTANT
+        expandedColumns.map(c => `${c.key}_${c.enabled}`).join("|")
     ]);
 
     const loadStaffBasedReport = async () => {
@@ -393,10 +408,12 @@ const StaffBasedReport: React.FC = () => {
 
             // ================= EXPANDED =================
             else {
+
                 const defaultEnabled = [
                     "Staff_Name",
                     "Godown_Name",
                     "Qty",
+                    "Load_Man",
                     "Others1",
                     "Others2",
                     "Others3",
@@ -413,76 +430,29 @@ const StaffBasedReport: React.FC = () => {
                         )
                         : [];
 
-                const allColumns = allKeys.map((key) => ({
-                    key,
-                    label: key.replace(/_/g, " "),
-                    isNumeric:
-                        key === "Qty" ||   // ✅ Qty numeric
-                        [
-                            "Others1",
-                            "Others2",
-                            "Others3",
-                            "Others4",
-                            "Others5",
-                            "Load_Man",
-                            "Checker",
-                            "Delivery_Man",
-                            "Others6",
-                            "Driver"
-                        ].includes(key)
-                }));
-
-                const staffFields = [
+                const categoryFields = [
+                    "Load_Man",
                     "Others1",
                     "Others2",
                     "Others3",
                     "Others4",
                     "Others5",
-                    "Load_Man",
                     "Checker",
                     "Delivery_Man",
                     "Others6",
                     "Driver"
                 ];
 
-                const staffMap: any = {};
+                /* ================= SPLIT COLUMNS (IMPORTANT) ================= */
+                const splitColumns = [
+                    "Invoice_no",
+                    "Journal_no",
+                    "Stock_Journal_Voucher_type"
+                ];
 
-                reportRows.forEach((row: any) => {
-                    const qty = Number(row.Qty || 0);
-
-                    const processedStaffs = new Set<string>();
-
-                    staffFields.forEach((field) => {
-                        const staff = String(row[field] || "").trim();
-
-                        if (!staff || processedStaffs.has(staff)) return;
-
-                        processedStaffs.add(staff);
-
-                        if (!staffMap[staff]) {
-                            staffMap[staff] = {
-                                Staff_Name: staff,
-                                Godown_Name: row.Godown_Name || "",
-                                Qty: 0,
-                            };
-
-                            allColumns.forEach((c) => {
-                                if (c.key !== "Qty") {
-                                    staffMap[staff][c.key] =
-                                        c.isNumeric ? 0 : row[c.key] || "";
-                                }
-                            });
-                        }
-
-                        staffMap[staff][field] += qty;
-                        staffMap[staff]["Qty"] += qty;
-                    });
-                });
-
-                const rows = Object.values(staffMap).map((r: any, i) => ({
-                    SNo: i + 1,
-                    ...r
-                }));
+                /* =========================================
+                   COLUMN CONFIG
+                ========================================= */
 
                 const cols: ColumnConfig[] = [
                     {
@@ -498,36 +468,206 @@ const StaffBasedReport: React.FC = () => {
                         order: 2
                     },
                     {
+                        key: "Invoice_no",
+                        label: "Invoice no",
+                        enabled: false,
+                        order: 3
+                    },
+                    {
+                        key: "Journal_no",
+                        label: "Journal no",
+                        enabled: false,
+                        order: 3
+                    },
+                    {
+                        key: "Stock_Journal_Voucher_type",
+                        label: "Voucher Type",
+                        enabled: false,
+                        order: 4
+                    },
+
+                    {
                         key: "Qty",
                         label: "Total Qty",
                         enabled: true,
-                        order: 3,
+                        order: 5,
                         isNumeric: true
                     },
 
-                    ...allColumns
+                    ...allKeys
                         .filter(
-                            (col) =>
-                                col.key !== "Staff_Name" &&
-                                col.key !== "Godown_Name" &&
-                                col.key !== "Qty"
+                            (key) =>
+                                ![
+                                    "Staff_Name",
+                                    "Godown_Name",
+                                    "Invoice_no",
+                                    "Journal_no",
+                                    "Stock_Journal_Voucher_type",
+                                    "Qty"
+                                ].includes(key)
                         )
-                        .map((col, i) => ({
-                            key: col.key,
-                            label: col.label,
-                            enabled: defaultEnabled.includes(col.key),
-                            order: i + 4,
-                            isNumeric: col.isNumeric
+                        .map((key, i) => ({
+                            key,
+                            label: key.replace(/_/g, " "),
+                            enabled: defaultEnabled.includes(key),
+                            order: i + 6,
+                            isNumeric:
+                                key === "Qty" ||
+                                categoryFields.includes(key)
                         }))
                 ];
 
-                setExpandedRows(rows);
-                let finalCols = cols;
+                /* ================= APPLY TEMPLATE ================= */
+                const previousColumnState = expandedColumns;
+
+                let finalCols: ColumnConfig[] = cols.map((col) => {
+                    const existing = previousColumnState.find(
+                        (c) => c.key === col.key
+                    );
+
+                    return existing
+                        ? {
+                            ...col,
+                            enabled: existing.enabled,
+                            order: existing.order,
+                            groupBy: existing.groupBy,
+                        }
+                        : col;
+                });
 
                 if (templateConfig?.expanded) {
-                    finalCols = applyTemplateToColumns(cols, templateConfig.expanded);
+                    finalCols = applyTemplateToColumns(
+                        cols,
+                        templateConfig.expanded
+                    );
                 }
 
+                /* ================= ENABLED SPLIT COLUMNS ================= */
+                const enabledSplitColumns = splitColumns.filter(col =>
+                    finalCols.some(c => c.key === col && c.enabled)
+                );
+
+                /* ================= PIVOT ================= */
+
+                const pivotMap = new Map<string, any>();
+
+                reportRows.forEach((row: any) => {
+
+                    const qty = Number(row.Qty || 0);
+
+                    const processedStaffs = new Set<string>();
+
+                    categoryFields.forEach((field) => {
+
+                        const staff = String(row[field] || "").trim();
+                        if (!staff) return;
+
+                        const duplicateKey =
+                            `${row.Invoice_no}_${row.Trans_Id}_${field}_${staff}`;
+
+                        if (processedStaffs.has(duplicateKey)) return;
+                        processedStaffs.add(duplicateKey);
+
+                        /* ================= BASE GROUP KEY ================= */
+                        const pivotParts: string[] = [
+                            staff,
+                            row.Godown_Name || ""
+                        ];
+
+                        /* ================= DYNAMIC SPLIT (IMPORTANT FIX) ================= */
+                        enabledSplitColumns.forEach((col: string) => {
+                            pivotParts.push(String(row[col] || ""));
+                        });
+
+                        const pivotKey = pivotParts.join("|");
+
+                        /* ================= CREATE ROW ================= */
+                        if (!pivotMap.has(pivotKey)) {
+
+                            const baseRow: any = {};
+
+                            allKeys.forEach((key) => {
+                                if (categoryFields.includes(key)) {
+                                    baseRow[key] = 0;
+                                } else {
+                                    baseRow[key] = row[key];
+                                }
+                            });
+
+                            baseRow.Staff_Name = staff;
+                            baseRow.Godown_Name = row.Godown_Name || "";
+                            baseRow.Invoice_no = row.Invoice_no || "";
+                            baseRow.Journal_no = row.Journal_no || "";
+                            baseRow.Stock_Journal_Voucher_type =
+                                row.Stock_Journal_Voucher_type || "";
+                            baseRow.Qty = 0;
+
+                            baseRow.__invoiceTracker = new Set<string>();
+                            baseRow.__categoryTracker = new Set<string>();
+
+                            pivotMap.set(pivotKey, baseRow);
+                        }
+
+                        const existing = pivotMap.get(pivotKey);
+
+                        /* ================= QTY ================= */
+                        const qtyKey = `${pivotKey}_${row.Trans_Id}`;
+                        const categoryKey = `${pivotKey}_${row.Trans_Id}_${field}`;
+
+                        if (!existing.__invoiceTracker.has(qtyKey)) {
+                            existing.Qty += qty;
+                            existing.__invoiceTracker.add(qtyKey);
+                        }
+
+                        if (!existing.__categoryTracker.has(categoryKey)) {
+                            existing[field] += qty;
+                            existing.__categoryTracker.add(categoryKey);
+                        }
+
+                        /* ================= OTHER FIELDS ================= */
+                        allKeys.forEach((key) => {
+
+                            if ([
+                                "Staff_Name",
+                                "Godown_Name",
+                                "Invoice_no",
+                                "Journal_no",
+                                "Stock_Journal_Voucher_type",
+                                "Qty",
+                                ...categoryFields
+                            ].includes(key)) return;
+
+                            const oldValue = existing[key];
+                            const newValue = row[key];
+
+                            if (
+                                oldValue === null ||
+                                oldValue === undefined ||
+                                oldValue === ""
+                            ) {
+                                existing[key] = newValue;
+                            }
+                            else if (String(oldValue) !== String(newValue)) {
+                                existing[key] = "Multiple";
+                            }
+                        });
+
+                    });
+                });
+
+                /* ================= FINAL ROWS ================= */
+                const rows = Array.from(pivotMap.values()).map((r: any, i) => {
+
+                    delete r.__invoiceTracker;
+                    delete r.__categoryTracker;
+
+                    return {
+                        SNo: i + 1,
+                        ...r
+                    };
+                });
+
+                setExpandedRows(rows);
                 setExpandedColumns(finalCols);
             }
 
@@ -592,43 +732,32 @@ const StaffBasedReport: React.FC = () => {
     /* ================= FILTERING ================= */
 
     const filteredRows = useMemo(() => {
-        return rawRows.filter((row) => {
-            // ================= DATE FILTER =================
-            const rowDate = dayjs(
-                row.Ledger_Date || row.Stock_Journal_date
-            );
 
-            if (
-                filters.Date.from &&
-                rowDate.isBefore(dayjs(filters.Date.from), "day")
-            )
-                return false;
+        let rows = [...rawRows];
 
-            if (
-                filters.Date.to &&
-                rowDate.isAfter(dayjs(filters.Date.to), "day")
-            )
-                return false;
+        /* ================= COLUMN FILTER ================= */
+        for (const [key, values] of Object.entries(filters.columnFilters)) {
 
-            // ================= COLUMN FILTER =================
-            for (const [key, values] of Object.entries(
-                filters.columnFilters
-            )) {
-                if (!values || values.length === 0) continue;
+            if (!values || values.length === 0) continue;
+
+            rows = rows.filter((row) => {
 
                 const rowValue = String(row[key] ?? "")
                     .trim()
                     .toLowerCase();
 
-                const match = values.some(
+                return values.some(
                     (v) =>
-                        String(v).trim().toLowerCase() === rowValue
+                        String(v)
+                            .trim()
+                            .toLowerCase() === rowValue
                 );
+            });
+        }
 
-                if (!match) return false;
-            }
+        /* ================= STOCK FILTER ================= */
+        rows = rows.filter((row) => {
 
-            // ================= STOCK FILTER =================
             const qty = Number(row.Qty || row.Total || 0);
 
             if (stockFilter === "hasValues" && qty <= 0)
@@ -639,7 +768,10 @@ const StaffBasedReport: React.FC = () => {
 
             return true;
         });
-    }, [rawRows, filters, stockFilter]);
+
+        return rows;
+
+    }, [rawRows, filters.columnFilters, stockFilter]);
 
     const sortedRows = useMemo(() => {
         if (!sortConfig.key) return filteredRows;
@@ -845,12 +977,20 @@ const StaffBasedReport: React.FC = () => {
     const filterOptions = useMemo(() => {
         if (!activeHeader) return [];
 
+        // ✅ Use currently visible rows only
+        const visibleRows = sortedRows;
+
         const uniqueValues = Array.from(
             new Set(
-                rawRows
-                    .map(r => r[activeHeader])
-                    .filter(v => v !== null && v !== undefined && v !== "")
-                    .map(v => String(v).trim())
+                visibleRows
+                    .map((r) => r[activeHeader])
+                    .filter(
+                        (v) =>
+                            v !== null &&
+                            v !== undefined &&
+                            v !== ""
+                    )
+                    .map((v) => String(v).trim())
             )
         );
 
@@ -859,7 +999,11 @@ const StaffBasedReport: React.FC = () => {
             activeHeader,
             sortConfig.order
         );
-    }, [activeHeader, rawRows, sortConfig.order]);
+    }, [
+        activeHeader,
+        sortedRows,
+        sortConfig.order
+    ]);
 
     const exportColumns = enabledColumns.map(c => ({
         key: c.key,

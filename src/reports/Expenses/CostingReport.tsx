@@ -379,11 +379,11 @@ const CostingReport: React.FC = () => {
 
             if (existing[accountName] !== undefined) {
                 existing[accountName] += Number(
-                    row.debit_amount || 0
+                    row.expence_value || 0
                 );
             }
 
-            existing.Total += Number(row.debit_amount || 0);
+            existing.Total += Number(row.expence_value || 0);
 
         });
 
@@ -1595,7 +1595,7 @@ const CostingReport: React.FC = () => {
                                                                                 <TableCell align="right">
                                                                                     {formatINR(
                                                                                         Number(
-                                                                                            detail.debit_amount ||
+                                                                                            detail.expence_value ||
                                                                                             0
                                                                                         )
                                                                                     )}

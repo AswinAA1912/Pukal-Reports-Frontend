@@ -8,6 +8,7 @@ export interface PosRate {
   Rate_Date: string;
   Pos_Brand_Id: string;
   Item_Id: string;
+  Min_Rate: number;
   Rate: number;
   Max_Rate: number;
   POS_Brand_Name: string;

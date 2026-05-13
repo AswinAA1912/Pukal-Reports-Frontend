@@ -53,9 +53,26 @@ const mapExpenseData = (summary: any[], direct: any[], indirect: any[]) => {
 
         list.forEach((acc) => {
 
-            const rows = summary.filter(
+            const debitRows = summary.filter(
                 (s) => normalize(s.debit_ledger) === normalize(acc.Acc_Id)
             );
+
+            const creditRows = summary.filter(
+                (s) => normalize(s.credit_ledger) === normalize(acc.Acc_Id)
+            );
+
+            const rows = [
+                ...debitRows.map(r => ({
+                    ...r,
+                    entryType: "DR",
+                    amount: Number(r.debit_amount || 0)
+                })),
+                ...creditRows.map(r => ({
+                    ...r,
+                    entryType: "CR",
+                    amount: Number(r.credit_amount || 0)
+                }))
+            ];
 
             if (!rows.length) return;
 
@@ -64,34 +81,55 @@ const mapExpenseData = (summary: any[], direct: any[], indirect: any[]) => {
             if (!groupMap[groupName]) {
                 groupMap[groupName] = {
                     name: groupName,
-                    total: 0,
+                    dr: 0,
+                    cr: 0,
+                    balance: 0,
                     subGroups: {}
                 };
             }
 
             rows.forEach((row) => {
 
-                const subKey = row.debit_ledger_name || "Others";
+                const subKey =
+                    row.debit_ledger_name ||
+                    row.credit_ledger_name ||
+                    "Others";
 
                 if (!groupMap[groupName].subGroups[subKey]) {
                     groupMap[groupName].subGroups[subKey] = {
                         name: subKey,
-                        total: 0,
+                        dr: 0,
+                        cr: 0,
+                        balance: 0,
                         ledgers: []
                     };
                 }
 
-                groupMap[groupName].subGroups[subKey].total += Number(row.debit_amount || 0);
+                const amount = row.amount;
+
+                if (row.entryType === "DR") {
+                    groupMap[groupName].dr += amount;
+                    groupMap[groupName].subGroups[subKey].dr += amount;
+                } else {
+                    groupMap[groupName].cr += amount;
+                    groupMap[groupName].subGroups[subKey].cr += amount;
+                }
+
+                const sub = groupMap[groupName].subGroups[subKey];
+                sub.balance = sub.dr - sub.cr;
 
                 groupMap[groupName].subGroups[subKey].ledgers.push(row);
-
-                groupMap[groupName].total += Number(row.debit_amount || 0);
             });
 
+            groupMap[groupName].balance =
+                groupMap[groupName].dr - groupMap[groupName].cr;
         });
 
         return {
-            total: Object.values(groupMap).reduce((s: any, g: any) => s + g.total, 0),
+            total: Object.values(groupMap).reduce(
+                (s: any, g: any) => s + g.balance,
+                0
+            ),
             groups: Object.values(groupMap).map((g: any) => ({
                 ...g,
                 subGroups: Object.values(g.subGroups)
@@ -455,6 +493,16 @@ const ExpensesReport = () => {
     const activeType = toggleMode === "Abstract" ? "Direct" : "Indirect";
     const section = data?.[activeType];
 
+    const getSectionSummary = (section: any) => {
+        const dr = section.groups.reduce((s: number, g: any) => s + (g.dr || 0), 0);
+        const cr = section.groups.reduce((s: number, g: any) => s + (g.cr || 0), 0);
+        const balance = dr - cr;
+
+        return { dr, cr, balance };
+    };
+
+    const summary = section ? getSectionSummary(section) : null;
+
 
     /* ================= RENDER ================= */
 
@@ -505,18 +553,38 @@ const ExpensesReport = () => {
                             <Box
                                 display="flex"
                                 justifyContent="space-between"
+                                alignItems="center"
                                 border="1px solid #cbd5e1"
-                                p={1}
+                                borderRadius={1}
+                                p={1.5}
                                 mb={1}
+                                sx={{
+                                    background:
+                                        (summary?.balance ?? 0) >= 0
+                                            ? "#f0fdf4"
+                                            : "#fef2f2",
+                                }}
                             >
-                                <Typography fontWeight={700}>
+                                <Typography
+                                    fontWeight={700}
+                                    fontSize="15px"
+                                >
                                     {activeType === "Direct"
                                         ? "DIRECT EXPENSES"
                                         : "INDIRECT EXPENSES"}
                                 </Typography>
 
-                                <Typography fontWeight={700}>
-                                    {formatINR(section.total)}
+                                <Typography
+                                    fontWeight={800}
+                                    fontSize="16px"
+                                    color={
+                                        (summary?.balance ?? 0) >= 0
+                                            ? "success.main"
+                                            : "error.main"
+                                    }
+                                >
+                                    {formatINR(Math.abs(summary?.balance ?? 0))}{" "}
+                                    {(summary?.balance ?? 0) >= 0 ? "DR" : "CR"}
                                 </Typography>
                             </Box>
 
@@ -546,7 +614,21 @@ const ExpensesReport = () => {
                                                 <Typography ml={1}>{group.name}</Typography>
                                             </Box>
 
-                                            <Typography>{formatINR(group.total)}</Typography>
+                                            <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
+
+                                                <Typography fontWeight={600}>
+                                                    DR: {formatINR(group.dr)}
+                                                </Typography>
+
+                                                <Typography fontWeight={600}>
+                                                    CR: {formatINR(group.cr)}
+                                                </Typography>
+
+                                                <Typography fontWeight={700} color={group.balance >= 0 ? "green" : "red"}>
+                                                    BAL: {formatINR(Math.abs(group.balance))} {group.balance >= 0 ? "DR" : "CR"}
+                                                </Typography>
+
+                                            </Box>
                                         </Box>
 
                                         {/* 🔷 SUB GROUP */}
@@ -579,7 +661,21 @@ const ExpensesReport = () => {
                                                             <Typography ml={1}>{sub.name}</Typography>
                                                         </Box>
 
-                                                        <Typography>{formatINR(sub.total)}</Typography>
+                                                        <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
+
+                                                            <Typography>
+                                                                DR: {formatINR(sub.dr)}
+                                                            </Typography>
+
+                                                            <Typography>
+                                                                CR: {formatINR(sub.cr)}
+                                                            </Typography>
+
+                                                            <Typography fontWeight={600} color={sub.balance >= 0 ? "green" : "red"}>
+                                                                BAL: {formatINR(Math.abs(sub.balance))} {sub.balance >= 0 ? "DR" : "CR"}
+                                                            </Typography>
+
+                                                        </Box>
                                                     </Box>
 
                                                     {/* 🔥 FINAL TABLE (LEVEL 3) */}
@@ -695,7 +791,9 @@ const ExpensesReport = () => {
                                                                                     }}
                                                                                 >
                                                                                     {col.key === "debit_amount"
-                                                                                        ? formatINR(row[col.key])
+                                                                                        ? row.entryType === "CR"
+                                                                                            ? `${formatINR(row.amount)} CR`
+                                                                                            : `${formatINR(row.amount)} DR`
                                                                                         : col.key === "payment_date"
                                                                                             ? dayjs(row[col.key]).format("DD-MM-YYYY")
                                                                                             : row[col.key]}
