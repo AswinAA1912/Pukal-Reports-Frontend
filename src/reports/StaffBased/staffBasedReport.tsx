@@ -326,7 +326,8 @@ const StaffBasedReport: React.FC = () => {
                     "Checker",
                     "Delivery_Man",
                     "Others6",
-                    "Driver"
+                    "Driver",
+                    "Created_By"
                 ];
 
                 /* ===============================
@@ -418,7 +419,8 @@ const StaffBasedReport: React.FC = () => {
                     "Others2",
                     "Others3",
                     "Others4",
-                    "Others5"
+                    "Others5",
+                    "Created_By"
                 ];
 
                 const excludeKeys = ["SNo"];
@@ -440,7 +442,8 @@ const StaffBasedReport: React.FC = () => {
                     "Checker",
                     "Delivery_Man",
                     "Others6",
-                    "Driver"
+                    "Driver",
+                    "Created_By"
                 ];
 
                 /* ================= SPLIT COLUMNS (IMPORTANT) ================= */
