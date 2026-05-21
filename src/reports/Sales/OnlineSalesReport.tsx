@@ -1071,29 +1071,54 @@ const OnlineSalesReportPage: React.FC = () => {
                     </MenuItem>
 
                     {/* ✅ VALUES */}
-                    {[...new Set(
-                      (toggleMode === "Abstract" ? rawAbstract : rawExpanded)
-                        .map((r) => r[activeHeader])
-                    )]
-                      .filter(Boolean)
-                      .filter((v) =>
-                        String(v).toLowerCase().includes(searchText.toLowerCase())
-                      )
-                      .map((v) => {
-                        const selectedValues = columnFilters[activeHeader] || [];
+                    {(() => {
+                      const selectedValues =
+                        columnFilters[activeHeader] || [];
 
-                        const isSelected = selectedValues.includes(v);
+                      const allValues = [
+                        ...new Set(
+                          (
+                            toggleMode === "Abstract"
+                              ? rawAbstract
+                              : rawExpanded
+                          ).map((r) => r[activeHeader])
+                        ),
+                      ]
+                        .filter(Boolean)
+                        .filter((v) =>
+                          String(v)
+                            .toLowerCase()
+                            .includes(searchText.toLowerCase())
+                        );
+
+                      // selected values first
+                      const sortedValues = [
+                        ...allValues.filter((v) =>
+                          selectedValues.includes(v)
+                        ),
+                        ...allValues.filter(
+                          (v) => !selectedValues.includes(v)
+                        ),
+                      ];
+
+                      return sortedValues.map((v) => {
+                        const isSelected =
+                          selectedValues.includes(v);
 
                         return (
                           <MenuItem
-                            key={v}
+                            key={String(v)}
                             onClick={() => {
                               setColumnFilters((prev) => {
-                                const prevValues = prev[activeHeader] || [];
+                                const prevValues =
+                                  prev[activeHeader] || [];
 
-                                const newValues = prevValues.includes(v)
-                                  ? prevValues.filter((x: any) => x !== v) // remove
-                                  : [...prevValues, v]; // add
+                                const newValues =
+                                  prevValues.includes(v)
+                                    ? prevValues.filter(
+                                      (x: any) => x !== v
+                                    )
+                                    : [...prevValues, v];
 
                                 return {
                                   ...prev,
@@ -1102,14 +1127,19 @@ const OnlineSalesReportPage: React.FC = () => {
                               });
                             }}
                             sx={{
-                              backgroundColor: isSelected ? "#e0e7ff" : "transparent",
-                              fontWeight: isSelected ? 600 : 400,
+                              backgroundColor: isSelected
+                                ? "#e0e7ff"
+                                : "transparent",
+                              fontWeight: isSelected
+                                ? 600
+                                : 400,
                             }}
                           >
                             {v}
                           </MenuItem>
                         );
-                      })}
+                      });
+                    })()}
                   </>
                 )}
               </Box>

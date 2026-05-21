@@ -12,6 +12,8 @@ export interface UnitEconomicsReport {
   Bill_Qty: number;
   Rate: number;
   Amount: number;
+  Min_Rate:number;
+  List_Rate:number;
   COGS: number;
   COGS_Amount: number;
 

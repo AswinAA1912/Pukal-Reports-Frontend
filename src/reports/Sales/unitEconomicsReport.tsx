@@ -65,6 +65,8 @@ const UnitEconomicsReportPage: React.FC = () => {
     { label: "Quantity", key: "Bill_Qty", type: "number" },
     { label: "Rate", key: "Rate", type: "number" },
     { label: "Amount", key: "Amount", type: "number" },
+    { label: "Min Rate", key: "Min_Rate", type: "number" },
+    { label: "List Rate", key: "List_Rate", type: "number" },
     { label: "COGS", key: "COGS", type: "number" },
   ];
 
@@ -242,6 +244,8 @@ const UnitEconomicsReportPage: React.FC = () => {
                   <TableCell align="right" sx={headStyle} > Quantity </TableCell>
                   <TableCell align="right" sx={headStyle} >Rate</TableCell>
                   <TableCell align="right" sx={headStyle} >Amount</TableCell>
+                  <TableCell align="right" sx={headStyle} >Min Rate</TableCell>
+                  <TableCell align="right" sx={headStyle} >List Rate</TableCell>
                   <TableCell align="right" sx={headStyle} >COGS</TableCell>
                 </TableRow>
               </TableHead>
@@ -256,17 +260,38 @@ const UnitEconomicsReportPage: React.FC = () => {
                     zIndex: 1,
                   }}
                 >
-                  <TableCell colSpan={3} sx={{ fontWeight: 700, fontSize: "0.8rem" }}>
-                    Total
+                  {/* S.No */}
+                  <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
+
+                  {/* Date */}
+                  <TableCell />
+
+                  {/* Product */}
+                  <TableCell />
+
+                  {/* Quantity */}
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    {getTotal("Bill_Qty").toFixed(2)}
                   </TableCell>
 
-                  {(["Bill_Qty", "Rate", "Amount", "COGS"] as const).map((key) => (
-                    <TableCell key={key} align="right" sx={{ fontWeight: 700 }}>
-                      {key === "Rate" || key === "Amount"
-                        ? formatINR(getTotal(key))
-                        : getTotal(key).toFixed(2)}
-                    </TableCell>
-                  ))}
+                  {/* Rate (empty) */}
+                  <TableCell />
+
+                  {/* Amount */}
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    {formatINR(getTotal("Amount"))}
+                  </TableCell>
+
+                  {/* Min Rate (empty) */}
+                  <TableCell />
+
+                  {/* List Rate (empty) */}
+                  <TableCell />
+
+                  {/* COGS */}
+                  <TableCell align="right" sx={{ fontWeight: 700 }}>
+                    {getTotal("COGS").toFixed(2)}
+                  </TableCell>
                 </TableRow>
               </TableBody>
 
@@ -275,7 +300,7 @@ const UnitEconomicsReportPage: React.FC = () => {
                 {paginatedData.map((row, i) => (
                   <TableRow key={`${row.Product_Id}-${i}`}>
                     <TableCell sx={{ fontSize: "0.75rem" }}>
-                      {(page - 1) * rowsPerPage  + i + 1}
+                      {(page - 1) * rowsPerPage + i + 1}
                     </TableCell>
                     <TableCell sx={{ fontSize: "0.75rem" }}>
                       {dayjs(row.Trans_Date).format("DD/MM/YYYY")}
@@ -284,6 +309,8 @@ const UnitEconomicsReportPage: React.FC = () => {
                     <TableCell align="right">{Number(row.Bill_Qty).toFixed(2)}</TableCell>
                     <TableCell align="right">{formatINR(Number(row.Rate))}</TableCell>
                     <TableCell align="right">{formatINR(Number(row.Amount))}</TableCell>
+                    <TableCell align="right">{formatINR(Number(row.Min_Rate))}</TableCell>
+                    <TableCell align="right">{formatINR(Number(row.List_Rate))}</TableCell>
                     <TableCell align="right">{Number(row.COGS).toFixed(2)}</TableCell>
                   </TableRow>
                 ))}

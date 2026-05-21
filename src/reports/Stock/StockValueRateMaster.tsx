@@ -182,7 +182,7 @@ const StockValueRateMasterReport: React.FC = () => {
 
     /* ================= EXPORT ================= */
     const handleExportPDF = () => {
-        const headers = ["S.No", "Product Name", "Min Rate", "Rate", "CL Rate"];
+        const headers = ["S.No", "Product Name", "Min Rate", "List Rate", "CL Rate"];
 
         const data: any[] = [];
         let sno = 1;
@@ -195,12 +195,13 @@ const StockValueRateMasterReport: React.FC = () => {
                 prev?.POS_Brand_Name !== row.POS_Brand_Name;
 
             if (showGroup) {
-                data.push([row.POS_Brand_Name, "", "", ""]);
+                data.push([row.POS_Brand_Name, "", "", "", ""]);
             }
 
             data.push([
                 sno++,
                 row.Product_Name,
+                formatINR(row.Min_Rate),
                 formatINR(row.Rate),
                 formatINR(row.CL_Rate),
             ]);
@@ -210,7 +211,7 @@ const StockValueRateMasterReport: React.FC = () => {
     };
 
     const handleExportExcel = () => {
-        const headers = ["S.No", "Product Name", "Rate", "CL Rate"];
+        const headers = ["S.No", "Product Name", "Min Rate", "List Rate", "CL Rate"];
 
         const data: any[] = [];
         let sno = 1;
@@ -223,7 +224,7 @@ const StockValueRateMasterReport: React.FC = () => {
                 prev?.POS_Brand_Name !== row.POS_Brand_Name;
 
             if (showGroup) {
-                data.push([row.POS_Brand_Name, "", "", ""]);
+                data.push([row.POS_Brand_Name, "", "", "", ""]);
             }
 
             data.push([
@@ -329,7 +330,7 @@ const StockValueRateMasterReport: React.FC = () => {
                                                 Product Name
                                             </TableCell>
                                             <TableCell sx={{ color: "#fff" }}>Min Rate</TableCell>
-                                            <TableCell sx={{ color: "#fff" }}>Rate</TableCell>
+                                            <TableCell sx={{ color: "#fff" }}>List Rate</TableCell>
                                             <TableCell sx={{ color: "#fff" }}>CL Rate</TableCell>
                                         </TableRow>
                                     </TableHead>

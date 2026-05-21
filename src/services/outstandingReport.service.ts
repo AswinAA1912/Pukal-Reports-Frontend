@@ -3,7 +3,7 @@ import { getBaseURL } from "../config/portalBaseURL";
 
 /* ================= TYPES ================= */
 
-export interface CostingReport {
+export interface OutStandingReport {
   Acc_Id: string;
   Account_name: string;
   Retailer_Name: string;
@@ -49,9 +49,9 @@ export interface CostingReport {
 
 /* ================= API SERVICES ================= */
 
-export const costingReportService = {
+export const OutStandingReportService = {
   getCostingReport: (params?: { Fromdate?: string; Todate?: string }) =>
-    axios.get<{ success: boolean; data: CostingReport[] }>(
+    axios.get<{ success: boolean; data: OutStandingReport[] }>(
       // `http://192.168.1.5:9001/api/reports/externalAPI/debtorsCreditors`,
       `${getBaseURL()}api/reports/externalAPI/debtorsCreditors`,
       { params }

@@ -27,6 +27,9 @@ import StaffBasedReport from "../reports/StaffBased/staffBasedReport";
 import LOSStaffBasedReport from "../reports/StaffBased/LOSstaffBasedReport";
 import ExpensesReport from "../reports/Expenses/ExpensesReport";
 import CostingReport from "../reports/Expenses/CostingReport";
+import OutstandingReport from "../reports/Expenses/outstandingReport";
+import PendingOutstandingReport from "../reports/Expenses/PendingOutstandingReport";
+import TransactionDetailsReport from "../reports/Expenses/TransactionDetailsReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -266,7 +269,7 @@ const AppRouting: React.FC<AppRoutingProps> = ({
         />
 
         <Route
-          path="templateList"
+          path="/templateList"
           element={
             <RequireAuth>
               <AppLayout
@@ -360,6 +363,39 @@ const AppRouting: React.FC<AppRoutingProps> = ({
             <RequireAuth>
               <AppLayout fullWidth>
                 <CostingReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/outStanding"
+          element={
+            <RequireAuth>
+              <AppLayout>
+                <OutstandingReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/transaction-details/:accId/:partyName"
+          element={
+            <RequireAuth>
+              <AppLayout>
+                <TransactionDetailsReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/pending-outstanding/:accId"
+          element={
+            <RequireAuth>
+              <AppLayout>
+                <PendingOutstandingReport />
               </AppLayout>
             </RequireAuth>
           }

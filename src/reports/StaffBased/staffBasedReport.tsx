@@ -21,11 +21,18 @@ import {
     DialogTitle,
     DialogContent,
     Checkbox,
-    CircularProgress
+    CircularProgress,
 } from "@mui/material";
+
 import dayjs from "dayjs";
+
 import SettingsIcon from "@mui/icons-material/Settings";
 import GroupWorkIcon from "@mui/icons-material/GroupWork";
+import FilterAltIcon from "@mui/icons-material/FilterAlt";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+
 import {
     DndContext,
     closestCenter,
@@ -33,28 +40,35 @@ import {
     useSensor,
     useSensors,
 } from "@dnd-kit/core";
-import FilterAltIcon from "@mui/icons-material/FilterAlt";
+
 import {
     SortableContext,
     useSortable,
     verticalListSortingStrategy,
     arrayMove,
 } from "@dnd-kit/sortable";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+
 import { CSS } from "@dnd-kit/utilities";
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import AppLayout, { useToggleMode } from "../../Layout/appLayout";
+
+import AppLayout, {
+    useToggleMode,
+} from "../../Layout/appLayout";
+
 import PageHeader from "../../Layout/PageHeader";
 import ReportFilterDrawer from "../../Components/ReportFilterDrawer";
 import CommonPagination from "../../Components/CommonPagination";
+
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+
 import { toast } from "react-toastify";
+
 import { SettingsService } from "../../services/reportSettings.services";
+
 import {
-    costCenterListService, staffBasedReportService
+    costCenterListService,
+    staffBasedReportService,
 } from "../../services/staffBasedReport.services";
 
 /* ================= TYPES ================= */
@@ -68,21 +82,28 @@ type ColumnConfig = {
     groupBy?: number;
 };
 
-
 type SortableColumnRowProps = {
     column: ColumnConfig;
     onToggle: (key: string) => void;
     hasActiveFilter?: boolean;
 };
 
-const SortableColumnRow = ({ column, onToggle, hasActiveFilter, }: SortableColumnRowProps) => {
+/* ================= SORTABLE COLUMN ================= */
+
+const SortableColumnRow = ({
+    column,
+    onToggle,
+    hasActiveFilter,
+}: SortableColumnRowProps) => {
     const {
         attributes,
         listeners,
         setNodeRef,
         transform,
         transition,
-    } = useSortable({ id: column.key });
+    } = useSortable({
+        id: column.key,
+    });
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -109,14 +130,22 @@ const SortableColumnRow = ({ column, onToggle, hasActiveFilter, }: SortableColum
             </IconButton>
 
             {/* LABEL */}
-            <Box display="flex" alignItems="center" gap={1} sx={{ flex: 1 }}>
+            <Box
+                display="flex"
+                alignItems="center"
+                gap={1}
+                sx={{ flex: 1 }}
+            >
                 <Typography fontSize="0.75rem">
                     {column.label}
                 </Typography>
 
                 {hasActiveFilter && (
                     <Tooltip title="Header filter enabled">
-                        <FilterAltIcon fontSize="small" color="action" />
+                        <FilterAltIcon
+                            fontSize="small"
+                            color="action"
+                        />
                     </Tooltip>
                 )}
             </Box>
@@ -130,7 +159,8 @@ const SortableColumnRow = ({ column, onToggle, hasActiveFilter, }: SortableColum
                     "& .MuiSwitch-switchBase.Mui-checked": {
                         color: "#1E3A8A",
                     },
-                    "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": {
+                    "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track":
+                    {
                         backgroundColor: "#b5b9c4",
                     },
                     "& .MuiSwitch-track": {
@@ -142,8 +172,13 @@ const SortableColumnRow = ({ column, onToggle, hasActiveFilter, }: SortableColum
     );
 };
 
-const CURRENCY_KEYS = ["Total_Invoice_value", "Amount", "Rate"];
+/* ================= HELPERS ================= */
 
+const CURRENCY_KEYS = [
+    "Total_Invoice_value",
+    "Amount",
+    "Rate",
+];
 
 const formatINR = (value: number) =>
     new Intl.NumberFormat("en-IN", {
@@ -156,15 +191,37 @@ const formatINR = (value: number) =>
 const StaffBasedReport: React.FC = () => {
     const today = dayjs().format("YYYY-MM-DD");
 
-    const { toggleMode, setToggleMode } = useToggleMode();
-    const [loading, setLoading] = useState(false);
+    const {
+        toggleMode,
+        setToggleMode,
+    } = useToggleMode();
 
-    const [abstractRows, setAbstractRows] = useState<any[]>([]);
-    const [expandedRows, setExpandedRows] = useState<any[]>([]);
+    const [loading, setLoading] =
+        useState(false);
+
+    const [abstractRows, setAbstractRows] =
+        useState<any[]>([]);
+
+    const [expandedRows, setExpandedRows] =
+        useState<any[]>([]);
+
     const rawRows =
-        toggleMode === "Expanded" ? expandedRows : abstractRows;
-    const [abstractColumns, setAbstractColumns] = useState<ColumnConfig[]>([]);
-    const [expandedColumns, setExpandedColumns] = useState<ColumnConfig[]>([]);
+        toggleMode === "Expanded"
+            ? expandedRows
+            : abstractRows;
+
+    /* ================= COLUMNS ================= */
+
+    const [
+        abstractColumns,
+        setAbstractColumns,
+    ] = useState<ColumnConfig[]>([]);
+
+    const [
+        expandedColumns,
+        setExpandedColumns,
+    ] = useState<ColumnConfig[]>([]);
+
     const columns =
         toggleMode === "Expanded"
             ? expandedColumns
@@ -174,74 +231,178 @@ const StaffBasedReport: React.FC = () => {
         toggleMode === "Expanded"
             ? setExpandedColumns
             : setAbstractColumns;
+
+    /* ================= PAGINATION ================= */
+
     const [page, setPage] = useState(1);
-    const [rowsPerPage, setRowsPerPage] = useState(100);
 
-    const [drawerOpen, setDrawerOpen] = useState(false);
-    const [fromDate, setFromDate] = useState(today);
-    const [toDate, setToDate] = useState(today);
-    const [stockFilter, setStockFilter] = useState<
-        "hasValues" | "zero" | "all"
-    >("hasValues");
+    const [rowsPerPage, setRowsPerPage] =
+        useState(100);
 
-    const [settingsAnchor, setSettingsAnchor] =
-        useState<null | HTMLElement>(null);
-    const [filterAnchor, setFilterAnchor] =
-        useState<null | HTMLElement>(null);
-    const [activeHeader, setActiveHeader] = useState<string | null>(null);
-    const [searchText, setSearchText] = useState("");
+    /* ================= DRAWER ================= */
+
+    const [drawerOpen, setDrawerOpen] =
+        useState(false);
+
+    /* ================= DATE FILTER ================= */
+
+    const [fromDate, setFromDate] =
+        useState(today);
+
+    const [toDate, setToDate] =
+        useState(today);
+
+    /* ================= STOCK FILTER ================= */
+
+    const [stockFilter, setStockFilter] =
+        useState<
+            "hasValues" | "zero" | "all"
+        >("hasValues");
+
+    /* ================= MENU ANCHORS ================= */
+
+    const [
+        settingsAnchor,
+        setSettingsAnchor,
+    ] = useState<null | HTMLElement>(
+        null
+    );
+
+    const [
+        filterAnchor,
+        setFilterAnchor,
+    ] = useState<null | HTMLElement>(
+        null
+    );
+
+    const [activeHeader, setActiveHeader] =
+        useState<string | null>(null);
+
+    const [searchText, setSearchText] =
+        useState("");
+
+    /* ================= FILTERS ================= */
+
     type FiltersMap = {
-        Date: { from: string; to: string };
-        columnFilters: Record<string, string[]>;
+        Date: {
+            from: string;
+            to: string;
+        };
+        columnFilters: Record<
+            string,
+            string[]
+        >;
     };
 
-    const [filters, setFilters] = useState<FiltersMap>({
-        Date: {
-            from: today,
-            to: today
-        },
-        columnFilters: {},
-    });
+    const [filters, setFilters] =
+        useState<FiltersMap>({
+            Date: {
+                from: today,
+                to: today,
+            },
+            columnFilters: {},
+        });
+
+    /* ================= SORT ================= */
+
     type SortOrder = "asc" | "desc";
 
-    const [sortConfig, setSortConfig] = useState<{
-        key: string | null;
-        order: SortOrder;
-    }>({
-        key: null,
-        order: "asc",
-    });
+    const [sortConfig, setSortConfig] =
+        useState<{
+            key: string | null;
+            order: SortOrder;
+        }>({
+            key: null,
+            order: "asc",
+        });
 
-    const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+    /* ================= GROUPING ================= */
 
-    const [abstractGrouping, setAbstractGrouping] = useState<string[]>([]);
-    const [expandedGrouping, setExpandedGrouping] = useState<string[]>([]);
+    const [
+        groupDialogOpen,
+        setGroupDialogOpen,
+    ] = useState(false);
 
-    const [abstractPendingGrouping, setAbstractPendingGrouping] = useState<string[]>([]);
-    const [expandedPendingGrouping, setExpandedPendingGrouping] = useState<string[]>([]);
+    const [
+        abstractGrouping,
+        setAbstractGrouping,
+    ] = useState<string[]>([]);
 
-    const [abstractExpandedKeys, setAbstractExpandedKeys] = useState<string[]>([]);
-    const [expandedExpandedKeys, setExpandedExpandedKeys] = useState<string[]>([]);
+    const [
+        expandedGrouping,
+        setExpandedGrouping,
+    ] = useState<string[]>([]);
 
-    const serialRef = React.useRef(0);
+    const [
+        abstractPendingGrouping,
+        setAbstractPendingGrouping,
+    ] = useState<string[]>([]);
 
-    const [templateConfig, setTemplateConfig] = useState<{
+    const [
+        expandedPendingGrouping,
+        setExpandedPendingGrouping,
+    ] = useState<string[]>([]);
+
+    const [
+        abstractExpandedKeys,
+        setAbstractExpandedKeys,
+    ] = useState<string[]>([]);
+
+    const [
+        expandedExpandedKeys,
+        setExpandedExpandedKeys,
+    ] = useState<string[]>([]);
+
+    const serialRef =
+        React.useRef(0);
+
+    /* ================= TEMPLATE ================= */
+
+    const [
+        templateConfig,
+        setTemplateConfig,
+    ] = useState<{
         expanded: ColumnConfig[];
     } | null>(null);
 
-    const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
-    const [saveDialogOpen, setSaveDialogOpen] = useState(false);
-    const [reportName, setReportName] = useState("");
-    const [parentReportName, setParentReportName] = useState("");
-    const [isEditTemplate, setIsEditTemplate] = useState(false);
+    const [
+        selectedTemplateId,
+        setSelectedTemplateId,
+    ] = useState<number | null>(
+        null
+    );
+
+    const [
+        saveDialogOpen,
+        setSaveDialogOpen,
+    ] = useState(false);
+
+    const [reportName, setReportName] =
+        useState("");
+
+    const [
+        parentReportName,
+        setParentReportName,
+    ] = useState("");
+
+    const [
+        isEditTemplate,
+        setIsEditTemplate,
+    ] = useState(false);
+
+    /* ================= GROUP HELPERS ================= */
 
     const grouping =
-        toggleMode === "Expanded" ? expandedGrouping : abstractGrouping;
+        toggleMode === "Expanded"
+            ? expandedGrouping
+            : abstractGrouping;
 
     const HEADER_HEIGHT = 36;
 
     const setGrouping =
-        toggleMode === "Expanded" ? setExpandedGrouping : setAbstractGrouping;
+        toggleMode === "Expanded"
+            ? setExpandedGrouping
+            : setAbstractGrouping;
 
     const pendingGrouping =
         toggleMode === "Expanded"
@@ -263,504 +424,895 @@ const StaffBasedReport: React.FC = () => {
             ? setExpandedExpandedKeys
             : setAbstractExpandedKeys;
 
-    /* ================= LOAD DATA ================= */
+    /* ================= LOAD EFFECT ================= */
 
     useEffect(() => {
+        let ignore = false;
 
-        // prevent initial loop
-        if (
-            toggleMode === "Expanded" &&
-            expandedColumns.length === 0
-        ) {
-            loadStaffBasedReport();
-            return;
-        }
+        const load = async () => {
+            if (ignore) return;
 
-        loadStaffBasedReport();
+            await loadStaffBasedReport();
+        };
 
+        load();
+
+        return () => {
+            ignore = true;
+        };
     }, [
+        toggleMode,
         filters.Date.from,
         filters.Date.to,
-        filters.columnFilters,
-        toggleMode,
+        selectedTemplateId,
 
-        // IMPORTANT
-        expandedColumns.map(c => `${c.key}_${c.enabled}`).join("|")
+        toggleMode === "Expanded"
+            ? expandedColumns
+                .map(
+                    (c) =>
+                        `${c.key}_${c.enabled}_${c.order}`
+                )
+                .join("|")
+            : "",
     ]);
 
-    const loadStaffBasedReport = async () => {
-        try {
-            setLoading(true);
+    /* ================= LOAD DATA ================= */
 
-            const [staffRes, reportRes] = await Promise.all([
-                costCenterListService.getStaff(),
-                staffBasedReportService.getStaffBasedReport({
-                    Fromdate: filters.Date.from,
-                    Todate: filters.Date.to
-                })
-            ]);
+    const loadStaffBasedReport =
+        async () => {
+            try {
+                setLoading(true);
 
-            const staffList = staffRes.data.data || [];
-            const reportRows = reportRes.data.data || [];
+                const [
+                    staffRes,
+                    reportRes,
+                ] = await Promise.all([
+                    costCenterListService.getStaff(),
 
-            // ================= ABSTRACT =================
-            if (toggleMode === "Abstract") {
-                const start = dayjs(filters.Date.from);
-                const end = dayjs(filters.Date.to);
-
-                const dates: string[] = [];
-                let current = start;
-
-                while (current.isBefore(end) || current.isSame(end, "day")) {
-                    dates.push(current.format("DD.MM"));
-                    current = current.add(1, "day");
-                }
-
-                const staffFields = [
-                    "Others1",
-                    "Others2",
-                    "Others3",
-                    "Others4",
-                    "Others5",
-                    "Load_Man",
-                    "Checker",
-                    "Delivery_Man",
-                    "Others6",
-                    "Driver",
-                    "Created_By"
-                ];
-
-                /* ===============================
-                   BUILD FAST LOOKUP MAP
-                ================================ */
-                const qtyMap: Record<string, number> = {};
-
-                reportRows.forEach((row: any) => {
-                    const dateKey = dayjs(row.Stock_Journal_date).format("DD.MM");
-                    const qty = Number(row.Qty || 0);
-
-                    const processedStaffs = new Set<string>();
-
-                    staffFields.forEach((field) => {
-                        const staff = String(row[field] || "").trim();
-
-                        if (!staff || processedStaffs.has(staff)) return;
-
-                        processedStaffs.add(staff);
-
-                        const mapKey = `${staff}_${dateKey}`;
-
-                        qtyMap[mapKey] = (qtyMap[mapKey] || 0) + qty;
-                    });
-                });
-
-                /* ===============================
-                   BUILD ABSTRACT ROWS
-                ================================ */
-                const rows = staffList.map((staff: any, index: number) => {
-                    const obj: any = {
-                        SNo: index + 1,
-                        Staff_Name: staff.Cost_Center_Name
-                    };
-
-                    let total = 0;
-
-                    dates.forEach((dateCol) => {
-                        const mapKey = `${staff.Cost_Center_Name}_${dateCol}`;
-
-                        const qty = qtyMap[mapKey] || 0;
-
-                        obj[dateCol] = qty;
-
-                        total += qty;
-                    });
-
-                    obj.Total = total;
-
-                    return obj;
-                });
-
-                const cols: ColumnConfig[] = [
-                    {
-                        key: "Staff_Name",
-                        label: "Staff Name",
-                        enabled: true,
-                        order: 1
-                    },
-                    ...dates.map((d, i) => ({
-                        key: d,
-                        label: d,
-                        enabled: true,
-                        order: i + 2,
-                        isNumeric: true
-                    })),
-                    {
-                        key: "Total",
-                        label: "Total",
-                        enabled: true,
-                        order: 999,
-                        isNumeric: true
-                    }
-                ];
-
-                setAbstractRows(rows);
-                setAbstractColumns(cols);
-            }
-
-            // ================= EXPANDED =================
-            else {
-
-                const defaultEnabled = [
-                    "Staff_Name",
-                    "Godown_Name",
-                    "Qty",
-                    "Load_Man",
-                    "Others1",
-                    "Others2",
-                    "Others3",
-                    "Others4",
-                    "Others5",
-                    "Created_By"
-                ];
-
-                const excludeKeys = ["SNo"];
-
-                const allKeys =
-                    reportRows.length > 0
-                        ? Object.keys(reportRows[0]).filter(
-                            (key) => !excludeKeys.includes(key)
-                        )
-                        : [];
-
-                const categoryFields = [
-                    "Load_Man",
-                    "Others1",
-                    "Others2",
-                    "Others3",
-                    "Others4",
-                    "Others5",
-                    "Checker",
-                    "Delivery_Man",
-                    "Others6",
-                    "Driver",
-                    "Created_By"
-                ];
-
-                /* ================= SPLIT COLUMNS (IMPORTANT) ================= */
-                const splitColumns = [
-                    "Invoice_no",
-                    "Journal_no",
-                    "Stock_Journal_Voucher_type"
-                ];
-
-                /* =========================================
-                   COLUMN CONFIG
-                ========================================= */
-
-                const cols: ColumnConfig[] = [
-                    {
-                        key: "Staff_Name",
-                        label: "Staff Name",
-                        enabled: true,
-                        order: 1
-                    },
-                    {
-                        key: "Godown_Name",
-                        label: "Godown Name",
-                        enabled: true,
-                        order: 2
-                    },
-                    {
-                        key: "Invoice_no",
-                        label: "Invoice no",
-                        enabled: false,
-                        order: 3
-                    },
-                    {
-                        key: "Journal_no",
-                        label: "Journal no",
-                        enabled: false,
-                        order: 3
-                    },
-                    {
-                        key: "Stock_Journal_Voucher_type",
-                        label: "Voucher Type",
-                        enabled: false,
-                        order: 4
-                    },
-
-                    {
-                        key: "Qty",
-                        label: "Total Qty",
-                        enabled: true,
-                        order: 5,
-                        isNumeric: true
-                    },
-
-                    ...allKeys
-                        .filter(
-                            (key) =>
-                                ![
-                                    "Staff_Name",
-                                    "Godown_Name",
-                                    "Invoice_no",
-                                    "Journal_no",
-                                    "Stock_Journal_Voucher_type",
-                                    "Qty"
-                                ].includes(key)
-                        )
-                        .map((key, i) => ({
-                            key,
-                            label: key.replace(/_/g, " "),
-                            enabled: defaultEnabled.includes(key),
-                            order: i + 6,
-                            isNumeric:
-                                key === "Qty" ||
-                                categoryFields.includes(key)
-                        }))
-                ];
-
-                /* ================= APPLY TEMPLATE ================= */
-                const previousColumnState = expandedColumns;
-
-                let finalCols: ColumnConfig[] = cols.map((col) => {
-                    const existing = previousColumnState.find(
-                        (c) => c.key === col.key
-                    );
-
-                    return existing
-                        ? {
-                            ...col,
-                            enabled: existing.enabled,
-                            order: existing.order,
-                            groupBy: existing.groupBy,
+                    staffBasedReportService.getStaffBasedReport(
+                        {
+                            Fromdate:
+                                filters.Date.from,
+                            Todate:
+                                filters.Date.to,
                         }
-                        : col;
-                });
+                    ),
+                ]);
 
-                if (templateConfig?.expanded) {
-                    finalCols = applyTemplateToColumns(
-                        cols,
-                        templateConfig.expanded
+                const staffList =
+                    staffRes.data.data || [];
+
+                const reportRows =
+                    reportRes.data.data || [];
+
+                /* ================= ABSTRACT ================= */
+
+                if (
+                    toggleMode ===
+                    "Abstract"
+                ) {
+                    const start = dayjs(
+                        filters.Date.from
                     );
-                }
 
-                /* ================= ENABLED SPLIT COLUMNS ================= */
-                const enabledSplitColumns = splitColumns.filter(col =>
-                    finalCols.some(c => c.key === col && c.enabled)
-                );
+                    const end = dayjs(
+                        filters.Date.to
+                    );
 
-                /* ================= PIVOT ================= */
+                    const dates: string[] =
+                        [];
 
-                const pivotMap = new Map<string, any>();
+                    let current = start;
 
-                reportRows.forEach((row: any) => {
+                    while (
+                        current.isBefore(end) ||
+                        current.isSame(
+                            end,
+                            "day"
+                        )
+                    ) {
+                        dates.push(
+                            current.format(
+                                "DD.MM"
+                            )
+                        );
 
-                    const qty = Number(row.Qty || 0);
+                        current =
+                            current.add(
+                                1,
+                                "day"
+                            );
+                    }
 
-                    const processedStaffs = new Set<string>();
+                    const staffFields = [
+                        "Others1",
+                        "Others2",
+                        "Others3",
+                        "Others4",
+                        "Others5",
+                        "Load_Man",
+                        "Checker",
+                        "Delivery_Man",
+                        "Others6",
+                        "Driver",
+                        "Created_By",
+                    ];
 
-                    categoryFields.forEach((field) => {
+                    /* ================= BUILD FAST LOOKUP MAP ================= */
 
-                        const staff = String(row[field] || "").trim();
-                        if (!staff) return;
+                    const qtyMap: Record<
+                        string,
+                        number
+                    > = {};
 
-                        const duplicateKey =
-                            `${row.Invoice_no}_${row.Trans_Id}_${field}_${staff}`;
+                    reportRows.forEach(
+                        (row: any) => {
+                            const dateKey =
+                                dayjs(
+                                    row.Stock_Journal_date
+                                ).format(
+                                    "DD.MM"
+                                );
 
-                        if (processedStaffs.has(duplicateKey)) return;
-                        processedStaffs.add(duplicateKey);
+                            const qty =
+                                Number(
+                                    row.Qty || 0
+                                );
 
-                        /* ================= BASE GROUP KEY ================= */
-                        const pivotParts: string[] = [
-                            staff,
-                            row.Godown_Name || ""
+                            const processedStaffs =
+                                new Set<string>();
+
+                            staffFields.forEach(
+                                (field) => {
+                                    const staff =
+                                        String(
+                                            row[field] ||
+                                            ""
+                                        ).trim();
+
+                                    if (
+                                        !staff ||
+                                        processedStaffs.has(
+                                            staff
+                                        )
+                                    ) {
+                                        return;
+                                    }
+
+                                    processedStaffs.add(
+                                        staff
+                                    );
+
+                                    const mapKey =
+                                        `${staff}_${dateKey}`;
+
+                                    qtyMap[
+                                        mapKey
+                                    ] =
+                                        (
+                                            qtyMap[
+                                            mapKey
+                                            ] || 0
+                                        ) + qty;
+                                }
+                            );
+                        }
+                    );
+
+                    /* ================= BUILD ABSTRACT ROWS ================= */
+
+                    const rows =
+                        staffList.map(
+                            (
+                                staff: any,
+                                index: number
+                            ) => {
+                                const obj: any =
+                                {
+                                    SNo:
+                                        index + 1,
+
+                                    Staff_Name:
+                                        staff.Cost_Center_Name,
+                                };
+
+                                let total = 0;
+
+                                dates.forEach(
+                                    (
+                                        dateCol
+                                    ) => {
+                                        const mapKey =
+                                            `${staff.Cost_Center_Name}_${dateCol}`;
+
+                                        const qty =
+                                            qtyMap[
+                                            mapKey
+                                            ] || 0;
+
+                                        obj[
+                                            dateCol
+                                        ] = qty;
+
+                                        total +=
+                                            qty;
+                                    }
+                                );
+
+                                obj.Total =
+                                    total;
+
+                                return obj;
+                            }
+                        );
+
+                    const cols: ColumnConfig[] =
+                        [
+                            {
+                                key:
+                                    "Staff_Name",
+
+                                label:
+                                    "Staff Name",
+
+                                enabled:
+                                    true,
+
+                                order: 1,
+                            },
+
+                            ...dates.map(
+                                (
+                                    d,
+                                    i
+                                ) => ({
+                                    key: d,
+
+                                    label: d,
+
+                                    enabled:
+                                        true,
+
+                                    order:
+                                        i + 2,
+
+                                    isNumeric:
+                                        true,
+                                })
+                            ),
+
+                            {
+                                key: "Total",
+
+                                label:
+                                    "Total",
+
+                                enabled:
+                                    true,
+
+                                order:
+                                    999,
+
+                                isNumeric:
+                                    true,
+                            },
                         ];
 
-                        /* ================= DYNAMIC SPLIT (IMPORTANT FIX) ================= */
-                        enabledSplitColumns.forEach((col: string) => {
-                            pivotParts.push(String(row[col] || ""));
-                        });
+                    setAbstractRows(
+                        rows
+                    );
 
-                        const pivotKey = pivotParts.join("|");
+                    setAbstractColumns(
+                        cols
+                    );
+                }
 
-                        /* ================= CREATE ROW ================= */
-                        if (!pivotMap.has(pivotKey)) {
+                /* ================= EXPANDED ================= */
 
-                            const baseRow: any = {};
+                else {
+                    const defaultEnabled =
+                        [
+                            "Staff_Name",
+                            "Godown_Name",
+                            "Qty",
+                            "Load_Man",
+                            "Others1",
+                            "Others2",
+                            "Others3",
+                            "Others4",
+                            "Others5",
+                            "Created_By",
+                        ];
 
-                            allKeys.forEach((key) => {
-                                if (categoryFields.includes(key)) {
-                                    baseRow[key] = 0;
-                                } else {
-                                    baseRow[key] = row[key];
+                    const excludeKeys =
+                        ["SNo"];
+
+                    const allKeys =
+                        reportRows.length >
+                            0
+                            ? Object.keys(
+                                reportRows[0]
+                            ).filter(
+                                (
+                                    key
+                                ) =>
+                                    !excludeKeys.includes(
+                                        key
+                                    )
+                            )
+                            : [];
+
+                    const categoryFields =
+                        [
+                            "Load_Man",
+                            "Others1",
+                            "Others2",
+                            "Others3",
+                            "Others4",
+                            "Others5",
+                            "Checker",
+                            "Delivery_Man",
+                            "Others6",
+                            "Driver",
+                            "Created_By",
+                        ];
+
+                    /* ================= COLUMN CONFIG ================= */
+
+                    const cols: ColumnConfig[] =
+                        [
+                            {
+                                key:
+                                    "Staff_Name",
+                                label:
+                                    "Staff Name",
+                                enabled:
+                                    true,
+                                order: 1,
+                            },
+
+                            {
+                                key:
+                                    "Godown_Name",
+                                label:
+                                    "Godown Name",
+                                enabled:
+                                    true,
+                                order: 2,
+                            },
+
+                            {
+                                key:
+                                    "Invoice_no",
+                                label:
+                                    "Invoice no",
+                                enabled:
+                                    false,
+                                order: 3,
+                            },
+
+                            {
+                                key:
+                                    "Journal_no",
+                                label:
+                                    "Journal no",
+                                enabled:
+                                    false,
+                                order: 3,
+                            },
+
+                            {
+                                key:
+                                    "Stock_Journal_Voucher_type",
+                                label:
+                                    "Voucher Type",
+                                enabled:
+                                    false,
+                                order: 4,
+                            },
+
+                            {
+                                key: "Qty",
+                                label:
+                                    "Total Qty",
+                                enabled:
+                                    true,
+                                order: 5,
+                                isNumeric:
+                                    true,
+                            },
+
+                            ...allKeys
+                                .filter(
+                                    (
+                                        key
+                                    ) =>
+                                        ![
+                                            "Staff_Name",
+                                            "Godown_Name",
+                                            "Invoice_no",
+                                            "Journal_no",
+                                            "Stock_Journal_Voucher_type",
+                                            "Qty",
+                                        ].includes(
+                                            key
+                                        )
+                                )
+                                .map(
+                                    (
+                                        key,
+                                        i
+                                    ) => ({
+                                        key,
+
+                                        label:
+                                            key.replace(
+                                                /_/g,
+                                                " "
+                                            ),
+
+                                        enabled:
+                                            defaultEnabled.includes(
+                                                key
+                                            ),
+
+                                        order:
+                                            i + 6,
+
+                                        isNumeric:
+                                            [
+                                                "Qty",
+                                                "Act_Qty",
+                                            ].includes(
+                                                key
+                                            ) ||
+                                            categoryFields.includes(
+                                                key
+                                            ),
+                                    })
+                                ),
+                        ];
+
+                    /* ================= APPLY TEMPLATE ================= */
+
+                    let finalCols: ColumnConfig[] =
+                        cols;
+
+                    if (
+                        selectedTemplateId &&
+                        templateConfig
+                            ?.expanded
+                            ?.length
+                    ) {
+                        finalCols =
+                            applyTemplateToColumns(
+                                cols,
+                                templateConfig.expanded
+                            );
+                    } else {
+                        const previousColumnState =
+                            expandedColumns;
+
+                        finalCols =
+                            cols.map(
+                                (
+                                    col
+                                ) => {
+                                    const existing =
+                                        previousColumnState.find(
+                                            (
+                                                c
+                                            ) =>
+                                                c.key ===
+                                                col.key
+                                        );
+
+                                    return existing
+                                        ? {
+                                            ...col,
+                                            enabled:
+                                                existing.enabled,
+                                            order:
+                                                existing.order,
+                                            groupBy:
+                                                existing.groupBy,
+                                        }
+                                        : col;
                                 }
-                            });
+                            );
+                    }
 
-                            baseRow.Staff_Name = staff;
-                            baseRow.Godown_Name = row.Godown_Name || "";
-                            baseRow.Invoice_no = row.Invoice_no || "";
-                            baseRow.Journal_no = row.Journal_no || "";
-                            baseRow.Stock_Journal_Voucher_type =
-                                row.Stock_Journal_Voucher_type || "";
-                            baseRow.Qty = 0;
+                    /* ================= ENABLED SPLIT COLUMNS ================= */
 
-                            baseRow.__invoiceTracker = new Set<string>();
-                            baseRow.__categoryTracker = new Set<string>();
+                    const enabledSplitColumns =
+                        finalCols
+                            .filter(
+                                (c) =>
+                                    c.enabled &&
+                                    ![
+                                        "Staff_Name",
+                                        "Qty",
+                                        "SNo",
+                                    ].includes(c.key) &&
+                                    !categoryFields.includes(
+                                        c.key
+                                    )
+                            )
+                            .sort(
+                                (a, b) =>
+                                    a.order -
+                                    b.order
+                            )
+                            .map((c) => c.key);
 
-                            pivotMap.set(pivotKey, baseRow);
+                    /* ================= PIVOT MAP ================= */
+
+                    const pivotMap = new Map<
+                        string,
+                        any
+                    >();
+
+                    reportRows.forEach(
+                        (row: any) => {
+                            const qty = Number(
+                                row.Qty || 0
+                            );
+
+                            const processedStaffs =
+                                new Set<string>();
+
+                            categoryFields.forEach(
+                                (field) => {
+                                    const staff =
+                                        String(
+                                            row[field] ||
+                                            ""
+                                        ).trim();
+
+                                    if (!staff)
+                                        return;
+
+                                    const duplicateKey = `${row.Invoice_no}_${row.Trans_Id}_${field}_${staff}`;
+
+                                    if (
+                                        processedStaffs.has(
+                                            duplicateKey
+                                        )
+                                    )
+                                        return;
+
+                                    processedStaffs.add(
+                                        duplicateKey
+                                    );
+
+                                    /* ================= BASE GROUP KEY ================= */
+
+                                    const pivotParts: string[] =
+                                        [staff];
+
+                                    /* ================= DYNAMIC SPLIT ================= */
+
+                                    enabledSplitColumns.forEach(
+                                        (col: string) => {
+                                            pivotParts.push(
+                                                String(
+                                                    row[
+                                                    col
+                                                    ] || ""
+                                                )
+                                            );
+                                        }
+                                    );
+
+                                    const pivotKey =
+                                        pivotParts.join(
+                                            "|"
+                                        );
+
+                                    /* ================= CREATE ROW ================= */
+
+                                    if (
+                                        !pivotMap.has(
+                                            pivotKey
+                                        )
+                                    ) {
+                                        const baseRow: any =
+                                            {};
+
+                                        allKeys.forEach(
+                                            (key) => {
+                                                if (
+                                                    categoryFields.includes(
+                                                        key
+                                                    )
+                                                ) {
+                                                    baseRow[
+                                                        key
+                                                    ] = 0;
+                                                } else {
+                                                    baseRow[
+                                                        key
+                                                    ] =
+                                                        row[key];
+                                                }
+                                            }
+                                        );
+
+                                        baseRow.Staff_Name =
+                                            staff;
+
+                                        baseRow.Qty = 0;
+
+                                        enabledSplitColumns.forEach(
+                                            (col) => {
+                                                baseRow[
+                                                    col
+                                                ] =
+                                                    row[
+                                                    col
+                                                    ] ?? "";
+                                            }
+                                        );
+
+                                        baseRow.__invoiceTracker =
+                                            new Set<
+                                                string
+                                            >();
+
+                                        baseRow.__categoryTracker =
+                                            new Set<
+                                                string
+                                            >();
+
+                                        pivotMap.set(
+                                            pivotKey,
+                                            baseRow
+                                        );
+                                    }
+
+                                    const existing =
+                                        pivotMap.get(
+                                            pivotKey
+                                        );
+
+                                    /* ================= QTY CALC ================= */
+
+                                    const qtyKey =
+                                        `${pivotKey}_${row.Trans_Id}`;
+
+                                    const categoryKey =
+                                        `${pivotKey}_${row.Trans_Id}_${field}`;
+
+                                    if (
+                                        !existing.__invoiceTracker.has(
+                                            qtyKey
+                                        )
+                                    ) {
+                                        existing.Qty +=
+                                            qty;
+
+                                        existing.__invoiceTracker.add(
+                                            qtyKey
+                                        );
+                                    }
+
+                                    if (
+                                        !existing.__categoryTracker.has(
+                                            categoryKey
+                                        )
+                                    ) {
+                                        existing[
+                                            field
+                                        ] += qty;
+
+                                        existing.__categoryTracker.add(
+                                            categoryKey
+                                        );
+                                    }
+
+                                    /* ================= OTHER FIELD MERGE ================= */
+
+                                    allKeys.forEach(
+                                        (key) => {
+                                            if (
+                                                [
+                                                    "Staff_Name",
+                                                    "Godown_Name",
+                                                    "Invoice_no",
+                                                    "Journal_no",
+                                                    "Stock_Journal_Voucher_type",
+                                                    "Qty",
+                                                    ...categoryFields,
+                                                ].includes(
+                                                    key
+                                                )
+                                            )
+                                                return;
+
+                                            const oldValue =
+                                                existing[
+                                                key
+                                                ];
+
+                                            const newValue =
+                                                row[key];
+
+                                            if (
+                                                oldValue ===
+                                                null ||
+                                                oldValue ===
+                                                undefined ||
+                                                oldValue ===
+                                                ""
+                                            ) {
+                                                existing[
+                                                    key
+                                                ] = newValue;
+                                            } else if (
+                                                String(
+                                                    oldValue
+                                                ) !==
+                                                String(
+                                                    newValue
+                                                )
+                                            ) {
+                                                existing[
+                                                    key
+                                                ] =
+                                                    "Multiple";
+                                            }
+                                        }
+                                    );
+                                }
+                            );
                         }
+                    );
 
-                        const existing = pivotMap.get(pivotKey);
+                    /* ================= FINAL ROWS ================= */
 
-                        /* ================= QTY ================= */
-                        const qtyKey = `${pivotKey}_${row.Trans_Id}`;
-                        const categoryKey = `${pivotKey}_${row.Trans_Id}_${field}`;
+                    const rows =
+                        Array.from(
+                            pivotMap.values()
+                        ).map(
+                            (
+                                r: any,
+                                i
+                            ) => {
+                                delete r.__invoiceTracker;
+                                delete r.__categoryTracker;
 
-                        if (!existing.__invoiceTracker.has(qtyKey)) {
-                            existing.Qty += qty;
-                            existing.__invoiceTracker.add(qtyKey);
-                        }
-
-                        if (!existing.__categoryTracker.has(categoryKey)) {
-                            existing[field] += qty;
-                            existing.__categoryTracker.add(categoryKey);
-                        }
-
-                        /* ================= OTHER FIELDS ================= */
-                        allKeys.forEach((key) => {
-
-                            if ([
-                                "Staff_Name",
-                                "Godown_Name",
-                                "Invoice_no",
-                                "Journal_no",
-                                "Stock_Journal_Voucher_type",
-                                "Qty",
-                                ...categoryFields
-                            ].includes(key)) return;
-
-                            const oldValue = existing[key];
-                            const newValue = row[key];
-
-                            if (
-                                oldValue === null ||
-                                oldValue === undefined ||
-                                oldValue === ""
-                            ) {
-                                existing[key] = newValue;
+                                return {
+                                    SNo: i + 1,
+                                    ...r,
+                                };
                             }
-                            else if (String(oldValue) !== String(newValue)) {
-                                existing[key] = "Multiple";
-                            }
-                        });
+                        );
 
-                    });
-                });
+                    setExpandedRows(rows);
 
-                /* ================= FINAL ROWS ================= */
-                const rows = Array.from(pivotMap.values()).map((r: any, i) => {
+                    /* ================= COLUMN STATE UPDATE ================= */
 
-                    delete r.__invoiceTracker;
-                    delete r.__categoryTracker;
+                    setExpandedColumns(
+                        (prev) => {
+                            const next =
+                                finalCols.map(
+                                    (col) => {
+                                        const existing =
+                                            prev.find(
+                                                (p) =>
+                                                    p.key ===
+                                                    col.key
+                                            );
 
-                    return {
-                        SNo: i + 1,
-                        ...r
-                    };
-                });
+                                        return existing
+                                            ? {
+                                                ...col,
+                                                enabled:
+                                                    existing.enabled,
+                                                order:
+                                                    existing.order,
+                                                groupBy:
+                                                    existing.groupBy,
+                                            }
+                                            : col;
+                                    }
+                                );
 
-                setExpandedRows(rows);
-                setExpandedColumns(finalCols);
+                            const same =
+                                JSON.stringify(
+                                    prev
+                                ) ===
+                                JSON.stringify(
+                                    next
+                                );
+
+                            return same
+                                ? prev
+                                : next;
+                        }
+                    );
+                }
+
+                setPage(1);
+            } catch (error) {
+                console.error(error);
+                toast.error(
+                    "Failed to load Staff Based Report"
+                );
+            } finally {
+                setLoading(false);
             }
-
-            setPage(1);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to load Staff Based Report");
-        } finally {
-            setLoading(false);
-        }
-    };
+        };
 
     useEffect(() => {
         setFromDate(filters.Date.from);
         setToDate(filters.Date.to);
     }, [toggleMode]);
 
+    /* ================= RESET SETTINGS ================= */
 
     const handleResetSettings = () => {
         const todayDate = dayjs().format("YYYY-MM-DD");
 
-        setTemplateConfig(null);
-
-        // ✅ Reset filters
         setFromDate(todayDate);
         setToDate(todayDate);
 
         setFilters({
-            Date: { from: todayDate, to: todayDate },
+            Date: {
+                from: todayDate,
+                to: todayDate,
+            },
             columnFilters: {},
         });
 
         setAbstractGrouping([]);
         setExpandedGrouping([]);
-
         setAbstractPendingGrouping([]);
         setExpandedPendingGrouping([]);
-
         setAbstractExpandedKeys([]);
         setExpandedExpandedKeys([]);
 
-        // ✅ Reset sort
-        setSortConfig({ key: null, order: "asc" });
+        setSortConfig({
+            key: null,
+            order: "asc",
+        });
 
-        // ✅ HARD RESET DATA (IMPORTANT)
         setAbstractRows([]);
         setExpandedRows([]);
-
         setAbstractColumns([]);
         setExpandedColumns([]);
+
         setStockFilter("hasValues");
 
-        // ✅ Reset pagination
         setPage(1);
 
-        // ✅ Close menus
         setSettingsAnchor(null);
         setFilterAnchor(null);
-
     };
 
     /* ================= FILTERING ================= */
 
     const filteredRows = useMemo(() => {
-
         let rows = [...rawRows];
 
-        /* ================= COLUMN FILTER ================= */
-        for (const [key, values] of Object.entries(filters.columnFilters)) {
-
-            if (!values || values.length === 0) continue;
+        for (const [key, values] of Object.entries(
+            filters.columnFilters
+        )) {
+            if (!values?.length) continue;
 
             rows = rows.filter((row) => {
-
                 const rowValue = String(row[key] ?? "")
                     .trim()
                     .toLowerCase();
 
                 return values.some(
                     (v) =>
-                        String(v)
-                            .trim()
-                            .toLowerCase() === rowValue
+                        String(v).trim().toLowerCase() === rowValue
                 );
             });
         }
 
-        /* ================= STOCK FILTER ================= */
         rows = rows.filter((row) => {
-
             const qty = Number(row.Qty || row.Total || 0);
 
             if (stockFilter === "hasValues" && qty <= 0)
@@ -773,8 +1325,9 @@ const StaffBasedReport: React.FC = () => {
         });
 
         return rows;
-
     }, [rawRows, filters.columnFilters, stockFilter]);
+
+    /* ================= SORTING ================= */
 
     const sortedRows = useMemo(() => {
         if (!sortConfig.key) return filteredRows;
@@ -786,21 +1339,23 @@ const StaffBasedReport: React.FC = () => {
             if (aVal == null) return 1;
             if (bVal == null) return -1;
 
-            // Date handling
             if (sortConfig.key === "Ledger_Date") {
                 return sortConfig.order === "asc"
-                    ? dayjs(aVal).valueOf() - dayjs(bVal).valueOf()
-                    : dayjs(bVal).valueOf() - dayjs(aVal).valueOf();
+                    ? dayjs(aVal).valueOf() -
+                    dayjs(bVal).valueOf()
+                    : dayjs(bVal).valueOf() -
+                    dayjs(aVal).valueOf();
             }
 
-            // Numeric
-            if (typeof aVal === "number" && typeof bVal === "number") {
+            if (
+                typeof aVal === "number" &&
+                typeof bVal === "number"
+            ) {
                 return sortConfig.order === "asc"
                     ? aVal - bVal
                     : bVal - aVal;
             }
 
-            // String
             return sortConfig.order === "asc"
                 ? String(aVal).localeCompare(String(bVal))
                 : String(bVal).localeCompare(String(aVal));
@@ -810,25 +1365,29 @@ const StaffBasedReport: React.FC = () => {
     /* ================= GROUPING ================= */
 
     const buildGroupedData = React.useCallback(
-        (data: any[], level: number, parentKey = ""): any[] => {
+        (data: any[], level: number, parentKey = "") => {
             const groupKey = grouping[level];
+
             if (!groupKey) return data;
 
             const map = new Map<string, any[]>();
 
             for (const row of data) {
                 const val = String(row[groupKey] ?? "Others");
+
                 if (!map.has(val)) map.set(val, []);
                 map.get(val)!.push(row);
             }
 
-            return Array.from(map.entries()).map(([value, rows]) => ({
-                __group: true,
-                __key: `${parentKey}${groupKey}:${value}`,
-                __value: value,
-                __level: level,
-                __rows: rows,
-            }));
+            return Array.from(map.entries()).map(
+                ([value, rows]) => ({
+                    __group: true,
+                    __key: `${parentKey}${groupKey}:${value}`,
+                    __value: value,
+                    __level: level,
+                    __rows: rows,
+                })
+            );
         },
         [grouping]
     );
@@ -836,7 +1395,7 @@ const StaffBasedReport: React.FC = () => {
     const groupedRows = useMemo(() => {
         if (!grouping.length) return sortedRows;
         return buildGroupedData(sortedRows, 0);
-    }, [sortedRows, grouping]);
+    }, [sortedRows, grouping, buildGroupedData]);
 
     const flattenRows = (rows: any[]): any[] => {
         const result: any[] = [];
@@ -844,12 +1403,13 @@ const StaffBasedReport: React.FC = () => {
         const walk = (list: any[]) => {
             for (const r of list) {
                 result.push(r);
+
                 if (r.__group && expandedKeys.includes(r.__key)) {
                     walk(
                         buildGroupedData(
                             r.__rows,
                             r.__level + 1,
-                            `${r.__key} > `
+                            `${r.__key}>`
                         )
                     );
                 }
@@ -873,7 +1433,7 @@ const StaffBasedReport: React.FC = () => {
         return paginatedSourceRows.slice(start, end);
     }, [paginatedSourceRows, page, rowsPerPage]);
 
-    /* ================= PAGINATION ================= */
+    /* ================= DRAG & DROP ================= */
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -883,49 +1443,83 @@ const StaffBasedReport: React.FC = () => {
 
     const handleDragEnd = (event: any) => {
         const { active, over } = event;
+
         if (!over || active.id === over.id) return;
 
-        setColumns(cols => {
-            const enabled = cols.filter(c => c.enabled);
-            const disabled = cols.filter(c => !c.enabled);
+        setColumns((cols) => {
+            const enabled = cols.filter((c) => c.enabled);
+            const disabled = cols.filter((c) => !c.enabled);
 
-            const activeList = enabled.some(c => c.key === active.id)
+            const isEnabledDrag = enabled.some(
+                (c) => c.key === active.id
+            );
+
+            const activeList = isEnabledDrag
                 ? enabled
                 : disabled;
 
-            const oldIndex = activeList.findIndex(c => c.key === active.id);
-            const newIndex = activeList.findIndex(c => c.key === over.id);
+            const oldIndex = activeList.findIndex(
+                (c) => c.key === active.id
+            );
 
-            const reordered = arrayMove(activeList, oldIndex, newIndex);
+            const newIndex = activeList.findIndex(
+                (c) => c.key === over.id
+            );
 
-            reordered.forEach((c, i) => (c.order = i));
+            const reordered = arrayMove(
+                activeList,
+                oldIndex,
+                newIndex
+            );
 
-            return [
-                ...reordered,
-                ...(!activeList[0].enabled ? enabled : disabled),
-            ];
+            const reorderedWithOrder = reordered.map(
+                (c, index) => ({
+                    ...c,
+                    order: index + 1,
+                })
+            );
+
+            return isEnabledDrag
+                ? [...reorderedWithOrder, ...disabled]
+                : [...enabled, ...reorderedWithOrder];
         });
     };
 
+    /* ================= COLUMNS SORT ================= */
+
     const sortedColumns = useMemo(() => {
         return [...columns].sort((a, b) => {
-            // enabled columns first
             if (a.enabled !== b.enabled) {
                 return a.enabled ? -1 : 1;
             }
-            // then by order
+
             return a.order - b.order;
         });
     }, [columns]);
 
-    const enabledColumns = sortedColumns.filter(c => c.enabled);
+    const enabledColumns =
+        sortedColumns.filter((c) => c.enabled);
 
-    const baseRows = grouping.length ? filteredRows : sortedRows;
+    /* ================= TOTAL ================= */
+
+    const baseRows = grouping.length
+        ? filteredRows
+        : sortedRows;
 
     const getTotal = (key: string) =>
         Number(
-            baseRows.reduce((s, r) => s + Number(r[key] || 0), 0).toFixed(2)
+            baseRows
+                .reduce((s, r) => {
+                    const value = Number(r[key]);
+                    return (
+                        s +
+                        (Number.isFinite(value) ? value : 0)
+                    );
+                }, 0)
+                .toFixed(2)
         );
+
+    /* ================= HEADER CLICK ================= */
 
     const handleHeaderClick = (
         e: React.MouseEvent<HTMLElement>,
@@ -936,13 +1530,24 @@ const StaffBasedReport: React.FC = () => {
         setFilterAnchor(e.currentTarget);
     };
 
+    /* ================= DEFAULT SORT INIT ================= */
+
     useEffect(() => {
         if (sortConfig.key) return;
 
-        const hasLedgerDate = enabledColumns.some(c => c.key === "Ledger_Date");
-        const hasInvoiceNo = enabledColumns.some(c => c.key === "invoice_no");
+        const hasLedgerDate = enabledColumns.some(
+            (c) => c.key === "Ledger_Date"
+        );
 
-        if (!hasLedgerDate && !hasInvoiceNo && enabledColumns.length > 0) {
+        const hasInvoiceNo = enabledColumns.some(
+            (c) => c.key === "invoice_no"
+        );
+
+        if (
+            !hasLedgerDate &&
+            !hasInvoiceNo &&
+            enabledColumns.length > 0
+        ) {
             setSortConfig({
                 key: enabledColumns[0].key,
                 order: "asc",
@@ -950,27 +1555,31 @@ const StaffBasedReport: React.FC = () => {
         }
     }, [enabledColumns, sortConfig.key]);
 
+    /* ================= FILTER OPTIONS ================= */
+
     const sortFilterValues = (
         values: string[],
         key: string,
         order: "asc" | "desc"
     ) => {
         return [...values].sort((a, b) => {
-            // Date column
             if (key === "Ledger_Date") {
                 return order === "asc"
-                    ? dayjs(a).valueOf() - dayjs(b).valueOf()
-                    : dayjs(b).valueOf() - dayjs(a).valueOf();
+                    ? dayjs(a).valueOf() -
+                    dayjs(b).valueOf()
+                    : dayjs(b).valueOf() -
+                    dayjs(a).valueOf();
             }
 
-            // Numeric column
-            if (!isNaN(Number(a)) && !isNaN(Number(b))) {
+            if (
+                !isNaN(Number(a)) &&
+                !isNaN(Number(b))
+            ) {
                 return order === "asc"
                     ? Number(a) - Number(b)
                     : Number(b) - Number(a);
             }
 
-            // String column
             return order === "asc"
                 ? a.localeCompare(b)
                 : b.localeCompare(a);
@@ -980,19 +1589,31 @@ const StaffBasedReport: React.FC = () => {
     const filterOptions = useMemo(() => {
         if (!activeHeader) return [];
 
-        // ✅ Use currently visible rows only
-        const visibleRows = sortedRows;
+        let rows = [...rawRows];
+
+        for (const [key, values] of Object.entries(
+            filters.columnFilters
+        )) {
+            if (key === activeHeader) continue;
+            if (!values?.length) continue;
+
+            rows = rows.filter((row) => {
+                const rowValue = String(row[key] ?? "")
+                    .trim()
+                    .toLowerCase();
+
+                return values.some(
+                    (v) =>
+                        String(v).trim().toLowerCase() === rowValue
+                );
+            });
+        }
 
         const uniqueValues = Array.from(
             new Set(
-                visibleRows
+                rows
                     .map((r) => r[activeHeader])
-                    .filter(
-                        (v) =>
-                            v !== null &&
-                            v !== undefined &&
-                            v !== ""
-                    )
+                    .filter((v) => v !== null && v !== undefined && v !== "")
                     .map((v) => String(v).trim())
             )
         );
@@ -1002,20 +1623,19 @@ const StaffBasedReport: React.FC = () => {
             activeHeader,
             sortConfig.order
         );
-    }, [
-        activeHeader,
-        sortedRows,
-        sortConfig.order
-    ]);
+    }, [activeHeader, rawRows, filters.columnFilters, sortConfig.order]);
 
-    const exportColumns = enabledColumns.map(c => ({
+    /* ================= EXPORT ================= */
+
+    const exportColumns = enabledColumns.map((c) => ({
         key: c.key,
         label: c.label,
     }));
 
-    const exportRows = sortedRows.map(row => {
+    const exportRows = sortedRows.map((row) => {
         const obj: any = {};
-        exportColumns.forEach(col => {
+
+        exportColumns.forEach((col) => {
             let value = row[col.key];
 
             if (col.key === "Ledger_Date") {
@@ -1024,24 +1644,35 @@ const StaffBasedReport: React.FC = () => {
 
             obj[col.label] = value ?? "";
         });
+
         return obj;
     });
 
+    /* ================= EXPORT EXCEL ================= */
+
     const handleExportExcel = () => {
-        const worksheet = XLSX.utils.json_to_sheet(exportRows);
+        const worksheet =
+            XLSX.utils.json_to_sheet(exportRows);
+
         const workbook = XLSX.utils.book_new();
 
         XLSX.utils.book_append_sheet(
             workbook,
             worksheet,
-            toggleMode === "Expanded" ? "Expanded Report" : "Abstract Report"
+            toggleMode === "Expanded"
+                ? "Expanded Report"
+                : "Abstract Report"
         );
 
         XLSX.writeFile(
             workbook,
-            `Staff Based Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.xlsx`
+            `Staff Based Report_${toggleMode}_${dayjs().format(
+                "DDMMYYYY"
+            )}.xlsx`
         );
     };
+
+    /* ================= EXPORT PDF ================= */
 
     const handleExportPDF = () => {
         const doc = new jsPDF("l", "mm", "a4");
@@ -1054,120 +1685,109 @@ const StaffBasedReport: React.FC = () => {
 
         autoTable(doc, {
             startY: 15,
-            head: [exportColumns.map(c => c.label)],
-            body: exportRows.map(r => Object.values(r)),
+            head: [exportColumns.map((c) => c.label)],
+            body: exportRows.map((r) =>
+                Object.values(r)
+            ),
             styles: { fontSize: 7 },
             headStyles: { fillColor: [30, 58, 138] },
         });
 
         doc.save(
-            `Staff Based Report ${toggleMode}_${dayjs().format("DDMMYYYY")}.pdf`
+            `Staff Based Report_${toggleMode}_${dayjs().format(
+                "DDMMYYYY"
+            )}.pdf`
         );
     };
 
-
-    useEffect(() => {
-        if (!columns.length || !templateConfig) return;
-
-        const autoGroupCols = columns
-            .filter(col => col.groupBy && col.enabled)
-            .sort((a, b) => (a.groupBy! - b.groupBy!))
-            .map(col => col.key);
-
-        if (toggleMode === "Expanded") {
-            setExpandedGrouping(autoGroupCols);
-            setExpandedPendingGrouping(autoGroupCols);
-            setExpandedExpandedKeys([]);
-        } else {
-            setAbstractGrouping(autoGroupCols);
-            setAbstractPendingGrouping(autoGroupCols);
-            setAbstractExpandedKeys([]);
-        }
-    }, [columns]);
+    /* ================= APPLY TEMPLATE FUNCTION ================= */
 
     const applyTemplateToColumns = (
         baseCols: ColumnConfig[],
         templateCols: any[]
     ): ColumnConfig[] => {
-
         const mapped = templateCols.map((t: any) => ({
-            key: t.key,
-            label: t.label,
-            enabled: t.enabled,
-            order: t.order,
-            groupBy: t.groupBy || 0,
-            isNumeric: baseCols.find(b => b.key === t.key)?.isNumeric
+            key: t.key ?? t.Key,
+            label: t.label ?? t.Label,
+            enabled: t.enabled ?? t.Enabled ?? false,
+            order: t.order ?? t.Order ?? 0,
+            groupBy:
+                t.groupBy ??
+                t.GroupBy ??
+                t.group_by ??
+                t.Group_By ??
+                0,
+            isNumeric: baseCols.find(
+                (b) => b.key === (t.key ?? t.Key)
+            )?.isNumeric,
         }));
 
         const missing = baseCols
-            .filter(b => !mapped.some((m: any) => m.key === b.key))
-            .map(b => ({
+            .filter(
+                (b) =>
+                    !mapped.some((m: any) => m.key === b.key)
+            )
+            .map((b) => ({
                 ...b,
-                enabled: false
+                enabled: false,
             }));
 
         return [...mapped, ...missing];
     };
 
+    /* ================= LOAD TEMPLATE ================= */
+
     const loadTemplate = async (reportId: number) => {
         try {
             setLoading(true);
 
-            const res = await SettingsService.getReportEditData({
-                reportId,
-                typeId: 2,
-            });
-
-            console.log("Template Response:", res.data);
+            const res =
+                await SettingsService.getReportEditData({
+                    reportId,
+                    typeId: 2,
+                });
 
             const data =
-                res?.data?.data ||
-                res?.data ||
-                {};
+                res?.data?.data || res?.data || {};
 
             const templateCols =
-                data?.columns ||
-                data?.Columns ||
-                [];
+                data?.columns || data?.Columns || [];
 
-            /* ==========================
-               TEMPLATE CONFIG
-            ========================== */
+            const autoReportName =
+                data?.Report_Name ||
+                data?.ReportName ||
+                "";
+
+            const autoParentReport =
+                data?.Parent_Report ||
+                data?.ParentReport ||
+                "";
+
+            setExpandedRows([]);
+
             setTemplateConfig({
                 expanded: templateCols,
             });
 
             setSelectedTemplateId(reportId);
+
             setIsEditTemplate(true);
 
-            /* ==========================
-               REPORT NAME AUTO FILL
-            ========================== */
-            const autoReportName =
-                data?.Report_Name ||
-                data?.ReportName ||
-                data?.report_name ||
-                data?.reportName ||
-                data?.Name ||
-                data?.name ||
-                "";
+            setReportName(autoReportName);
 
-            if (autoReportName) {
-                setReportName(autoReportName);
-            }
+            setParentReportName(autoParentReport);
 
-            /* ==========================
-               EXPANDED MODE
-            ========================== */
             setToggleMode("Expanded");
 
-            setExpandedRows([]);
-            setExpandedColumns([]);
+            const mappedCols =
+                applyTemplateToColumns(
+                    expandedColumns,
+                    templateCols
+                );
 
-            setTimeout(() => {
-                loadStaffBasedReport();
-            }, 0);
+            setExpandedColumns(mappedCols);
 
+            setPage(1);
         } catch (error) {
             console.error(error);
             toast.error("Failed to load template");
@@ -1176,13 +1796,14 @@ const StaffBasedReport: React.FC = () => {
         }
     };
 
+    /* ================= QUICK SAVE TEMPLATE ================= */
+
     const handleQuickSave = async () => {
         try {
-            /* ===============================
-               VALIDATION
-            =============================== */
             if (toggleMode !== "Expanded") {
-                toast.info("Templates can be saved only in Expanded mode");
+                toast.info(
+                    "Templates can be saved only in Expanded mode"
+                );
                 return;
             }
 
@@ -1201,21 +1822,14 @@ const StaffBasedReport: React.FC = () => {
                 return;
             }
 
-            /* ===============================
-               LOGIN USER
-            =============================== */
             const userData = JSON.parse(
                 localStorage.getItem("user") || "{}"
             );
 
             const createdBy = userData?.id || 0;
 
-            /* ===============================
-               ABSTRACT PAYLOAD
-               (backend requires valid data)
-            =============================== */
-            const abstractPayload = (
-                abstractColumns.length
+            const abstractPayload =
+                (abstractColumns.length
                     ? abstractColumns
                     : [
                         {
@@ -1227,33 +1841,28 @@ const StaffBasedReport: React.FC = () => {
                             isNumeric: false,
                         },
                     ]
-            ).map((c) => ({
-                key: c.key,
-                label: c.label,
-                enabled: c.enabled,
-                order: c.order,
-                groupBy: 0,
-                dataType: "nvarchar",
-            }));
+                ).map((c) => ({
+                    key: c.key,
+                    label: c.label,
+                    enabled: c.enabled,
+                    order: c.order,
+                    groupBy: 0,
+                    dataType: "nvarchar",
+                }));
 
-            /* ===============================
-               EXPANDED PAYLOAD
-            =============================== */
-            const expandedPayload = expandedColumns.map((c) => ({
-                key: c.key,
-                label: c.label,
-                enabled: c.enabled,
-                order: c.order,
-                groupBy: expandedGrouping.includes(c.key)
-                    ? expandedGrouping.indexOf(c.key) + 1
-                    : 0,
-                dataType: "nvarchar",
-            }));
+            const expandedPayload =
+                expandedColumns.map((c) => ({
+                    key: c.key,
+                    label: c.label,
+                    enabled: c.enabled,
+                    order: c.order,
+                    groupBy: expandedGrouping.includes(c.key)
+                        ? expandedGrouping.indexOf(c.key) + 1
+                        : 0,
+                    dataType: "nvarchar",
+                }));
 
-            /* ===============================
-               EDIT TEMPLATE
-            =============================== */
-            if (selectedTemplateId) {
+            if (isEditTemplate && selectedTemplateId) {
                 await SettingsService.updateReport({
                     reportId: selectedTemplateId,
                     typeId: 1,
@@ -1266,36 +1875,30 @@ const StaffBasedReport: React.FC = () => {
                     columns: expandedPayload,
                 });
 
-                toast.success("Template Updated Successfully ✅");
-            }
+                toast.success(
+                    "Template Updated Successfully ✅"
+                );
 
-            /* ===============================
-               CREATE TEMPLATE
-            =============================== */
-            else {
+                setIsEditTemplate(false);
+            } else {
                 await SettingsService.saveReportSettings({
                     reportName: reportName.trim(),
-                    parentReport: parentReportName.trim(),
-
-                    // backend required SP names
+                    parentReport:
+                        parentReportName.trim(),
                     abstractSP:
                         "Reporting_Online_Stock_Journal_VW",
-
                     expandedSP:
                         "Reporting_Online_Stock_Journal_Item_VW",
-
                     abstractColumns: abstractPayload,
                     expandedColumns: expandedPayload,
-
                     createdBy,
                 });
 
-                toast.success("Template Saved Successfully ✅");
+                toast.success(
+                    "Template Saved Successfully ✅"
+                );
             }
 
-            /* ===============================
-               CLOSE / REFRESH
-            =============================== */
             setSaveDialogOpen(false);
 
             setTimeout(() => {
@@ -1311,7 +1914,31 @@ const StaffBasedReport: React.FC = () => {
         }
     };
 
-    /* ================= RENDER ================= */
+    /* ================= USE EFFECT (GROUP AUTO INIT) ================= */
+
+    useEffect(() => {
+        if (!columns.length) return;
+
+        const autoGroupCols = columns
+            .filter((col) => Number(col.groupBy || 0) > 0)
+            .sort(
+                (a, b) =>
+                    Number(a.groupBy) - Number(b.groupBy)
+            )
+            .map((col) => col.key);
+
+        if (toggleMode === "Expanded") {
+            setExpandedGrouping(autoGroupCols);
+            setExpandedPendingGrouping(autoGroupCols);
+            setExpandedExpandedKeys([]);
+        } else {
+            setAbstractGrouping(autoGroupCols);
+            setAbstractPendingGrouping(autoGroupCols);
+            setAbstractExpandedKeys([]);
+        }
+    }, [columns, toggleMode]);
+
+    /* ================= RENDER START ================= */
 
     return (
         <>
@@ -1321,48 +1948,36 @@ const StaffBasedReport: React.FC = () => {
                 onExportPDF={handleExportPDF}
                 onExportExcel={handleExportExcel}
                 onReportChange={(template) => {
-
                     if (!template) {
-                        setTemplateConfig(null);
                         setSelectedTemplateId(null);
+                        setTemplateConfig(null);
                         setReportName("");
                         setParentReportName("");
                         setIsEditTemplate(false);
-
-                        /* RESET MODE */
+                        setExpandedColumns([]);
+                        setExpandedRows([]);
+                        setPage(1);
+                        setGrouping([]);
+                        setPendingGrouping([]);
+                        setExpandedKeys([]);
                         setToggleMode("Abstract");
-
-                        /* RESET ALL PAGE SETTINGS */
                         handleResetSettings();
-
-                        /* RELOAD INITIAL DATA */
-                        setTimeout(() => {
-                            loadStaffBasedReport();
-                        }, 0);
-
                         return;
                     }
 
-                    /* ===============================
-                       TEMPLATE SELECTED
-                    =============================== */
-                    setIsEditTemplate(true);
-                    setSelectedTemplateId(template.Report_Id);
-                    setReportName(template.Report_Name || "");
-
                     loadTemplate(template.Report_Id);
                 }}
-
                 onQuickSave={(parentName) => {
                     if (toggleMode !== "Expanded") {
-                        toast.info("Templates only available in Expanded mode");
+                        toast.info(
+                            "Templates only available in Expanded mode"
+                        );
                         return;
                     }
 
                     setParentReportName(parentName);
                     setSaveDialogOpen(true);
                 }}
-
                 settingsSlot={
                     <Box display="flex" gap={1}>
                         <Tooltip title="Group By">
@@ -1386,7 +2001,9 @@ const StaffBasedReport: React.FC = () => {
                         <Tooltip title="Table Settings">
                             <IconButton
                                 size="small"
-                                onClick={(e) => setSettingsAnchor(e.currentTarget)}
+                                onClick={(e) =>
+                                    setSettingsAnchor(e.currentTarget)
+                                }
                                 sx={{
                                     height: 24,
                                     width: 24,
@@ -1576,8 +2193,14 @@ const StaffBasedReport: React.FC = () => {
                                                             {c.key === "Ledger_Date"
                                                                 ? dayjs(row[c.key]).format("DD/MM/YYYY")
                                                                 : c.isNumeric
-                                                                    ? Number(row[c.key] || 0).toFixed(2)
-                                                                    : row[c.key]}
+                                                                    ? (() => {
+                                                                        const value = Number(row[c.key]);
+
+                                                                        return Number.isFinite(value)
+                                                                            ? value.toFixed(2)
+                                                                            : "0.00";
+                                                                    })()
+                                                                    : (row[c.key] ?? "")}
                                                         </TableCell>
                                                     ))}
                                                 </TableRow>
@@ -1899,8 +2522,12 @@ const StaffBasedReport: React.FC = () => {
                         fullWidth
                         size="small"
                         label="Report Name"
-                        value={reportName}
-                        onChange={(e) => setReportName(e.target.value)}
+                        value={reportName || ""}
+                        onChange={(e) =>
+                            setReportName(
+                                e.target.value
+                            )
+                        }
                     />
                 </DialogContent>
 

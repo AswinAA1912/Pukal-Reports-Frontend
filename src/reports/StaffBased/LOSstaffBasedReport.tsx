@@ -99,6 +99,7 @@ const EXPANDED_DEFAULT_KEYS = [
     "Stock_Journal_Voucher_type",
     "Product_Name",
     "Godown_Name",
+    "Created_By",
     "Qty",
     "Rate"
 ];
@@ -841,24 +842,36 @@ const LOSStaffBasedReport: React.FC = () => {
 
             /* =========================
                GROUP BY WORKED AS
+               (MULTIPLE WORK SUPPORT)
             ========================= */
             const workedGroups: any = {};
 
             staffRows.forEach((row) => {
-                const workedField =
-                    staffFields.find(
-                        (f) =>
-                            String(row[f] || "").trim().toLowerCase() ===
-                            staffName.trim().toLowerCase()
-                    ) || "Others";
 
-                if (!workedGroups[workedField]) {
-                    workedGroups[workedField] = [];
-                }
+                // get ALL matched roles instead of first role
+                const workedFields = staffFields.filter(
+                    (field) =>
+                        String(row[field] || "")
+                            .trim()
+                            .toLowerCase() ===
+                        staffName.trim().toLowerCase()
+                );
 
-                workedGroups[workedField].push(row);
+                // fallback
+                const finalFields =
+                    workedFields.length > 0
+                        ? workedFields
+                        : ["Others"];
+
+                // push row into every matched group
+                finalFields.forEach((workedField) => {
+                    if (!workedGroups[workedField]) {
+                        workedGroups[workedField] = [];
+                    }
+
+                    workedGroups[workedField].push(row);
+                });
             });
-
             return (
                 <Accordion
                     key={`${staffName}-${staffIndex}`}
@@ -991,7 +1004,9 @@ const LOSStaffBasedReport: React.FC = () => {
                                                             >
                                                                 {["Qty", "Rate", "Amt"].includes(col.key)
                                                                     ? Number(totals[col.key] || 0).toFixed(2)
-                                                                    : ""}
+                                                                    : col.key === "Created_By"
+                                                                        ? Number(totals["Qty"] || 0).toFixed(2)
+                                                                        : ""}
                                                             </TableCell>
                                                         ))}
                                                     </TableRow>
@@ -1012,45 +1027,20 @@ const LOSStaffBasedReport: React.FC = () => {
                                                                         1}
                                                                 </TableCell>
 
-                                                                {enabledColumns.map(
-                                                                    (
-                                                                        col
-                                                                    ) => (
-                                                                        <TableCell
-                                                                            key={
-                                                                                col.key
-                                                                            }
-                                                                        >
-                                                                            {col.key ===
-                                                                                "Stock_Journal_date"
-                                                                                ? dayjs(
-                                                                                    row[
-                                                                                    col
-                                                                                        .key
-                                                                                    ]
-                                                                                ).format(
-                                                                                    "DD/MM/YYYY"
-                                                                                )
-                                                                                : numericKeys.includes(
-                                                                                    col.key
-                                                                                )
-                                                                                    ? Number(
-                                                                                        row[
-                                                                                        col
-                                                                                            .key
-                                                                                        ] ||
-                                                                                        0
-                                                                                    ).toFixed(
-                                                                                        2
-                                                                                    )
-                                                                                    : row[
-                                                                                    col
-                                                                                        .key
-                                                                                    ] ??
-                                                                                    ""}
-                                                                        </TableCell>
-                                                                    )
-                                                                )}
+                                                                {enabledColumns.map((col) => (
+                                                                    <TableCell key={col.key}>
+                                                                        {col.key === "Stock_Journal_date"
+                                                                            ? dayjs(row[col.key]).format("DD/MM/YYYY")
+
+                                                                            : col.key === "Created_By"
+                                                                                ? Number(row["Qty"] || 0).toFixed(2)
+
+                                                                                : numericKeys.includes(col.key)
+                                                                                    ? Number(row[col.key] || 0).toFixed(2)
+
+                                                                                    : row[col.key] ?? ""}
+                                                                    </TableCell>
+                                                                ))}
                                                             </TableRow>
                                                         )
                                                     )}
@@ -1683,186 +1673,189 @@ const LOSStaffBasedReport: React.FC = () => {
                             <CircularProgress size={40} />
                         </Box>
                     )}
-                    {toggleMode === "Abstract" ? (
-                        <TableContainer
-                            component={Paper}
-                            sx={{
-                                maxHeight: "calc(100vh - 100px)",
-                                "& th, & td": {
-                                    fontSize: "0.75rem",
-                                },
-                                position: "relative",
-                            }}
-                        >
-                            {/* LOADING OVERLAY */}
-                            {loading && (
-                                <Box
-                                    sx={{
-                                        position: "absolute",
-                                        inset: 0,
-                                        backgroundColor: "rgba(255,255,255,0.6)",
-                                        display: "flex",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                        zIndex: 10,
-                                    }}
-                                >
-                                    <CircularProgress size={40} />
-                                </Box>
-                            )}
+                    <Box sx={{ position: "relative" }}>
+                        {/* GLOBAL LOADING OVERLAY */}
+                        {loading && (
+                            <Box
+                                sx={{
+                                    position: "absolute",
+                                    inset: 0,
+                                    backgroundColor: "rgba(255,255,255,0.6)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    zIndex: 1000,
+                                    minHeight: "300px",
+                                }}
+                            >
+                                <CircularProgress size={40} />
+                            </Box>
+                        )}
 
-                            <Table size="small">
-                                <TableHead
-                                    sx={{
-                                        background: "#1E3A8A",
-                                        position: "sticky",
-                                        top: 0,
-                                        zIndex: 3,
-                                        height: HEADER_HEIGHT,
-                                    }}
-                                >
-                                    <TableRow>
-                                        <TableCell sx={{ color: "#fff", fontSize: "0.75rem", fontWeight: 600, }}>
-                                            S.No
-                                        </TableCell>
-                                        {enabledColumns.map((c) => (
-                                            <TableCell
-                                                key={c.key}
-                                                sx={{
-                                                    color: "#fff",
-                                                    cursor: !c.isNumeric ? "pointer" : "default",
-                                                }}
-                                                onClick={(e) =>
-                                                    !c.isNumeric && handleHeaderClick(e, c.key)
-                                                }
-                                            >
-                                                <Box
-                                                    display="flex"
-                                                    alignItems="center"
-                                                    justifyContent="space-between"
-                                                >
-                                                    {/* HEADER LABEL (FILTER CLICK) */}
-                                                    <Box sx={{ display: "flex", alignItems: "center" }}>
-                                                        {c.label}
-                                                    </Box>
-                                                </Box>
-                                            </TableCell>
-                                        ))}
-                                    </TableRow>
-                                    <TableRow
+                        {toggleMode === "Abstract" ? (
+                            <TableContainer
+                                component={Paper}
+                                sx={{
+                                    maxHeight: "calc(100vh - 100px)",
+                                    "& th, & td": {
+                                        fontSize: "0.75rem",
+                                    },
+                                    position: "relative",
+                                }}
+                            >
+                                <Table size="small">
+                                    <TableHead
                                         sx={{
-                                            background: "#f3f4f6",
+                                            background: "#1E3A8A",
                                             position: "sticky",
-                                            top: "var(--mui-table-header-height, 36px)",
-                                            zIndex: 2,
+                                            top: 0,
+                                            zIndex: 3,
+                                            height: HEADER_HEIGHT,
                                         }}
                                     >
-                                        <TableCell>Total</TableCell>
-                                        {enabledColumns.map((c) => (
-                                            <TableCell key={c.key}>
-                                                {c.isNumeric
-                                                    ? c.key === "Qty"
-                                                        ? Number(getTotal(c.key)).toFixed(2)
-                                                        : CURRENCY_KEYS.includes(c.key)
-                                                            ? formatINR(getTotal(c.key))
-                                                            : Number(getTotal(c.key)).toFixed(2)
-                                                    : ""}
+                                        <TableRow>
+                                            <TableCell sx={{ color: "#fff", fontSize: "0.75rem", fontWeight: 600, }}>
+                                                S.No
                                             </TableCell>
-                                        ))}
-                                    </TableRow>
-                                </TableHead>
+                                            {enabledColumns.map((c) => (
+                                                <TableCell
+                                                    key={c.key}
+                                                    sx={{
+                                                        color: "#fff",
+                                                        cursor: !c.isNumeric ? "pointer" : "default",
+                                                    }}
+                                                    onClick={(e) =>
+                                                        !c.isNumeric && handleHeaderClick(e, c.key)
+                                                    }
+                                                >
+                                                    <Box
+                                                        display="flex"
+                                                        alignItems="center"
+                                                        justifyContent="space-between"
+                                                    >
+                                                        {/* HEADER LABEL (FILTER CLICK) */}
+                                                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                                                            {c.label}
+                                                        </Box>
+                                                    </Box>
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                        <TableRow
+                                            sx={{
+                                                background: "#f3f4f6",
+                                                position: "sticky",
+                                                top: "var(--mui-table-header-height, 36px)",
+                                                zIndex: 2,
+                                            }}
+                                        >
+                                            <TableCell>Total</TableCell>
+                                            {enabledColumns.map((c) => (
+                                                <TableCell key={c.key}>
+                                                    {c.isNumeric
+                                                        ? c.key === "Qty"
+                                                            ? Number(getTotal(c.key)).toFixed(2)
+                                                            : CURRENCY_KEYS.includes(c.key)
+                                                                ? formatINR(getTotal(c.key))
+                                                                : Number(getTotal(c.key)).toFixed(2)
+                                                        : ""}
+                                                </TableCell>
+                                            ))}
+                                        </TableRow>
+                                    </TableHead>
 
-                                <TableBody>
-                                    {(() => {
-                                        serialRef.current = grouping.length
-                                            ? 0
-                                            : (page - 1) * rowsPerPage;
+                                    <TableBody>
+                                        {(() => {
+                                            serialRef.current = grouping.length
+                                                ? 0
+                                                : (page - 1) * rowsPerPage;
 
-                                        return finalRows.map((row: any, i) => {
-                                            if (row.__group) {
-                                                const expanded = expandedKeys.includes(row.__key);
+                                            return finalRows.map((row: any, i) => {
+                                                if (row.__group) {
+                                                    const expanded = expandedKeys.includes(row.__key);
+
+                                                    return (
+                                                        <TableRow key={row.__key} sx={{ background: "#E2E8F0" }}>
+                                                            <TableCell>
+                                                                <IconButton
+                                                                    size="small"
+                                                                    onClick={() =>
+                                                                        setExpandedKeys(p =>
+                                                                            p.includes(row.__key)
+                                                                                ? p.filter(x => x !== row.__key)
+                                                                                : [...p, row.__key]
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {expanded ? (
+                                                                        <ExpandMoreIcon fontSize="small" />
+                                                                    ) : (
+                                                                        <ChevronRightIcon fontSize="small" />
+                                                                    )}
+                                                                </IconButton>
+                                                            </TableCell>
+
+                                                            {enabledColumns.map(c => {
+                                                                const currentGroupKey = grouping[row.__level];
+
+                                                                if (c.key === currentGroupKey) {
+                                                                    return (
+                                                                        <TableCell key={c.key} sx={{ fontWeight: 700 }}>
+                                                                            {row.__value}
+                                                                        </TableCell>
+                                                                    );
+                                                                }
+
+                                                                if (c.isNumeric) {
+                                                                    const total = row.__rows.reduce(
+                                                                        (s: number, r: any) =>
+                                                                            s + Number(r[c.key] || 0),
+                                                                        0
+                                                                    );
+
+                                                                    return (
+                                                                        <TableCell key={c.key}>
+                                                                            {c.key === "Qty"
+                                                                                ? total.toFixed(2)
+                                                                                : CURRENCY_KEYS.includes(c.key)
+                                                                                    ? formatINR(total)
+                                                                                    : total.toFixed(2)}
+                                                                        </TableCell>
+                                                                    );
+                                                                }
+
+                                                                return <TableCell key={c.key} />;
+                                                            })}
+                                                        </TableRow>
+                                                    );
+                                                }
 
                                                 return (
-                                                    <TableRow key={row.__key} sx={{ background: "#E2E8F0" }}>
+                                                    <TableRow key={i}>
                                                         <TableCell>
-                                                            <IconButton
-                                                                size="small"
-                                                                onClick={() =>
-                                                                    setExpandedKeys(p =>
-                                                                        p.includes(row.__key)
-                                                                            ? p.filter(x => x !== row.__key)
-                                                                            : [...p, row.__key]
-                                                                    )
-                                                                }
-                                                            >
-                                                                {expanded ? (
-                                                                    <ExpandMoreIcon fontSize="small" />
-                                                                ) : (
-                                                                    <ChevronRightIcon fontSize="small" />
-                                                                )}
-                                                            </IconButton>
+                                                            {!row.__group ? ++serialRef.current : ""}
                                                         </TableCell>
 
-                                                        {enabledColumns.map(c => {
-                                                            const currentGroupKey = grouping[row.__level];
-
-                                                            if (c.key === currentGroupKey) {
-                                                                return (
-                                                                    <TableCell key={c.key} sx={{ fontWeight: 700 }}>
-                                                                        {row.__value}
-                                                                    </TableCell>
-                                                                );
-                                                            }
-
-                                                            if (c.isNumeric) {
-                                                                const total = row.__rows.reduce(
-                                                                    (s: number, r: any) =>
-                                                                        s + Number(r[c.key] || 0),
-                                                                    0
-                                                                );
-
-                                                                return (
-                                                                    <TableCell key={c.key}>
-                                                                        {c.key === "Qty"
-                                                                            ? total.toFixed(2)
-                                                                            : CURRENCY_KEYS.includes(c.key)
-                                                                                ? formatINR(total)
-                                                                                : total.toFixed(2)}
-                                                                    </TableCell>
-                                                                );
-                                                            }
-
-                                                            return <TableCell key={c.key} />;
-                                                        })}
+                                                        {enabledColumns.map(c => (
+                                                            <TableCell key={c.key}>
+                                                                {c.key === "Stock_Journal_date"
+                                                                    ? dayjs(row[c.key]).format("DD/MM/YYYY")
+                                                                    : row[c.key]}
+                                                            </TableCell>
+                                                        ))}
                                                     </TableRow>
                                                 );
-                                            }
-
-                                            return (
-                                                <TableRow key={i}>
-                                                    <TableCell>
-                                                        {!row.__group ? ++serialRef.current : ""}
-                                                    </TableCell>
-
-                                                    {enabledColumns.map(c => (
-                                                        <TableCell key={c.key}>
-                                                            {c.key === "Stock_Journal_date"
-                                                                ? dayjs(row[c.key]).format("DD/MM/YYYY")
-                                                                : row[c.key]}
-                                                        </TableCell>
-                                                    ))}
-                                                </TableRow>
-                                            );
-                                        });
-                                    })()}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    ) : (
-                        <Paper sx={{ p: 1 }}>
-                            {renderExpandedView()}
-                        </Paper>
-                    )}
+                                            });
+                                        })()}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        ) : (
+                            <Paper sx={{ p: 1 }}>
+                                {renderExpandedView()}
+                            </Paper>
+                        )}
+                    </Box>
 
 
                     <CommonPagination
