@@ -90,6 +90,11 @@ const PendingOutstandingReport: React.FC = () => {
         toDate,
     ]);
 
+    const getPendingDays = (date: string) => {
+        if (!date) return "";
+        return dayjs().diff(dayjs(date), "day");
+    };
+
     /* ================= PAGINATION ================= */
 
     const finalRows =
@@ -110,150 +115,138 @@ const PendingOutstandingReport: React.FC = () => {
 
     /* ================= EXPORT EXCEL ================= */
 
-    const handleExportExcel =
-        () => {
-            const exportRows =
-                rows.map(
-                    (
-                        row,
-                        index
-                    ) => ({
-                        SNo:
-                            index + 1,
+    const handleExportExcel = () => {
+        const decodedPartyName = decodeURIComponent(partyName || "");
 
-                        VoucherNo:
-                            row.voucherNumber,
+        const exportRows = rows.map((row, index) => ({
+            "S.No": index + 1,
+            "Voucher No": row.voucherNumber,
+            Date: row.eventDate
+                ? dayjs(row.eventDate).format("DD-MM-YYYY")
+                : "",
+            Source: row.actualSource,
+            "Dr / CR": row.accountSide,
 
-                        EventDate:
-                            dayjs(
-                                row.eventDate
-                            ).format(
-                                "DD-MM-YYYY"
-                            ),
+            "Pending Days": row.eventDate
+                ? dayjs().diff(dayjs(row.eventDate), "day")
+                : "",
 
-                        TotalValue:
-                            row.totalValue,
+            Total: row.totalValue,
+            Pending: row.BalanceAmount,
+        }));
 
-                        DataSource:
-                            row.dataSource,
+        const ws = XLSX.utils.json_to_sheet([]);
 
-                        ActualSource:
-                            row.actualSource,
+        // Add heading rows
+        XLSX.utils.sheet_add_aoa(ws, [
+            ["Pending Transaction Report"],
+            [`Party Name : ${decodedPartyName}`],
+            [],
+        ]);
 
-                        AgainstAmount:
-                            row.againstAmount,
+        // Add table data starting from row 4
+        XLSX.utils.sheet_add_json(ws, exportRows, {
+            origin: "A4",
+        });
 
-                        JournalAdjustment:
-                            row.journalAdjustment,
+        // Optional column width
+        ws["!cols"] = [
+            { wch: 8 },
+            { wch: 25 },
+            { wch: 15 },
+            { wch: 20 },
+            { wch: 10 },
+            { wch: 15 },
+            { wch: 15 },
+            { wch: 15 },
+        ];
 
-                        AccountSide:
-                            row.accountSide,
+        const wb = XLSX.utils.book_new();
 
-                        BillRefNo:
-                            row.BillRefNo,
+        XLSX.utils.book_append_sheet(
+            wb,
+            ws,
+            "Pending Outstanding"
+        );
 
-                        BalanceAmount:
-                            row.BalanceAmount,
-                    })
-                );
-
-            const ws =
-                XLSX.utils.json_to_sheet(
-                    exportRows
-                );
-
-            const wb =
-                XLSX.utils.book_new();
-
-            XLSX.utils.book_append_sheet(
-                wb,
-                ws,
-                "Pending Outstanding"
-            );
-
-            XLSX.writeFile(
-                wb,
-                `PendingOutstanding_${dayjs().format(
-                    "DDMMYYYY"
-                )}.xlsx`
-            );
-        };
+        XLSX.writeFile(
+            wb,
+            `Pending Transaction_${decodedPartyName}_${dayjs().format(
+                "DDMMYYYY"
+            )}.xlsx`
+        );
+    };
 
     /* ================= EXPORT PDF ================= */
 
-    const handleExportPDF =
-        () => {
-            const doc =
-                new jsPDF(
-                    "landscape"
-                );
+    const handleExportPDF = () => {
+        const decodedPartyName =
+            decodeURIComponent(partyName || "");
 
-            doc.text(
-                "Pending Outstanding Report",
-                14,
-                10
-            );
+        const doc = new jsPDF("landscape");
 
-            autoTable(doc, {
-                startY: 20,
+        // Title
+        doc.setFontSize(14);
+        doc.text(
+            "Pending Transaction Report",
+            14,
+            12
+        );
 
-                head: [[
-                    "SNo",
-                    "Voucher No",
-                    "Date",
-                    "Total Value",
-                    "Data Source",
-                    "Actual Source",
-                    "Against Amount",
-                    "Journal Adj",
-                    "Account Side",
-                    "Bill Ref No",
-                    "Balance Amount",
-                ]],
+        // Party Name
+        doc.setFontSize(10);
+        doc.text(
+            `Party Name : ${decodedPartyName}`,
+            14,
+            20
+        );
 
-                body:
-                    rows.map(
-                        (
-                            row,
-                            index
-                        ) => [
-                                index + 1,
+        autoTable(doc, {
+            startY: 28,
 
-                                row.voucherNumber,
+            head: [[
+                "S.No",
+                "Voucher No",
+                "Date",
+                "Source",
+                "Dr / CR",
+                "Pending Days",
+                "Total",
+                "Pending",
+            ]],
 
-                                dayjs(
-                                    row.eventDate
-                                ).format(
-                                    "DD-MM-YYYY"
-                                ),
+            body: rows.map((row, index) => [
+                index + 1,
+                row.voucherNumber,
+                row.eventDate
+                    ? dayjs(row.eventDate).format("DD-MM-YYYY")
+                    : "",
+                row.actualSource,
+                row.accountSide,
+                row.eventDate
+                    ? dayjs().diff(dayjs(row.eventDate), "day")
+                    : "",
+                Number(row.totalValue || 0).toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                }),
+                Number(row.BalanceAmount || 0).toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                }),
+            ]),
 
-                                row.totalValue,
+            styles: {
+                fontSize: 8,
+            },
 
-                                row.dataSource,
+            headStyles: {
+                fontStyle: "bold",
+            },
+        });
 
-                                row.actualSource,
-
-                                row.againstAmount,
-
-                                row.journalAdjustment,
-
-                                row.accountSide,
-
-                                row.BillRefNo,
-
-                                row.BalanceAmount,
-                            ]
-                    ),
-
-                styles: {
-                    fontSize: 7,
-                },
-            });
-
-            doc.save(
-                "PendingOutstanding.pdf"
-            );
-        };
+        doc.save(
+            `Pending Transaction_${decodedPartyName}.pdf`
+        );
+    };
 
     return (
         < >
@@ -291,10 +284,7 @@ const PendingOutstandingReport: React.FC = () => {
                                 maxHeight: "72vh",
                             }}
                         >
-                            <Table
-                                stickyHeader
-                                size="small"
-                            >
+                            <Table stickyHeader size="small">
                                 <TableHead
                                     sx={{
                                         position: "sticky",
@@ -303,38 +293,30 @@ const PendingOutstandingReport: React.FC = () => {
                                     }}
                                 >
                                     {/* HEADER */}
-                                    <TableRow
-                                        sx={{
-                                            background: "#1E3A8A",
-                                        }}
-                                    >
+                                    <TableRow sx={{ background: "#1E3A8A" }}>
                                         {[
                                             "S.No",
                                             "Voucher No",
                                             "Date",
                                             "Source",
                                             "Dr / CR",
+                                            "Pending Days",
                                             "Total",
                                             "Pending",
                                         ].map((header) => (
                                             <TableCell
                                                 key={header}
                                                 align={
-                                                    ["Total", "Pending"].includes(
-                                                        header
-                                                    )
+                                                    ["Total", "Pending", "Pending Days"].includes(header)
                                                         ? "right"
                                                         : "left"
                                                 }
                                                 sx={{
                                                     color: "#fff",
                                                     fontWeight: 500,
-                                                    background:
-                                                        "#1E3A8A",
-                                                    whiteSpace:
-                                                        "nowrap",
-                                                    borderBottom:
-                                                        "none",
+                                                    background: "#1E3A8A",
+                                                    whiteSpace: "nowrap",
+                                                    borderBottom: "none",
                                                 }}
                                             >
                                                 {header}
@@ -343,193 +325,98 @@ const PendingOutstandingReport: React.FC = () => {
                                     </TableRow>
 
                                     {/* TOTAL ROW */}
-                                    <TableRow
-                                        sx={{
-                                            background: "#F3F4F6",
-                                        }}
-                                    >
-                                        <TableCell
-                                            sx={{
-                                                fontWeight: 700,
-                                            }}
-                                        >
-                                            Total
-                                        </TableCell>
+                                    <TableRow sx={{ background: "#F3F4F6" }}>
+                                        <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
 
+                                        <TableCell />
                                         <TableCell />
                                         <TableCell />
                                         <TableCell />
                                         <TableCell />
 
                                         {/* TOTAL */}
-                                        <TableCell
-                                            align="right"
-                                            sx={{
-                                                fontWeight: 700,
-                                            }}
-                                        >
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>
                                             {Number(
                                                 finalRows.reduce(
-                                                    (
-                                                        sum,
-                                                        row
-                                                    ) =>
-                                                        sum +
-                                                        Number(
-                                                            row.totalValue ||
-                                                            0
-                                                        ),
+                                                    (sum, row) => sum + Number(row.totalValue || 0),
                                                     0
                                                 )
-                                            ).toLocaleString(
-                                                "en-IN",
-                                                {
-                                                    minimumFractionDigits: 2,
-                                                }
-                                            )}
+                                            ).toLocaleString("en-IN", {
+                                                minimumFractionDigits: 2,
+                                            })}
                                         </TableCell>
 
                                         {/* PENDING */}
-                                        <TableCell
-                                            align="right"
-                                            sx={{
-                                                fontWeight: 700,
-                                            }}
-                                        >
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>
                                             {Number(
                                                 finalRows.reduce(
-                                                    (
-                                                        sum,
-                                                        row
-                                                    ) =>
-                                                        sum +
-                                                        Number(
-                                                            row.BalanceAmount ||
-                                                            0
-                                                        ),
+                                                    (sum, row) => sum + Number(row.BalanceAmount || 0),
                                                     0
                                                 )
-                                            ).toLocaleString(
-                                                "en-IN",
-                                                {
-                                                    minimumFractionDigits: 2,
-                                                }
-                                            )}
+                                            ).toLocaleString("en-IN", {
+                                                minimumFractionDigits: 2,
+                                            })}
                                         </TableCell>
                                     </TableRow>
                                 </TableHead>
 
-                                <TableBody
-                                    sx={{
-                                        background: "#fefeff",
-                                    }}
-                                >
+                                <TableBody sx={{ background: "#fefeff" }}>
                                     {loading ? (
                                         <TableRow>
-                                            <TableCell
-                                                colSpan={7}
-                                                align="center"
-                                            >
+                                            <TableCell colSpan={8} align="center">
                                                 <CircularProgress />
                                             </TableCell>
                                         </TableRow>
                                     ) : finalRows.length === 0 ? (
                                         <TableRow>
-                                            <TableCell
-                                                colSpan={7}
-                                                align="center"
-                                            >
+                                            <TableCell colSpan={8} align="center">
                                                 No Data Found
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        finalRows.map(
-                                            (
-                                                row,
-                                                index
-                                            ) => (
-                                                <TableRow
-                                                    key={index}
-                                                    hover
-                                                    sx={{
-                                                        background:"#ffffff"
-                                                    }}
-                                                >
-                                                    {/* S.NO */}
-                                                    <TableCell>
-                                                        {(page - 1) *
-                                                            rowsPerPage +
-                                                            index +
-                                                            1}
-                                                    </TableCell>
+                                        finalRows.map((row, index) => (
+                                            <TableRow key={index} hover sx={{ background: "#ffffff" }}>
+                                                {/* S.No */}
+                                                <TableCell>
+                                                    {(page - 1) * rowsPerPage + index + 1}
+                                                </TableCell>
 
-                                                    {/* Voucher No */}
-                                                    <TableCell>
-                                                        {
-                                                            row.voucherNumber
-                                                        }
-                                                    </TableCell>
+                                                {/* Voucher No */}
+                                                <TableCell>{row.voucherNumber}</TableCell>
 
-                                                    {/* Date */}
-                                                    <TableCell>
-                                                        {row.eventDate
-                                                            ? dayjs(
-                                                                row.eventDate
-                                                            ).format(
-                                                                "DD-MM-YYYY"
-                                                            )
-                                                            : ""}
-                                                    </TableCell>
+                                                {/* Date */}
+                                                <TableCell>
+                                                    {row.eventDate
+                                                        ? dayjs(row.eventDate).format("DD-MM-YYYY")
+                                                        : ""}
+                                                </TableCell>
 
-                                                    {/* Source */}
-                                                    <TableCell>
-                                                        {
-                                                            row.actualSource
-                                                        }
-                                                    </TableCell>
+                                                {/* Source */}
+                                                <TableCell>{row.actualSource}</TableCell>
 
-                                                    {/* Dr / CR */}
-                                                    <TableCell>
-                                                        {
-                                                            row.accountSide
-                                                        }
-                                                    </TableCell>
+                                                {/* Dr / CR */}
+                                                <TableCell>{row.accountSide}</TableCell>
 
-                                                    {/* Total */}
-                                                    <TableCell
-                                                        align="right"
-                                                    >
-                                                        {Number(
-                                                            row.totalValue ||
-                                                            0
-                                                        ).toLocaleString(
-                                                            "en-IN",
-                                                            {
-                                                                minimumFractionDigits: 2,
-                                                            }
-                                                        )}
-                                                    </TableCell>
+                                                {/* Pending Days */}
+                                                <TableCell align="right" >
+                                                    {getPendingDays(row.eventDate)}
+                                                </TableCell>
 
-                                                    {/* Pending */}
-                                                    <TableCell
-                                                        align="right"
-                                                        sx={{
-                                                            fontWeight: 700,
-                                                        }}
-                                                    >
-                                                        {Number(
-                                                            row.BalanceAmount ||
-                                                            0
-                                                        ).toLocaleString(
-                                                            "en-IN",
-                                                            {
-                                                                minimumFractionDigits: 2,
-                                                            }
-                                                        )}
-                                                    </TableCell>
-                                                </TableRow>
-                                            )
-                                        )
+                                                {/* Total */}
+                                                <TableCell align="right">
+                                                    {Number(row.totalValue || 0).toLocaleString("en-IN", {
+                                                        minimumFractionDigits: 2,
+                                                    })}
+                                                </TableCell>
+
+                                                {/* Pending */}
+                                                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                                                    {Number(row.BalanceAmount || 0).toLocaleString("en-IN", {
+                                                        minimumFractionDigits: 2,
+                                                    })}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
                                     )}
                                 </TableBody>
                             </Table>
