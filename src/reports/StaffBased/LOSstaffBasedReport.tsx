@@ -829,13 +829,28 @@ const LOSStaffBasedReport: React.FC = () => {
             );
 
             /* =========================
-               STAFF TOTALS
-            ========================= */
+            STAFF TOTALS
+            (MULTI WORK SAME INVOICE)
+         ========================= */
             const staffTotals: any = {};
 
             numericKeys.forEach((key) => {
                 staffTotals[key] = staffRows.reduce(
-                    (sum, row) => sum + Number(row[key] || 0),
+                    (sum, row) => {
+
+                        const workedCount = staffFields.filter(
+                            (field) =>
+                                String(row[field] || "")
+                                    .trim()
+                                    .toLowerCase() ===
+                                staffName.trim().toLowerCase()
+                        ).length || 1;
+
+                        return (
+                            sum +
+                            Number(row[key] || 0) * workedCount
+                        );
+                    },
                     0
                 );
             });

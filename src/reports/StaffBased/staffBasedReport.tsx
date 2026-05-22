@@ -445,15 +445,6 @@ const StaffBasedReport: React.FC = () => {
         filters.Date.from,
         filters.Date.to,
         selectedTemplateId,
-
-        toggleMode === "Expanded"
-            ? expandedColumns
-                .map(
-                    (c) =>
-                        `${c.key}_${c.enabled}_${c.order}`
-                )
-                .join("|")
-            : "",
     ]);
 
     /* ================= LOAD DATA ================= */
@@ -762,10 +753,8 @@ const StaffBasedReport: React.FC = () => {
                     const cols: ColumnConfig[] =
                         [
                             {
-                                key:
-                                    "Staff_Name",
-                                label:
-                                    "Staff Name",
+                                key: "Staff_Name",
+                                label: "Staff Name",
                                 enabled:
                                     true,
                                 order: 1,
@@ -1077,10 +1066,8 @@ const StaffBasedReport: React.FC = () => {
 
                                     /* ================= QTY CALC ================= */
 
+                                    // Count each work done by staff
                                     const qtyKey =
-                                        `${pivotKey}_${row.Trans_Id}`;
-
-                                    const categoryKey =
                                         `${pivotKey}_${row.Trans_Id}_${field}`;
 
                                     if (
@@ -1088,22 +1075,24 @@ const StaffBasedReport: React.FC = () => {
                                             qtyKey
                                         )
                                     ) {
-                                        existing.Qty +=
-                                            qty;
+                                        existing.Qty += qty;
 
                                         existing.__invoiceTracker.add(
                                             qtyKey
                                         );
                                     }
 
+                                    /* ================= CATEGORY TOTAL ================= */
+
+                                    const categoryKey =
+                                        `${pivotKey}_${row.Trans_Id}_${field}`;
+
                                     if (
                                         !existing.__categoryTracker.has(
                                             categoryKey
                                         )
                                     ) {
-                                        existing[
-                                            field
-                                        ] += qty;
+                                        existing[field] += qty;
 
                                         existing.__categoryTracker.add(
                                             categoryKey
@@ -1192,45 +1181,36 @@ const StaffBasedReport: React.FC = () => {
 
                     /* ================= COLUMN STATE UPDATE ================= */
 
-                    setExpandedColumns(
-                        (prev) => {
-                            const next =
-                                finalCols.map(
-                                    (col) => {
-                                        const existing =
-                                            prev.find(
-                                                (p) =>
-                                                    p.key ===
-                                                    col.key
-                                            );
+                    setExpandedColumns((prev) => {
+                        const next = finalCols.map((col) => {
+                            const existing = prev.find(
+                                (p) => p.key === col.key
+                            );
 
-                                        return existing
-                                            ? {
-                                                ...col,
-                                                enabled:
-                                                    existing.enabled,
-                                                order:
-                                                    existing.order,
-                                                groupBy:
-                                                    existing.groupBy,
-                                            }
-                                            : col;
-                                    }
-                                );
+                            return existing
+                                ? {
+                                    ...col,
 
-                            const same =
-                                JSON.stringify(
-                                    prev
-                                ) ===
-                                JSON.stringify(
-                                    next
-                                );
+                                    // Preserve template enabled state
+                                    enabled: col.enabled,
 
-                            return same
-                                ? prev
-                                : next;
-                        }
-                    );
+                                    // Keep drag order/grouping only
+                                    order:
+                                        col.order ??
+                                        existing.order,
+
+                                    groupBy:
+                                        col.groupBy ??
+                                        existing.groupBy,
+                                }
+                                : col;
+                        });
+
+                        return JSON.stringify(prev) ===
+                            JSON.stringify(next)
+                            ? prev
+                            : next;
+                    });
                 }
 
                 setPage(1);
@@ -1706,33 +1686,44 @@ const StaffBasedReport: React.FC = () => {
         baseCols: ColumnConfig[],
         templateCols: any[]
     ): ColumnConfig[] => {
-        const mapped = templateCols.map((t: any) => ({
-            key: t.key ?? t.Key,
-            label: t.label ?? t.Label,
-            enabled: t.enabled ?? t.Enabled ?? false,
-            order: t.order ?? t.Order ?? 0,
-            groupBy:
-                t.groupBy ??
-                t.GroupBy ??
-                t.group_by ??
-                t.Group_By ??
-                0,
-            isNumeric: baseCols.find(
-                (b) => b.key === (t.key ?? t.Key)
-            )?.isNumeric,
-        }));
 
-        const missing = baseCols
-            .filter(
-                (b) =>
-                    !mapped.some((m: any) => m.key === b.key)
-            )
-            .map((b) => ({
-                ...b,
-                enabled: false,
-            }));
+        const templateMap = new Map(
+            templateCols.map((t: any) => [
+                t.key ?? t.Key,
+                t,
+            ])
+        );
 
-        return [...mapped, ...missing];
+        return baseCols.map((base) => {
+            const template =
+                templateMap.get(base.key);
+
+            // Template exists → use saved state
+            if (template) {
+                return {
+                    ...base,
+                    enabled:
+                        template.enabled ??
+                        template.Enabled ??
+                        false,
+
+                    order:
+                        template.order ??
+                        template.Order ??
+                        base.order,
+
+                    groupBy:
+                        template.groupBy ??
+                        template.GroupBy ??
+                        template.group_by ??
+                        template.Group_By ??
+                        0,
+                };
+            }
+
+            // Template missing → preserve base column state
+            return base;
+        });
     };
 
     /* ================= LOAD TEMPLATE ================= */
@@ -1853,23 +1844,30 @@ const StaffBasedReport: React.FC = () => {
                 ).map((c) => ({
                     key: c.key,
                     label: c.label,
-                    enabled: c.enabled,
+
+                    // Always save exact state
+                    enabled: Boolean(c.enabled),
+
                     order: c.order,
                     groupBy: 0,
                     dataType: "nvarchar",
                 }));
 
-            const expandedPayload =
-                expandedColumns.map((c) => ({
-                    key: c.key,
-                    label: c.label,
-                    enabled: c.enabled,
-                    order: c.order,
-                    groupBy: expandedGrouping.includes(c.key)
-                        ? expandedGrouping.indexOf(c.key) + 1
-                        : 0,
-                    dataType: "nvarchar",
-                }));
+            const expandedPayload = expandedColumns.map((c) => ({
+                key: c.key,
+                label: c.label,
+
+                // Always send actual UI state
+                enabled: Boolean(c.enabled),
+
+                order: c.order,
+
+                groupBy: expandedGrouping.includes(c.key)
+                    ? expandedGrouping.indexOf(c.key) + 1
+                    : 0,
+
+                dataType: "nvarchar",
+            }));
 
             if (isEditTemplate && selectedTemplateId) {
                 await SettingsService.updateReport({
