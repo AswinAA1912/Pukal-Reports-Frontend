@@ -1753,12 +1753,21 @@ const StaffBasedReport: React.FC = () => {
             const templateCols =
                 data?.columns || data?.Columns || [];
 
+            const reportInfo =
+                data?.reportInfo ||
+                data?.ReportInfo ||
+                {};
+
             const autoReportName =
+                reportInfo?.Report_Name ||
+                reportInfo?.ReportName ||
                 data?.Report_Name ||
                 data?.ReportName ||
                 "";
 
             const autoParentReport =
+                reportInfo?.Parent_Report ||
+                reportInfo?.ParentReport ||
                 data?.Parent_Report ||
                 data?.ParentReport ||
                 "";
