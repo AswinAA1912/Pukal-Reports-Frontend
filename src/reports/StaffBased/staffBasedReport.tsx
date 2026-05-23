@@ -303,6 +303,7 @@ const StaffBasedReport: React.FC = () => {
             columnFilters: {},
         });
 
+
     /* ================= SORT ================= */
 
     type SortOrder = "asc" | "desc";
@@ -424,6 +425,9 @@ const StaffBasedReport: React.FC = () => {
             ? setExpandedExpandedKeys
             : setAbstractExpandedKeys;
 
+    const [useActualQty, setUseActualQty] =
+        useState(false);
+
     /* ================= LOAD EFFECT ================= */
 
     useEffect(() => {
@@ -445,6 +449,7 @@ const StaffBasedReport: React.FC = () => {
         filters.Date.from,
         filters.Date.to,
         selectedTemplateId,
+        useActualQty
     ]);
 
     /* ================= LOAD DATA ================= */
@@ -545,10 +550,11 @@ const StaffBasedReport: React.FC = () => {
                                     "DD.MM"
                                 );
 
-                            const qty =
-                                Number(
-                                    row.Qty || 0
-                                );
+                            const qty = Number(
+                                useActualQty
+                                    ? row.Act_Qty || 0
+                                    : row.Qty || 0
+                            );
 
                             const processedStaffs =
                                 new Set<string>();
@@ -1293,7 +1299,17 @@ const StaffBasedReport: React.FC = () => {
         }
 
         rows = rows.filter((row) => {
-            const qty = Number(row.Qty || row.Total || 0);
+            const qty = Number(
+                toggleMode === "Expanded"
+                    ? (
+                        useActualQty
+                            ? row.Act_Qty ??
+                            row.Qty ??
+                            0
+                            : row.Qty ?? 0
+                    )
+                    : row.Total || 0
+            );
 
             if (stockFilter === "hasValues" && qty <= 0)
                 return false;
@@ -1486,18 +1502,53 @@ const StaffBasedReport: React.FC = () => {
         ? filteredRows
         : sortedRows;
 
-    const getTotal = (key: string) =>
-        Number(
+    const getTotal = (key: string) => {
+        // Qty column special logic
+        if (key === "Qty") {
+            const enabledNumericColumns =
+                enabledColumns.filter(
+                    (c) =>
+                        c.enabled &&
+                        c.key !== "Qty" &&
+                        c.key !== "Staff_Name" &&
+                        typeof baseRows?.[0]?.[c.key] ===
+                        "number"
+                );
+
+            return Number(
+                baseRows
+                    .reduce((sum, row) => {
+                        const rowTotal =
+                            enabledNumericColumns.reduce(
+                                (rSum, col) =>
+                                    rSum +
+                                    Number(
+                                        row[col.key] || 0
+                                    ),
+                                0
+                            );
+
+                        return sum + rowTotal;
+                    }, 0)
+                    .toFixed(2)
+            );
+        }
+
+        return Number(
             baseRows
                 .reduce((s, r) => {
                     const value = Number(r[key]);
+
                     return (
                         s +
-                        (Number.isFinite(value) ? value : 0)
+                        (Number.isFinite(value)
+                            ? value
+                            : 0)
                     );
                 }, 0)
                 .toFixed(2)
         );
+    };
 
     /* ================= HEADER CLICK ================= */
 
@@ -2073,30 +2124,58 @@ const StaffBasedReport: React.FC = () => {
                                     <TableCell sx={{ color: "#fff", fontSize: "0.75rem", fontWeight: 600, }}>
                                         S.No
                                     </TableCell>
-                                    {enabledColumns.map((c) => (
-                                        <TableCell
-                                            key={c.key}
-                                            sx={{
-                                                color: "#fff",
-                                                cursor: !c.isNumeric ? "pointer" : "default",
-                                            }}
-                                            onClick={(e) =>
-                                                !c.isNumeric && handleHeaderClick(e, c.key)
-                                            }
-                                        >
-                                            <Box
-                                                display="flex"
-                                                alignItems="center"
-                                                justifyContent="space-between"
-                                            >
-                                                {/* HEADER LABEL (FILTER CLICK) */}
-                                                <Box sx={{ display: "flex", alignItems: "center" }}>
-                                                    {c.label}
-                                                </Box>
+                                    {enabledColumns.map((c) => {
+                                        const isQtyHeader = c.key === "Qty";
 
-                                            </Box>
-                                        </TableCell>
-                                    ))}
+                                        return (
+                                            <TableCell
+                                                key={c.key}
+                                                sx={{
+                                                    color: "#fff",
+                                                    cursor: isQtyHeader
+                                                        ? "pointer"
+                                                        : !c.isNumeric
+                                                            ? "pointer"
+                                                            : "default",
+                                                    userSelect: "none",
+                                                }}
+                                                onClick={(e) => {
+                                                    // Toggle Qty <-> Act_Qty
+                                                    if (isQtyHeader) {
+                                                        setUseActualQty((prev) => !prev);
+                                                        return;
+                                                    }
+
+                                                    // Existing filter click
+                                                    if (!c.isNumeric) {
+                                                        handleHeaderClick(e, c.key);
+                                                    }
+                                                }}
+                                            >
+                                                <Box
+                                                    display="flex"
+                                                    alignItems="center"
+                                                    justifyContent="space-between"
+                                                >
+                                                    <Box
+                                                        sx={{
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            fontWeight:
+                                                                isQtyHeader ? 700 : 500,
+                                                        }}
+                                                    >
+                                                        {isQtyHeader
+                                                            ? `Total Qty (${useActualQty
+                                                                ? "Act_Qty"
+                                                                : "Qty"
+                                                            })`
+                                                            : c.label}
+                                                    </Box>
+                                                </Box>
+                                            </TableCell>
+                                        );
+                                    })}
                                 </TableRow>
                                 <TableRow
                                     sx={{

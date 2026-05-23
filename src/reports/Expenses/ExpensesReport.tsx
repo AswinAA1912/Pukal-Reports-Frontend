@@ -43,40 +43,44 @@ const formatINR = (v: number) =>
 
 /* ================= MAPPING ================= */
 
-const mapExpenseData = (summary: any[], direct: any[], indirect: any[]) => {
+const mapExpenseData = (
+    summary: any[],
+    direct: any[],
+    indirect: any[]
+) => {
 
     const normalize = (val: any) =>
         String(val ?? "").trim();
 
-    const mapper = (list: any[]) => {
+    const mapper = (expenseList: any[]) => {
+
         const groupMap: any = {};
 
-        list.forEach((acc) => {
+        /* Create fast lookup */
+        const expenseMap = new Map(
+            expenseList.map((x: any) => [
+                normalize(x.Acc_Id),
+                x
+            ])
+        );
 
-            const debitRows = summary.filter(
-                (s) => normalize(s.debit_ledger) === normalize(acc.Acc_Id)
-            );
+        summary.forEach((row: any) => {
 
-            const creditRows = summary.filter(
-                (s) => normalize(s.credit_ledger) === normalize(acc.Acc_Id)
-            );
+            const debitId = normalize(row.debit_ledger);
+            const creditId = normalize(row.credit_ledger);
 
-            const rows = [
-                ...debitRows.map(r => ({
-                    ...r,
-                    entryType: "DR",
-                    amount: Number(r.debit_amount || 0)
-                })),
-                ...creditRows.map(r => ({
-                    ...r,
-                    entryType: "CR",
-                    amount: Number(r.credit_amount || 0)
-                }))
-            ];
+            const matchedExpense =
+                expenseMap.get(debitId) ||
+                expenseMap.get(creditId);
 
-            if (!rows.length) return;
+            /* ❌ Skip unmatched summary rows */
+            if (!matchedExpense) return;
 
-            const groupName = acc.Group_Name || "Others";
+            const groupName =
+                matchedExpense.Group_Name || "Others";
+
+            const subKey =
+                matchedExpense.Account_name || "Others";
 
             if (!groupMap[groupName]) {
                 groupMap[groupName] = {
@@ -88,52 +92,74 @@ const mapExpenseData = (summary: any[], direct: any[], indirect: any[]) => {
                 };
             }
 
-            rows.forEach((row) => {
+            if (!groupMap[groupName].subGroups[subKey]) {
+                groupMap[groupName].subGroups[subKey] = {
+                    name: subKey,
+                    dr: 0,
+                    cr: 0,
+                    balance: 0,
+                    ledgers: []
+                };
+            }
 
-                const subKey =
-                    row.debit_ledger_name ||
-                    row.credit_ledger_name ||
-                    "Others";
+            const sub =
+                groupMap[groupName].subGroups[subKey];
 
-                if (!groupMap[groupName].subGroups[subKey]) {
-                    groupMap[groupName].subGroups[subKey] = {
-                        name: subKey,
-                        dr: 0,
-                        cr: 0,
-                        balance: 0,
-                        ledgers: []
-                    };
-                }
+            /* DR MATCH */
+            if (expenseMap.has(debitId)) {
 
-                const amount = row.amount;
+                const amount = Number(
+                    row.debit_amount || 0
+                );
 
-                if (row.entryType === "DR") {
-                    groupMap[groupName].dr += amount;
-                    groupMap[groupName].subGroups[subKey].dr += amount;
-                } else {
-                    groupMap[groupName].cr += amount;
-                    groupMap[groupName].subGroups[subKey].cr += amount;
-                }
+                groupMap[groupName].dr += amount;
+                sub.dr += amount;
 
-                const sub = groupMap[groupName].subGroups[subKey];
-                sub.balance = sub.dr - sub.cr;
+                sub.ledgers.push({
+                    ...row,
+                    entryType: "DR",
+                    amount
+                });
+            }
 
-                groupMap[groupName].subGroups[subKey].ledgers.push(row);
-            });
+            /* CR MATCH */
+            if (expenseMap.has(creditId)) {
 
+                const amount = Number(
+                    row.credit_amount || 0
+                );
+
+                groupMap[groupName].cr += amount;
+                sub.cr += amount;
+
+                sub.ledgers.push({
+                    ...row,
+                    entryType: "CR",
+                    amount
+                });
+            }
+
+            sub.balance = sub.dr - sub.cr;
             groupMap[groupName].balance =
-                groupMap[groupName].dr - groupMap[groupName].cr;
+                groupMap[groupName].dr -
+                groupMap[groupName].cr;
         });
 
         return {
             total: Object.values(groupMap).reduce(
-                (s: any, g: any) => s + g.balance,
+                (sum: number, g: any) =>
+                    sum + g.balance,
                 0
             ),
-            groups: Object.values(groupMap).map((g: any) => ({
-                ...g,
-                subGroups: Object.values(g.subGroups)
-            }))
+
+            groups: Object.values(groupMap).map(
+                (g: any) => ({
+                    ...g,
+                    subGroups: Object.values(
+                        g.subGroups
+                    )
+                })
+            )
         };
     };
 
@@ -686,8 +712,6 @@ const ExpensesReport = () => {
                                                                 ml: { xs: 2, md: 6 },
                                                                 mb: 1,
                                                                 maxHeight: 300,
-
-                                                                /* ✅ KEY FIX */
                                                                 overflowX: "auto",
                                                                 overflowY: "auto",
                                                                 width: "100%",
@@ -696,11 +720,11 @@ const ExpensesReport = () => {
                                                             <Table
                                                                 size="small"
                                                                 sx={{
-                                                                    /* ✅ VERY IMPORTANT */
-                                                                    minWidth: enabledCols.length * 150,
+                                                                    minWidth: (enabledCols.length + 1) * 150, // +1 for S.NO
                                                                     tableLayout: "auto",
                                                                 }}
                                                             >
+                                                                {/* TABLE HEADER */}
                                                                 <TableHead>
                                                                     <TableRow
                                                                         sx={{
@@ -710,7 +734,23 @@ const ExpensesReport = () => {
                                                                             zIndex: 2,
                                                                         }}
                                                                     >
-                                                                        {enabledCols.map(col => (
+                                                                        {/* S.NO */}
+                                                                        <TableCell
+                                                                            sx={{
+                                                                                fontWeight: 700,
+                                                                                textTransform: "uppercase",
+                                                                                fontSize: "12px",
+                                                                                borderBottom: "2px solid #cbd5e1",
+                                                                                textAlign: "center",
+                                                                                minWidth: 80,
+                                                                                width: 80,
+                                                                                background: "#f8fafc",
+                                                                            }}
+                                                                        >
+                                                                            S.NO
+                                                                        </TableCell>
+
+                                                                        {enabledCols.map((col) => (
                                                                             <TableCell
                                                                                 key={col.key}
                                                                                 sx={{
@@ -718,12 +758,12 @@ const ExpensesReport = () => {
                                                                                     textTransform: "uppercase",
                                                                                     fontSize: "12px",
                                                                                     borderBottom: "2px solid #cbd5e1",
+
                                                                                     textAlign:
                                                                                         col.key === "debit_amount"
                                                                                             ? "right"
                                                                                             : "left",
 
-                                                                                    /* ✅ FIXED WIDTHS (NO AUTO) */
                                                                                     minWidth:
                                                                                         col.key === "debit_amount"
                                                                                             ? 120
@@ -734,17 +774,21 @@ const ExpensesReport = () => {
                                                                                                     : 150,
 
                                                                                     maxWidth:
-                                                                                        col.key === "remarks" ? 300 : "none",
+                                                                                        col.key === "remarks"
+                                                                                            ? 300
+                                                                                            : "none",
 
-                                                                                    /* ✅ TEXT CONTROL */
                                                                                     whiteSpace:
                                                                                         col.key === "remarks"
                                                                                             ? "normal"
                                                                                             : "nowrap",
+
                                                                                     wordBreak:
                                                                                         col.key === "remarks"
                                                                                             ? "break-word"
                                                                                             : "normal",
+
+                                                                                    background: "#f8fafc",
                                                                                 }}
                                                                             >
                                                                                 {col.label}
@@ -753,10 +797,25 @@ const ExpensesReport = () => {
                                                                     </TableRow>
                                                                 </TableHead>
 
+                                                                {/* TABLE BODY */}
                                                                 <TableBody>
-                                                                    {sub.ledgers.map((row: any) => (
-                                                                        <TableRow key={row.pay_id} hover>
-                                                                            {enabledCols.map(col => (
+                                                                    {sub.ledgers.map((row: any, index: number) => (
+                                                                        <TableRow
+                                                                            key={`${row.pay_id}-${index}`}
+                                                                            hover
+                                                                        >
+                                                                            {/* S.NO */}
+                                                                            <TableCell
+                                                                                sx={{
+                                                                                    textAlign: "center",
+                                                                                    minWidth: 80,
+                                                                                    width: 80,
+                                                                                }}
+                                                                            >
+                                                                                {index + 1}
+                                                                            </TableCell>
+
+                                                                            {enabledCols.map((col) => (
                                                                                 <TableCell
                                                                                     key={col.key}
                                                                                     sx={{
@@ -795,7 +854,9 @@ const ExpensesReport = () => {
                                                                                             ? `${formatINR(row.amount)} CR`
                                                                                             : `${formatINR(row.amount)} DR`
                                                                                         : col.key === "payment_date"
-                                                                                            ? dayjs(row[col.key]).format("DD-MM-YYYY")
+                                                                                            ? dayjs(row[col.key]).format(
+                                                                                                "DD-MM-YYYY"
+                                                                                            )
                                                                                             : row[col.key]}
                                                                                 </TableCell>
                                                                             ))}

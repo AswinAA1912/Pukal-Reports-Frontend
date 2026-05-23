@@ -30,7 +30,7 @@ import { DashBoardSalesGraph } from "../services/graphAnalysis.services";
 
 const HEADER_HEIGHT = 64;
 
-const Dashboard: React.FC = () => {
+const GroupDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -439,4 +439,4 @@ const Dashboard: React.FC = () => {
   );
 };
 
-export default Dashboard;
+export default GroupDashboard;
