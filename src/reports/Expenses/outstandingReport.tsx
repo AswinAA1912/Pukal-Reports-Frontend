@@ -1496,11 +1496,11 @@ const OutstandingReport: React.FC = () => {
                             }}
                         >
                             <ToggleButton value="Debtors">
-                                Debtors
+                                Debit
                             </ToggleButton>
 
                             <ToggleButton value="Creditors">
-                                Creditors
+                                Credit
                             </ToggleButton>
                         </ToggleButtonGroup>
                     </Box>
@@ -1823,7 +1823,7 @@ const OutstandingReport: React.FC = () => {
                                                                                     onClick={() =>
                                                                                         window.open(
                                                                                             `/transaction-details/${row.Acc_Id}/${encodeURIComponent(
-                                                                                                row.Account_name
+                                                                                                row.Retailer_Name
                                                                                             )}`,
                                                                                             "_blank"
                                                                                         )
@@ -1848,7 +1848,7 @@ const OutstandingReport: React.FC = () => {
                                                                                     onClick={() =>
                                                                                         window.open(
                                                                                             `/pending-outstanding/${row.Acc_Id}?partyName=${encodeURIComponent(
-                                                                                                row.Account_name
+                                                                                                row.Retailer_Name
                                                                                             )}`,
                                                                                             "_blank"
                                                                                         )}

@@ -230,20 +230,69 @@ const ExpensesReport = () => {
     const DEFAULT_ENABLED = [
         "payment_date",
         "payment_invoice_no",
+        "voucher_name",
         "debit_amount",
-        "transaction_type",
+        "credit_amount",
         "remarks",
         "Created_By",
-        "Approved"
     ];
 
     const buildColumns = (summary: any[]) => {
         if (!summary?.length) return [];
 
-        return Object.keys(summary[0]).map((key, index) => ({
-            key,
-            label: key.replace(/_/g, " ").toUpperCase(),
-            enabled: DEFAULT_ENABLED.includes(key),
+        // Fixed order columns
+        const fixedOrder = [
+            "payment_date",
+            "payment_invoice_no",
+            "voucher_name",
+            "debit_amount",
+            "credit_amount",
+        ];
+
+        // Remaining dynamic columns
+        const remainingCols = Object.keys(summary[0])
+            .filter(
+                (key) =>
+                    !fixedOrder.includes(key)
+            )
+            .map((key) => ({
+                key,
+                label: key.replace(/_/g, " ").toUpperCase(),
+                enabled: DEFAULT_ENABLED.includes(key),
+            }));
+
+        // Final ordered columns
+        const orderedCols = [
+            {
+                key: "payment_date",
+                label: "PAYMENT DATE",
+                enabled: true,
+            },
+            {
+                key: "payment_invoice_no",
+                label: "PAYMENT INVOICE NO",
+                enabled: true,
+            },
+            {
+                key: "voucher_name",
+                label: "VOUCHER NAME",
+                enabled: true,
+            },
+            {
+                key: "debit_amount",
+                label: "DEBIT AMOUNT",
+                enabled: true,
+            },
+            {
+                key: "credit_amount",
+                label: "CREDIT AMOUNT",
+                enabled: true,
+            },
+            ...remainingCols
+        ];
+
+        return orderedCols.map((col, index) => ({
+            ...col,
             order: index
         }));
     };
@@ -760,12 +809,12 @@ const ExpensesReport = () => {
                                                                                     borderBottom: "2px solid #cbd5e1",
 
                                                                                     textAlign:
-                                                                                        col.key === "debit_amount"
+                                                                                        ["debit_amount", "credit_amount"].includes(col.key)
                                                                                             ? "right"
                                                                                             : "left",
 
                                                                                     minWidth:
-                                                                                        col.key === "debit_amount"
+                                                                                        ["debit_amount", "credit_amount"].includes(col.key)
                                                                                             ? 120
                                                                                             : col.key === "transaction_type"
                                                                                                 ? 140
@@ -820,18 +869,18 @@ const ExpensesReport = () => {
                                                                                     key={col.key}
                                                                                     sx={{
                                                                                         textAlign:
-                                                                                            col.key === "debit_amount"
+                                                                                            ["debit_amount", "credit_amount"].includes(col.key)
                                                                                                 ? "right"
                                                                                                 : "left",
 
                                                                                         minWidth:
-                                                                                            col.key === "debit_amount"
-                                                                                                ? 120
+                                                                                            ["debit_amount", "credit_amount"].includes(col.key)
+                                                                                                ? 180
                                                                                                 : col.key === "transaction_type"
-                                                                                                    ? 140
+                                                                                                    ? 180
                                                                                                     : col.key === "remarks"
-                                                                                                        ? 300
-                                                                                                        : 150,
+                                                                                                        ? 350
+                                                                                                        : 160,
 
                                                                                         maxWidth:
                                                                                             col.key === "remarks"
@@ -850,14 +899,20 @@ const ExpensesReport = () => {
                                                                                     }}
                                                                                 >
                                                                                     {col.key === "debit_amount"
-                                                                                        ? row.entryType === "CR"
-                                                                                            ? `${formatINR(row.amount)} CR`
-                                                                                            : `${formatINR(row.amount)} DR`
-                                                                                        : col.key === "payment_date"
-                                                                                            ? dayjs(row[col.key]).format(
-                                                                                                "DD-MM-YYYY"
-                                                                                            )
-                                                                                            : row[col.key]}
+                                                                                        ? row.entryType === "DR"
+                                                                                            ? `${formatINR(row.amount)} DR`
+                                                                                            : ""
+
+                                                                                        : col.key === "credit_amount"
+                                                                                            ? row.entryType === "CR"
+                                                                                                ? `${formatINR(row.amount)} CR`
+                                                                                                : ""
+
+                                                                                            : col.key === "payment_date"
+                                                                                                ? dayjs(row[col.key]).format(
+                                                                                                    "DD-MM-YYYY"
+                                                                                                )
+                                                                                                : row[col.key]}
                                                                                 </TableCell>
                                                                             ))}
                                                                         </TableRow>

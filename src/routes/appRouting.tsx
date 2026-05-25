@@ -30,6 +30,7 @@ import CostingReport from "../reports/Expenses/CostingReport";
 import OutstandingReport from "../reports/Expenses/outstandingReport";
 import PendingOutstandingReport from "../reports/Expenses/PendingOutstandingReport";
 import TransactionDetailsReport from "../reports/Expenses/TransactionDetailsReport";
+import StaffBasedGroupingReport from "../reports/StaffBased/staffBasedGroupingReport";
 
 interface AppRoutingProps {
   setActiveCategory: (category: string) => void;
@@ -396,6 +397,17 @@ const AppRouting: React.FC<AppRoutingProps> = ({
             <RequireAuth>
               <AppLayout>
                 <PendingOutstandingReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/staffBasedGrouping"
+          element={
+            <RequireAuth>
+              <AppLayout>
+                <StaffBasedGroupingReport />
               </AppLayout>
             </RequireAuth>
           }
