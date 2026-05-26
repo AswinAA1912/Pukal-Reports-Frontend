@@ -31,18 +31,29 @@ const Dashboard: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
+  const companyId = user?.companyId ?? undefined;
+
   const { data: menuList = [], isLoading } = useQuery({
-    queryKey: ["dashboard-menus"],
+    queryKey: ["dashboard-menus", companyId], 
     queryFn: async () => {
       const res = await MenuService.getMenus();
 
       return res.data.data
-        .filter((menu: any) => menu.menu_type === 1 && menu.is_active === 3)
-        .flatMap((menu: any) =>
-          (menu.SubMenu || []).filter((sub: any) => sub.is_active === 3)
+        .filter(
+          (menu: any) =>
+            menu.menu_type === 1 && menu.is_active === 3
         )
-        .sort((a: any, b: any) => a.display_order - b.display_order);
+        .flatMap((menu: any) =>
+          (menu.SubMenu || []).filter(
+            (sub: any) => sub.is_active === 3
+          )
+        )
+        .sort(
+          (a: any, b: any) =>
+            a.display_order - b.display_order
+        );
     },
+    enabled: !!companyId,
   });
 
   const today = new Date();
@@ -54,7 +65,6 @@ const Dashboard: React.FC = () => {
 
   const fromDate = formatDate(firstDay);
   const toDate = formatDate(today);
-  const companyId = user?.companyId ?? undefined;
 
   const { data: graphData, isLoading: graphLoading } = useQuery({
     queryKey: ["dashboard-graph", user?.companyId, fromDate, toDate],
@@ -85,7 +95,7 @@ const Dashboard: React.FC = () => {
 
   const monthData =
     graphData?.DayWise?.filter((d: any) => {
-      const dateStr = d.Invoice_Date.split("T")[0]; 
+      const dateStr = d.Invoice_Date.split("T")[0];
       const [year, month, day] = dateStr.split("-").map(Number);
 
       return (
