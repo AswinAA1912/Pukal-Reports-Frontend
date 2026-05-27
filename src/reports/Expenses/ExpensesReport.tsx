@@ -633,6 +633,8 @@ const ExpensesReport = () => {
                                 borderRadius={1}
                                 p={1.5}
                                 mb={1}
+                                flexWrap="wrap"
+                                gap={2}
                                 sx={{
                                     background:
                                         (summary?.balance ?? 0) >= 0
@@ -640,6 +642,7 @@ const ExpensesReport = () => {
                                             : "#fef2f2",
                                 }}
                             >
+                                {/* LEFT TITLE */}
                                 <Typography
                                     fontWeight={700}
                                     fontSize="15px"
@@ -649,18 +652,34 @@ const ExpensesReport = () => {
                                         : "INDIRECT EXPENSES"}
                                 </Typography>
 
-                                <Typography
-                                    fontWeight={800}
-                                    fontSize="16px"
-                                    color={
-                                        (summary?.balance ?? 0) >= 0
-                                            ? "success.main"
-                                            : "error.main"
-                                    }
+                                {/* RIGHT SUMMARY */}
+                                <Box
+                                    display="flex"
+                                    gap={3}
+                                    alignItems="center"
+                                    flexWrap="wrap"
                                 >
-                                    {formatINR(Math.abs(summary?.balance ?? 0))}{" "}
-                                    {(summary?.balance ?? 0) >= 0 ? "DR" : "CR"}
-                                </Typography>
+                                    <Typography fontWeight={700}>
+                                        DR: {formatINR(summary?.dr ?? 0)}
+                                    </Typography>
+
+                                    <Typography fontWeight={700}>
+                                        CR: {formatINR(summary?.cr ?? 0)}
+                                    </Typography>
+
+                                    <Typography
+                                        fontWeight={800}
+                                        fontSize="16px"
+                                        color={
+                                            (summary?.balance ?? 0) >= 0
+                                                ? "success.main"
+                                                : "error.main"
+                                        }
+                                    >
+                                        BAL: {formatINR(Math.abs(summary?.balance ?? 0))}{" "}
+                                        {(summary?.balance ?? 0) >= 0 ? "DR" : "CR"}
+                                    </Typography>
+                                </Box>
                             </Box>
 
                             {/* 🔷 GROUPS */}
