@@ -62,6 +62,22 @@ export interface StaffBasedReport {
   Godown_Name: string;
 }
 
+export interface StaffBasedCountReport {
+  ST_Inv_Id: string;
+  Journal_no: string;
+  Stock_Journal_date: string;
+  Month_No: string;
+  Invoice_Month: string;
+  Invoice_Year: string;
+  Month_Year: string;
+  Bill_type: string;
+  Stock_Journal_Voucher_type: string;
+  Invoice_no: string;
+  Narration: string;
+  Created_on: string;
+  Created_By: string;
+}
+
 /* ================= API SERVICES ================= */
 
 export const costCenterListService = {
@@ -77,6 +93,15 @@ export const staffBasedReportService = {
     axios.get<{ success: boolean; data: StaffBasedReport[] }>(
       //  ` http://192.168.1.5:9001/api/reports/externalAPI/staffbased`,
       `${getBaseURL()}api/reports/externalAPI/staffbased`,
+      { params }
+    ),
+};
+
+export const StaffBasedCountReportService = {
+  getStaffBasedCountReport: (params?: { Fromdate?: string; Todate?: string}) =>
+    axios.get<{ success: boolean; data: StaffBasedCountReport[]}>(
+      //  ` http://192.168.1.5:9001/api/reports/externalAPI/staffbasedCount`,
+      `${getBaseURL()}api/reports/externalAPI/staffbasedCount`,
       { params }
     ),
 };
