@@ -230,6 +230,7 @@ const OnlineSalesReportLOL: React.FC = () => {
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [fromDate, setFromDate] = useState(today);
     const [toDate, setToDate] = useState(today);
+    const [loading, setLoading] = useState(false);
 
     const [settingsAnchor, setSettingsAnchor] =
         useState<null | HTMLElement>(null);
@@ -355,37 +356,45 @@ const OnlineSalesReportLOL: React.FC = () => {
                 ? onlineSalesReportItemLOLService.getReportsItemLOL
                 : onlineSalesReportLOLService.getReportsLOL;
 
+        setLoading(true);
+
         service({
             Fromdate: filters.Date.from,
             Todate: filters.Date.to,
-        }).then((res: any) => {
-            const apiRows = res.data.data || [];
+        })
+            .then((res: any) => {
+                const apiRows = res.data.data || [];
 
-            let cols = buildColumnsFromApi(apiRows, toggleMode);
+                let cols = buildColumnsFromApi(apiRows, toggleMode);
 
-            // ✅ APPLY TEMPLATE
-            if (toggleMode === "Abstract" && templateConfig?.abstract) {
-                cols = applyTemplateToColumns(cols, templateConfig.abstract);
-            }
+                // APPLY TEMPLATE
+                if (toggleMode === "Abstract" && templateConfig?.abstract) {
+                    cols = applyTemplateToColumns(cols, templateConfig.abstract);
+                }
 
-            if (toggleMode === "Expanded" && templateConfig?.expanded) {
-                cols = applyTemplateToColumns(cols, templateConfig.expanded);
-            }
+                if (toggleMode === "Expanded" && templateConfig?.expanded) {
+                    cols = applyTemplateToColumns(cols, templateConfig.expanded);
+                }
 
-            if (toggleMode === "Expanded") {
-                setExpandedRows(apiRows);
-                setExpandedDateKey(currentDateKey);
-                setExpandedColumns(cols);
+                if (toggleMode === "Expanded") {
+                    setExpandedRows(apiRows);
+                    setExpandedDateKey(currentDateKey);
+                    setExpandedColumns(cols);
+                } else {
+                    setAbstractRows(apiRows);
+                    setAbstractDateKey(currentDateKey);
+                    setAbstractColumns(cols);
+                }
 
-            } else {
-                setAbstractRows(apiRows);
-                setAbstractDateKey(currentDateKey);
-                setAbstractColumns(cols);
-
-            }
-
-            setPage(1);
-        });
+                setPage(1);
+            })
+            .catch((err) => {
+                console.error(err);
+                toast.error("Failed to load report ❌");
+            })
+            .finally(() => {
+                setLoading(false);
+            });
 
     }, [
         toggleMode,
@@ -1108,6 +1117,24 @@ const OnlineSalesReportLOL: React.FC = () => {
                             <CircularProgress size={40} />
                         </Box>
                     )}
+                    {loading && (
+                        <Box
+                            sx={{
+                                position: "absolute",
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                background: "rgba(255,255,255,0.5)",
+                                zIndex: 20,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
+                            <CircularProgress size={40} />
+                        </Box>
+                    )}
                     <TableContainer
                         component={Paper}
                         sx={{
@@ -1244,7 +1271,9 @@ const OnlineSalesReportLOL: React.FC = () => {
 
                                                             return (
                                                                 <TableCell key={c.key}>
-                                                                    {formatINR(total)}
+                                                                    {CURRENCY_KEYS.includes(c.key)
+                                                                        ? formatINR(total)
+                                                                        : total}
                                                                 </TableCell>
                                                             );
                                                         }
