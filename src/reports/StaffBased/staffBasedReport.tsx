@@ -2331,6 +2331,72 @@ const StaffBasedReport: React.FC = () => {
                                                             }
 
                                                             if (c.isNumeric) {
+                                                                const workColumns = [
+                                                                    "Load_Man",
+                                                                    "Others1",
+                                                                    "Others2",
+                                                                    "Others3",
+                                                                    "Others4",
+                                                                    "Others5",
+                                                                    "Checker",
+                                                                    "Delivery_Man",
+                                                                    "Others6",
+                                                                    "Driver",
+                                                                    "Created_By",
+                                                                ];
+
+                                                                // ===== QTY COLUMN =====
+                                                                if (c.key === "Qty") {
+                                                                    const totalQty = row.__rows.reduce(
+                                                                        (sum: number, r: any) =>
+                                                                            sum + Number(r.Qty || 0),
+                                                                        0
+                                                                    );
+
+                                                                    const invoiceCount = row.__rows.reduce(
+                                                                        (sum: number, r: any) =>
+                                                                            sum + Number(r.__qtyInvoiceCount || 0),
+                                                                        0
+                                                                    );
+
+                                                                    return (
+                                                                        <TableCell key={c.key}>
+                                                                            {totalQty > 0
+                                                                                ? `${totalQty.toFixed(2)} (${invoiceCount})`
+                                                                                : "-"}
+                                                                        </TableCell>
+                                                                    );
+                                                                }
+
+                                                                // ===== STAFF WORK COLUMNS =====
+                                                                if (workColumns.includes(c.key)) {
+                                                                    const totalQty = row.__rows.reduce(
+                                                                        (sum: number, r: any) =>
+                                                                            sum + Number(r[c.key] || 0),
+                                                                        0
+                                                                    );
+
+                                                                    const invoiceCount = row.__rows.reduce(
+                                                                        (sum: number, r: any) =>
+                                                                            sum +
+                                                                            Number(
+                                                                                r.__categoryInvoiceCount?.[
+                                                                                c.key
+                                                                                ] || 0
+                                                                            ),
+                                                                        0
+                                                                    );
+
+                                                                    return (
+                                                                        <TableCell key={c.key}>
+                                                                            {totalQty > 0
+                                                                                ? `${totalQty.toFixed(2)} (${invoiceCount})`
+                                                                                : "-"}
+                                                                        </TableCell>
+                                                                    );
+                                                                }
+
+                                                                // ===== NORMAL NUMERIC =====
                                                                 const total = row.__rows.reduce(
                                                                     (s: number, r: any) =>
                                                                         s + Number(r[c.key] || 0),
@@ -2339,7 +2405,9 @@ const StaffBasedReport: React.FC = () => {
 
                                                                 return (
                                                                     <TableCell key={c.key}>
-                                                                        {Number(total).toFixed(2)}
+                                                                        {total > 0
+                                                                            ? total.toFixed(2)
+                                                                            : "-"}
                                                                     </TableCell>
                                                                 );
                                                             }
