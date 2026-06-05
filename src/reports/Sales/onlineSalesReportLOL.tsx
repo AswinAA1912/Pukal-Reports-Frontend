@@ -495,21 +495,21 @@ const OnlineSalesReportLOL: React.FC = () => {
             if (aVal == null) return 1;
             if (bVal == null) return -1;
 
-            // Date handling
             if (sortConfig.key === "Ledger_Date") {
                 return sortConfig.order === "asc"
                     ? dayjs(aVal).valueOf() - dayjs(bVal).valueOf()
                     : dayjs(bVal).valueOf() - dayjs(aVal).valueOf();
             }
 
-            // Numeric
-            if (typeof aVal === "number" && typeof bVal === "number") {
+            const aNum = Number(aVal);
+            const bNum = Number(bVal);
+
+            if (!isNaN(aNum) && !isNaN(bNum)) {
                 return sortConfig.order === "asc"
-                    ? aVal - bVal
-                    : bVal - aVal;
+                    ? aNum - bNum
+                    : bNum - aNum;
             }
 
-            // String
             return sortConfig.order === "asc"
                 ? String(aVal).localeCompare(String(bVal))
                 : String(bVal).localeCompare(String(aVal));
@@ -527,25 +527,67 @@ const OnlineSalesReportLOL: React.FC = () => {
 
             for (const row of data) {
                 const val = String(row[groupKey] ?? "Others");
-                if (!map.has(val)) map.set(val, []);
+
+                if (!map.has(val)) {
+                    map.set(val, []);
+                }
+
                 map.get(val)!.push(row);
             }
 
-            return Array.from(map.entries()).map(([value, rows]) => ({
+            let groups = Array.from(map.entries()).map(([value, rows]) => ({
                 __group: true,
                 __key: `${parentKey}${groupKey}:${value}`,
                 __value: value,
                 __level: level,
                 __rows: rows,
             }));
+
+            // 🔥 SORT GROUPS WHEN SORT COLUMN IS SELECTED
+            if (sortConfig.key) {
+                groups.sort((a, b) => {
+                    const key = sortConfig.key!;
+
+                    const getValue = (group: any) => {
+                        if (
+                            NUMERIC_KEYS.includes(key) ||
+                            typeof group.__rows[0]?.[key] === "number"
+                        ) {
+                            return group.__rows.reduce(
+                                (sum: number, r: any) =>
+                                    sum + Number(r[key] || 0),
+                                0
+                            );
+                        }
+
+                        return String(group.__rows[0]?.[key] ?? "");
+                    };
+
+                    const aVal = getValue(a);
+                    const bVal = getValue(b);
+
+                    if (typeof aVal === "number" && typeof bVal === "number") {
+                        return sortConfig.order === "asc"
+                            ? aVal - bVal
+                            : bVal - aVal;
+                    }
+
+                    return sortConfig.order === "asc"
+                        ? String(aVal).localeCompare(String(bVal))
+                        : String(bVal).localeCompare(String(aVal));
+                });
+            }
+
+            return groups;
         },
-        [grouping]
+        [grouping, sortConfig]
     );
 
     const groupedRows = useMemo(() => {
         if (!grouping.length) return sortedRows;
+
         return buildGroupedData(sortedRows, 0);
-    }, [sortedRows, grouping]);
+    }, [sortedRows, grouping, sortConfig]);
 
     const flattenRows = (rows: any[]): any[] => {
         const result: any[] = [];
@@ -553,14 +595,16 @@ const OnlineSalesReportLOL: React.FC = () => {
         const walk = (list: any[]) => {
             for (const r of list) {
                 result.push(r);
+
                 if (r.__group && expandedKeys.includes(r.__key)) {
-                    walk(
-                        buildGroupedData(
-                            r.__rows,
-                            r.__level + 1,
-                            `${r.__key} > `
-                        )
+
+                    const children = buildGroupedData(
+                        r.__rows,
+                        r.__level + 1,
+                        `${r.__key} > `
                     );
+
+                    walk(children);
                 }
             }
         };
@@ -629,7 +673,7 @@ const OnlineSalesReportLOL: React.FC = () => {
 
     const enabledColumns = sortedColumns.filter(c => c.enabled);
 
-    const baseRows = grouping.length ? filteredRows : sortedRows;
+    const baseRows = sortedRows;
 
     const getTotal = (key: string) =>
         Number(
@@ -719,43 +763,129 @@ const OnlineSalesReportLOL: React.FC = () => {
         );
     }, [activeHeader, rawRows, sortConfig.order]);
 
-    const exportColumns = enabledColumns.map(c => ({
-        key: c.key,
-        label: c.label,
-    }));
+    const buildExportRows = () => {
+        const rows: any[] = [];
 
-    const exportRows = sortedRows.map(row => {
-        const obj: any = {};
-        exportColumns.forEach(col => {
-            let value = row[col.key];
+        const walk = (
+            list: any[],
+            level = 0
+        ) => {
+            for (const row of list) {
 
-            if (col.key === "Ledger_Date") {
-                value = dayjs(value).format("DD/MM/YYYY");
+                // GROUP ROW
+                if (row.__group) {
+
+                    const exportGroup: any = {};
+
+                    enabledColumns.forEach(col => {
+
+                        const currentGroupKey =
+                            grouping[row.__level];
+
+                        if (col.key === currentGroupKey) {
+                            exportGroup[col.label] =
+                                `${" ".repeat(row.__level * 4)}${row.__value}`;
+                        }
+                        else if (col.isNumeric) {
+
+                            exportGroup[col.label] =
+                                row.__rows.reduce(
+                                    (sum: number, r: any) =>
+                                        sum + Number(r[col.key] || 0),
+                                    0
+                                );
+                        }
+                        else {
+                            exportGroup[col.label] = "";
+                        }
+                    });
+
+                    rows.push(exportGroup);
+
+                    // ONLY EXPORT CHILDREN IF EXPANDED
+                    if (expandedKeys.includes(row.__key)) {
+
+                        const children = buildGroupedData(
+                            row.__rows,
+                            row.__level + 1,
+                            `${row.__key} > `
+                        );
+
+                        walk(children, level + 1);
+                    }
+
+                    continue;
+                }
+
+                // DETAIL ROW
+                const detail: any = {};
+
+                enabledColumns.forEach(col => {
+
+                    detail[col.label] =
+                        col.key === "Ledger_Date"
+                            ? dayjs(row[col.key]).format("DD/MM/YYYY")
+                            : row[col.key];
+                });
+
+                rows.push(detail);
             }
+        };
 
-            obj[col.label] = value ?? "";
-        });
-        return obj;
-    });
+        if (grouping.length) {
+            walk(groupedRows);
+        }
+        else {
+            sortedRows.forEach(row => {
+
+                const detail: any = {};
+
+                enabledColumns.forEach(col => {
+                    detail[col.label] =
+                        col.key === "Ledger_Date"
+                            ? dayjs(row[col.key]).format("DD/MM/YYYY")
+                            : row[col.key];
+                });
+
+                rows.push(detail);
+            });
+        }
+
+        return rows;
+    };
 
     const handleExportExcel = () => {
-        const worksheet = XLSX.utils.json_to_sheet(exportRows);
-        const workbook = XLSX.utils.book_new();
+
+        const exportRows = buildExportRows();
+
+        const worksheet =
+            XLSX.utils.json_to_sheet(exportRows);
+
+        const workbook =
+            XLSX.utils.book_new();
 
         XLSX.utils.book_append_sheet(
             workbook,
             worksheet,
-            toggleMode === "Expanded" ? "Expanded Report" : "Abstract Report"
+            toggleMode
         );
 
         XLSX.writeFile(
             workbook,
-            `Online_Sales_Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.xlsx`
+            `OnlineSales_${toggleMode}_${dayjs().format(
+                "DDMMYYYY"
+            )}.xlsx`
         );
     };
 
     const handleExportPDF = () => {
-        const doc = new jsPDF("l", "mm", "a4");
+
+        const exportRows = buildExportRows();
+
+        const doc =
+            new jsPDF("l", "mm", "a4");
+
+        doc.setFontSize(12);
 
         doc.text(
             `Online Sales Report (${toggleMode})`,
@@ -765,14 +895,48 @@ const OnlineSalesReportLOL: React.FC = () => {
 
         autoTable(doc, {
             startY: 15,
-            head: [exportColumns.map(c => c.label)],
-            body: exportRows.map(r => Object.values(r)),
-            styles: { fontSize: 7 },
-            headStyles: { fillColor: [30, 58, 138] },
+
+            head: [
+                enabledColumns.map(
+                    c => c.label
+                )
+            ],
+
+            body: exportRows.map(r =>
+                enabledColumns.map(
+                    c => r[c.label] ?? ""
+                )
+            ),
+
+            styles: {
+                fontSize: 7
+            },
+
+            headStyles: {
+                fillColor: [30, 58, 138]
+            },
+
+            didParseCell(data) {
+
+                const row =
+                    exportRows[data.row.index];
+
+                const firstColumn =
+                    enabledColumns[0]?.label;
+
+                if (
+                    row[firstColumn] &&
+                    typeof row[firstColumn] === "string" &&
+                    row[firstColumn].startsWith(" ")
+                ) {
+                    data.cell.styles.fontStyle =
+                        "bold";
+                }
+            }
         });
 
         doc.save(
-            `Online_Sales_Report_${toggleMode}_${dayjs().format("DDMMYYYY")}.pdf`
+            `OnlineSales_${toggleMode}.pdf`
         );
     };
 
