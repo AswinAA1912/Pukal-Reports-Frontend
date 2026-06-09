@@ -32,7 +32,7 @@ import PendingOutstandingReport from "../reports/Expenses/PendingOutstandingRepo
 import TransactionDetailsReport from "../reports/Expenses/TransactionDetailsReport";
 import StaffBasedGroupingReport from "../reports/StaffBased/staffBasedGroupingReport";
 import StaffBasedCountReport from "../reports/StaffBased/staffBasedCountReport";
-import DayAbstractReport from "../reports/Abstract/DayABstractReport";
+import DayAbstractReport from "../reports/Abstract/DayAbstractReport";
 
 
 interface AppRoutingProps {

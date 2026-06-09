@@ -30,6 +30,41 @@ export interface DayAbstractData4 {
     Trans_Count: number;
 }
 
+export interface DayAbstractData5 {
+    Dr_Amount: number;
+    Cr_Amount: number;
+    OB_Amount: number;
+    OPB_Amount: number;
+    Credit_Amt: number;
+    Debit_Amt: number;
+    Bal_Amount: number;
+}
+
+export interface DayAbstractData6 {
+    Dr_Amount: number;
+    Cr_Amount: number;
+    OB_Amount: number;
+    OPB_Amount: number;
+    Credit_Amt: number;
+    Debit_Amt: number;
+    Bal_Amount: number;
+}
+export interface DayAbstractData7 {
+    Trans_Type: string;
+    Credit_Amount: number;
+    Debit_Amount: number;
+    Credit_Amount_1: number;
+    Debit_Amount_1: number;
+}
+
+export interface DayAbstractData8 {
+    Trans_Type: string;
+    Credit_Amount: number;
+    Debit_Amount: number;
+    Credit_Amount_1: number;
+    Debit_Amount_1: number;
+}
+
 /* ---------------- FINAL RESPONSE TYPE ---------------- */
 
 export interface DayAbstractReportResponse {
@@ -37,6 +72,10 @@ export interface DayAbstractReportResponse {
     Data2: DayAbstractData2[];
     Data3: DayAbstractData3[];
     Data4: DayAbstractData4[];
+    Data5: DayAbstractData5[];
+    Data6: DayAbstractData6[];
+    Data7: DayAbstractData7[];
+    Data8: DayAbstractData8[];
 }
 
 /* ---------------- DAY ABSTRACT REPORT SERVICE ---------------- */
@@ -51,8 +90,8 @@ export const DayAbstractReportService = {
             success: boolean;
             data: any;
         }>(
-            'http://192.168.1.5:9001/api/reports/externalAPI/dayAbstract',
-            // `${getBaseURL()}api/reports/externalAPI/dayAbstract`,
+            // 'http://192.168.1.5:9001/api/reports/externalAPI/dayAbstract',
+            `${getBaseURL()}api/reports/externalAPI/dayAbstract`,
             {
                 params,
             }
@@ -79,6 +118,26 @@ export const DayAbstractReportService = {
             Data4:
                 data.Data4 ||
                 data["Data4"] ||
+                [],
+
+            Data5:
+                data.Data5 ||
+                data["Data5"] ||
+                [],
+
+            Data6:
+                data.Data6 ||
+                data["Data6"] ||
+                [],
+
+            Data7:
+                data.Data7 ||
+                data["Data7"] ||
+                [],
+
+            Data8:
+                data.Data8 ||
+                data["Data8"] ||
                 [],
         };
     },

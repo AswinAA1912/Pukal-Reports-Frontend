@@ -13,22 +13,18 @@ import {
     CircularProgress,
     TextField
 } from "@mui/material";
-
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
-
 import AppLayout, { useToggleMode } from "../../Layout/appLayout";
 import PageHeader from "../../Layout/PageHeader";
 import ReportFilterDrawer from "../../Components/ReportFilterDrawer";
-
 import {
     DayAbstractReportService,
     DayAbstractReportResponse,
 } from "../../services/dayAbstract.service";
-
 const DayAbstractReport: React.FC = () => {
 
     const today = dayjs().format("YYYY-MM-DD");
@@ -107,216 +103,186 @@ const DayAbstractReport: React.FC = () => {
 
     /* ================= EXPORT EXCEL ================= */
 
-    const getGroupedData = () => {
-
-        if (!reportData?.Data3?.length) return [];
-
-        return Object.values(
-            reportData.Data3.reduce(
-                (
-                    acc: Record<
-                        string,
-                        {
-                            transType: string;
-                            receiptCredit: number;
-                            receiptDebit: number;
-                            paymentCredit: number;
-                            paymentDebit: number;
-                        }
-                    >,
-                    row
-                ) => {
-
-                    const key = row.Master_Name;
-
-                    if (!acc[key]) {
-                        acc[key] = {
-                            transType: key,
-                            receiptCredit: 0,
-                            receiptDebit: 0,
-                            paymentCredit: 0,
-                            paymentDebit: 0,
-                        };
-                    }
-
-                    const transType =
-                        row.Trans_Type?.toUpperCase() || "";
-
-                    if (
-                        transType === "RECEIPTS" ||
-                        transType === "RECEIPT"
-                    ) {
-                        acc[key].receiptCredit += Number(
-                            row.Credit_Amount || 0
-                        );
-
-                        acc[key].receiptDebit += Number(
-                            row.Debit_Amount || 0
-                        );
-                    }
-
-                    if (
-                        transType === "PAYMENTS" ||
-                        transType === "PAYMENT"
-                    ) {
-                        acc[key].paymentCredit += Number(
-                            row.Credit_Amount || 0
-                        );
-
-                        acc[key].paymentDebit += Number(
-                            row.Debit_Amount || 0
-                        );
-                    }
-
-                    return acc;
-
-                },
-                {}
-            )
-        );
-    };
-
     const handleExportExcel = () => {
-
         if (!reportData) {
             toast.warning("No data available");
             return;
         }
 
-        const systemClosing =
-            reportData.Data1.reduce(
-                (sum, row) =>
-                    sum + Number(row.Trans_Amount || 0),
-                0
-            );
-
-        const difference =
-            systemClosing - Number(dayClosing || 0);
-
-       const groupedData = getGroupedData();
-       
+        const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.aoa_to_sheet([]);
 
         let row = 1;
 
         XLSX.utils.sheet_add_aoa(
             ws,
-            [[
-                `DAY ABSTRACT REPORT (${fromDate} To ${toDate})`
-            ]],
+            [[`DAY ABSTRACT REPORT (${fromDate} To ${toDate})`]],
             { origin: `A${row}` }
         );
 
         row += 2;
 
-        XLSX.utils.sheet_add_aoa(
-            ws,
-            [[
-                "System Closing",
-                formatAmount(systemClosing),
-                "",
-                "Day Closing",
-                formatAmount(Number(dayClosing || 0)),
-                "",
-                "Difference",
-                formatAmount(difference)
-            ]],
-            { origin: `A${row}` }
-        );
-
-        row += 3;
-
-        /* DATA 1 */
+        /* =========================
+           DATA 1
+        ========================= */
 
         XLSX.utils.sheet_add_aoa(
             ws,
-            [["DATA 1 - SUMMARY"]],
+            [["DATA 1"]],
             { origin: `A${row}` }
         );
 
         XLSX.utils.sheet_add_json(
             ws,
-            reportData.Data1,
+            reportData.Data1 || [],
             {
                 origin: `A${row + 1}`,
                 skipHeader: false,
             }
         );
 
-        /* DATA 2 */
+        /* =========================
+           DATA 2
+        ========================= */
 
         XLSX.utils.sheet_add_aoa(
             ws,
-            [["DATA 2 - TRANSACTION"]],
-            { origin: `F${row}` }
+            [["DATA 2"]],
+            { origin: `E${row}` }
         );
 
         XLSX.utils.sheet_add_json(
             ws,
-            reportData.Data2,
+            reportData.Data2 || [],
             {
-                origin: `F${row + 1}`,
+                origin: `E${row + 1}`,
                 skipHeader: false,
             }
         );
 
-        /* DATA 4 */
+        /* =========================
+           DATA 4
+        ========================= */
 
         XLSX.utils.sheet_add_aoa(
             ws,
-            [["DATA 4 - SALES SPLIT"]],
-            { origin: `K${row}` }
+            [["DATA 4"]],
+            { origin: `J${row}` }
         );
 
         XLSX.utils.sheet_add_json(
             ws,
-            reportData.Data4,
+            reportData.Data4 || [],
             {
-                origin: `K${row + 1}`,
+                origin: `J${row + 1}`,
                 skipHeader: false,
             }
         );
 
-        row +=
-            Math.max(
-                reportData.Data1.length,
-                reportData.Data2.length,
-                reportData.Data4.length
-            ) + 5;
+        row += Math.max(
+            reportData.Data1?.length || 0,
+            reportData.Data2?.length || 0,
+            reportData.Data4?.length || 0
+        ) + 6;
 
-        /* DATA 3 */
+        /* =========================
+           DATA 7
+        ========================= */
 
         XLSX.utils.sheet_add_aoa(
             ws,
-            [["DATA 3 - LEDGER SUMMARY"]],
+            [["DATA 7"]],
             { origin: `A${row}` }
         );
 
         XLSX.utils.sheet_add_json(
             ws,
-            groupedData,
+            reportData.Data7 || [],
             {
                 origin: `A${row + 1}`,
                 skipHeader: false,
             }
         );
 
-        ws["!cols"] = [
-            { wch: 30 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-            { wch: 18 },
-        ];
+        row += (reportData.Data7?.length || 0) + 5;
 
-        const wb = XLSX.utils.book_new();
+        /* =========================
+           DATA 8
+        ========================= */
+
+        XLSX.utils.sheet_add_aoa(
+            ws,
+            [["DATA 8"]],
+            { origin: `A${row}` }
+        );
+
+        XLSX.utils.sheet_add_json(
+            ws,
+            reportData.Data8 || [],
+            {
+                origin: `A${row + 1}`,
+                skipHeader: false,
+            }
+        );
+
+        /* =========================
+           RIGHT SIDE TABLES
+        ========================= */
+
+        let rightRow = 4;
+
+        XLSX.utils.sheet_add_aoa(
+            ws,
+            [["DATA 3"]],
+            { origin: `P${rightRow}` }
+        );
+
+        XLSX.utils.sheet_add_json(
+            ws,
+            reportData.Data3 || [],
+            {
+                origin: `P${rightRow + 1}`,
+                skipHeader: false,
+            }
+        );
+
+        rightRow += (reportData.Data3?.length || 0) + 6;
+
+        XLSX.utils.sheet_add_aoa(
+            ws,
+            [["DATA 5"]],
+            { origin: `P${rightRow}` }
+        );
+
+        XLSX.utils.sheet_add_json(
+            ws,
+            reportData.Data5 || [],
+            {
+                origin: `P${rightRow + 1}`,
+                skipHeader: false,
+            }
+        );
+
+        rightRow += 8;
+
+        XLSX.utils.sheet_add_aoa(
+            ws,
+            [["DATA 6"]],
+            { origin: `P${rightRow}` }
+        );
+
+        XLSX.utils.sheet_add_json(
+            ws,
+            reportData.Data6 || [],
+            {
+                origin: `P${rightRow + 1}`,
+                skipHeader: false,
+            }
+        );
+
+        ws["!cols"] = Array(30).fill({
+            wch: 20,
+        });
 
         XLSX.utils.book_append_sheet(
             wb,
@@ -335,220 +301,88 @@ const DayAbstractReport: React.FC = () => {
     /* ================= EXPORT PDF ================= */
 
     const handleExportPDF = () => {
-
         if (!reportData) {
             toast.warning("No data available");
             return;
         }
 
-        const doc = new jsPDF(
-            "landscape",
-            "mm",
-            "a4"
-        );
-
-        /* -----------------------------
-           HEADER
-        ------------------------------ */
+        const doc = new jsPDF("landscape", "mm", "a4");
 
         doc.setFontSize(16);
         doc.setFont("helvetica", "bold");
 
         doc.text(
             `DAY ABSTRACT REPORT (${fromDate} TO ${toDate})`,
-            105,
+            148,
             12,
             { align: "center" }
         );
 
-        const systemClosing =
-            reportData.Data1.reduce(
-                (sum, row) =>
-                    sum + Number(row.Trans_Amount || 0),
-                0
-            );
+        let currentY = 20;
 
-        const difference =
-            systemClosing - Number(dayClosing || 0);
-
-        doc.setFontSize(10);
-
-        doc.text(
-            `System Closing : ${formatAmount(systemClosing)}`,
-            15,
-            22
-        );
-
-        doc.text(
-            `Day Closing : ${formatAmount(
-                Number(dayClosing || 0)
-            )}`,
-            110,
-            22
-        );
-
-        doc.text(
-            `Difference : ${formatAmount(difference)}`,
-            210,
-            22
-        );
-
-        /* -----------------------------
-           DATA 1 (LEFT)
-        ------------------------------ */
-
-        autoTable(doc, {
-            startY: 30,
-            margin: { left: 10 },
-            tableWidth: 70,
-
-            head: [["Trans Type", "Amount"]],
-
-            body: reportData.Data1.map((row) => [
-                row.Trans_Type,
-                formatAmount(row.Trans_Amount),
-            ]),
-
-            styles: {
-                fontSize: 8,
-                cellPadding: 1.5,
-            },
-
-            headStyles: {
-                fillColor: [220, 220, 220],
-                textColor: 0,
-            },
-        });
-
-        /* -----------------------------
-           DATA 2 (CENTER)
-        ------------------------------ */
-
-        autoTable(doc, {
-            startY: 30,
-            margin: { left: 90 },
-            tableWidth: 80,
-
-            head: [["Trans Type", "Count", "Amount"]],
-
-            body: reportData.Data2.map((row) => [
-                row.Trans_Type,
-                row.Trans_Count,
-                formatAmount(row.Trans_Amount),
-            ]),
-
-            styles: {
-                fontSize: 8,
-                cellPadding: 1.5,
-            },
-
-            headStyles: {
-                fillColor: [220, 220, 220],
-                textColor: 0,
-            },
-        });
-
-        /* -----------------------------
-           DATA 4 (RIGHT)
-        ------------------------------ */
-
-        autoTable(doc, {
-            startY: 30,
-            margin: { left: 185 },
-            tableWidth: 85,
-
-            head: [["Type", "Count", "Amount"]],
-
-            body: reportData.Data4.map((row) => [
-                row.Trans_Type,
-                row.Trans_Count,
-                formatAmount(row.Trans_Amount),
-            ]),
-
-            styles: {
-                fontSize: 8,
-                cellPadding: 1.5,
-            },
-
-            headStyles: {
-                fillColor: [220, 220, 220],
-                textColor: 0,
-            },
-        });
-
-        /* -----------------------------
-           DATA 3 GROUPED SUMMARY
-        ------------------------------ */
-
-        type GroupedRow = {
-            transType: string;
-            receiptCredit: number;
-            receiptDebit: number;
-            paymentCredit: number;
-            paymentDebit: number;
+        const addTitle = (title: string) => {
+            doc.setFontSize(11);
+            doc.setFont("helvetica", "bold");
+            doc.text(title, 14, currentY);
+            currentY += 4;
         };
 
-        const groupedData: GroupedRow[] =
-            Object.values(
-                reportData.Data3.reduce(
-                    (
-                        acc: Record<string, GroupedRow>,
-                        row
-                    ) => {
+        /* ================= DATA 1 ================= */
 
-                        const key =
-                            row.Master_Name ||
-                            "Others";
-
-                        if (!acc[key]) {
-                            acc[key] = {
-                                transType: key,
-                                receiptCredit: 0,
-                                receiptDebit: 0,
-                                paymentCredit: 0,
-                                paymentDebit: 0,
-                            };
-                        }
-
-                        const type =
-                            row.Trans_Type?.toUpperCase();
-
-                        if (
-                            type === "RECEIPT" ||
-                            type === "RECEIPTS"
-                        ) {
-                            acc[key].receiptCredit += Number(
-                                row.Credit_Amount || 0
-                            );
-
-                            acc[key].receiptDebit += Number(
-                                row.Debit_Amount || 0
-                            );
-                        }
-
-                        if (
-                            type === "PAYMENT" ||
-                            type === "PAYMENTS"
-                        ) {
-                            acc[key].paymentCredit += Number(
-                                row.Credit_Amount || 0
-                            );
-
-                            acc[key].paymentDebit += Number(
-                                row.Debit_Amount || 0
-                            );
-                        }
-
-                        return acc;
-
-                    },
-                    {}
-                )
-            );
+        addTitle("DATA 1");
 
         autoTable(doc, {
-            startY: 105,
+            startY: currentY,
+            head: [["Type", "Amount"]],
+            body: (reportData.Data1 || []).map((r) => [
+                r.Trans_Type,
+                formatAmount(r.Trans_Amount),
+            ]),
+            styles: { fontSize: 8 },
+        });
 
+        currentY = (doc as any).lastAutoTable.finalY + 8;
+
+        /* ================= DATA 2 ================= */
+
+        addTitle("DATA 2");
+
+        autoTable(doc, {
+            startY: currentY,
+            head: [["Type", "Count", "Amount"]],
+            body: (reportData.Data2 || []).map((r) => [
+                r.Trans_Type,
+                r.Trans_Count,
+                formatAmount(r.Trans_Amount),
+            ]),
+            styles: { fontSize: 8 },
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 8;
+
+        /* ================= DATA 4 ================= */
+
+        addTitle("DATA 4");
+
+        autoTable(doc, {
+            startY: currentY,
+            head: [["Type", "Count", "Amount"]],
+            body: (reportData.Data4 || []).map((r) => [
+                r.Trans_Type,
+                r.Trans_Count,
+                formatAmount(r.Trans_Amount),
+            ]),
+            styles: { fontSize: 8 },
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 8;
+
+        /* ================= DATA 7 ================= */
+
+        addTitle("DATA 7");
+
+        autoTable(doc, {
+            startY: currentY,
             head: [
                 [
                     "S.No",
@@ -559,78 +393,96 @@ const DayAbstractReport: React.FC = () => {
                     "Payment Debit",
                 ],
             ],
+            body: (reportData.Data7 || []).map((r, i) => [
+                i + 1,
+                r.Trans_Type,
+                formatAmount(r.Credit_Amount),
+                formatAmount(r.Debit_Amount),
+                formatAmount(r.Credit_Amount_1),
+                formatAmount(r.Debit_Amount_1),
+            ]),
+            styles: { fontSize: 8 },
+        });
 
-            body: groupedData.map(
-                (row, index) => [
-                    index + 1,
-                    row.transType,
-                    formatAmount(
-                        row.receiptCredit
-                    ),
-                    formatAmount(
-                        row.receiptDebit
-                    ),
-                    formatAmount(
-                        row.paymentCredit
-                    ),
-                    formatAmount(
-                        row.paymentDebit
-                    ),
-                ]
-            ),
+        currentY = (doc as any).lastAutoTable.finalY + 8;
 
-            styles: {
-                fontSize: 8,
-                cellPadding: 1.5,
-            },
+        /* ================= DATA 8 ================= */
 
-            headStyles: {
-                fillColor: [220, 220, 220],
-                textColor: 0,
-            },
+        addTitle("DATA 8");
 
-            foot: [[
-                "",
-                "TOTAL",
+        autoTable(doc, {
+            startY: currentY,
+            head: [
+                [
+                    "S.No",
+                    "Trans Type",
+                    "Debtors Credit",
+                    "Debtors Debit",
+                    "Creditors Credit",
+                    "Creditors Debit",
+                ],
+            ],
+            body: (reportData.Data8 || []).map((r, i) => [
+                i + 1,
+                r.Trans_Type,
+                formatAmount(r.Credit_Amount),
+                formatAmount(r.Debit_Amount),
+                formatAmount(r.Credit_Amount_1),
+                formatAmount(r.Debit_Amount_1),
+            ]),
+            styles: { fontSize: 8 },
+        });
 
-                formatAmount(
-                    groupedData.reduce(
-                        (s, r) =>
-                            s + r.receiptCredit,
-                        0
-                    )
-                ),
+        currentY = (doc as any).lastAutoTable.finalY + 8;
 
-                formatAmount(
-                    groupedData.reduce(
-                        (s, r) =>
-                            s + r.receiptDebit,
-                        0
-                    )
-                ),
+        /* ================= DATA 3 ================= */
 
-                formatAmount(
-                    groupedData.reduce(
-                        (s, r) =>
-                            s + r.paymentCredit,
-                        0
-                    )
-                ),
+        addTitle("DATA 3");
 
-                formatAmount(
-                    groupedData.reduce(
-                        (s, r) =>
-                            s + r.paymentDebit,
-                        0
-                    )
-                ),
-            ]],
+        autoTable(doc, {
+            startY: currentY,
+            head: [["Master Name", "Credit", "Debit"]],
+            body: (reportData.Data3 || []).map((r) => [
+                r.Master_Name,
+                formatAmount(r.Credit_Amount),
+                formatAmount(r.Debit_Amount),
+            ]),
+            styles: { fontSize: 8 },
+        });
 
-            footStyles: {
-                fillColor: [240, 240, 240],
-                textColor: 0,
-                fontStyle: "bold",
-            },
+        currentY = (doc as any).lastAutoTable.finalY + 8;
+
+        /* ================= DATA 5 ================= */
+
+        addTitle("DATA 5");
+
+        autoTable(doc, {
+            startY: currentY,
+            head: [["Type", "Amount"]],
+            body: [
+                ["Receivable", formatAmount(reportData.Data5?.[0]?.Cr_Amount)],
+                ["Payable", formatAmount(reportData.Data5?.[0]?.Dr_Amount)],
+                ["Exp", formatAmount(reportData.Data5?.[0]?.OPB_Amount)],
+            ],
+            styles: { fontSize: 8 },
+        });
+
+        currentY = (doc as any).lastAutoTable.finalY + 8;
+
+        /* ================= DATA 6 ================= */
+
+        addTitle("DATA 6");
+
+        autoTable(doc, {
+            startY: currentY,
+            head: [["Type", "Amount"]],
+            body: [
+                ["Opening", formatAmount(reportData.Data6?.[0]?.OB_Amount)],
+                ["Credit", formatAmount(reportData.Data6?.[0]?.Credit_Amt)],
+                ["Debit", formatAmount(reportData.Data6?.[0]?.Debit_Amt)],
+                ["Closing", formatAmount(reportData.Data6?.[0]?.Bal_Amount)],
+            ],
+            styles: { fontSize: 8 },
         });
 
         doc.save(
@@ -654,23 +506,25 @@ const DayAbstractReport: React.FC = () => {
 
     /* ================= SECTION HEADER ================= */
 
-    const SectionTitle = ({
-        title,
-    }: {
-        title: string;
-    }) => (
-        <Typography
-            sx={{
-                p: 1,
-                fontWeight: 700,
-                fontSize: "0.9rem",
-                backgroundColor: "#1E3A8A",
-                color: "#fff",
-            }}
-        >
-            {title}
-        </Typography>
-    );
+    // const SectionTitle = ({
+    //     title,
+    // }: {
+    //     title: string;
+    // }) => (
+    //     <Typography
+    //         sx={{
+    //             py: 0.4,
+    //             px: 1,
+    //             fontWeight: 700,
+    //             fontSize: "0.75rem",
+    //             backgroundColor: "#1E3A8A",
+    //             color: "#fff",
+    //             lineHeight: 1.2,
+    //         }}
+    //     >
+    //         {title}
+    //     </Typography>
+    // );
 
     const compactTableStyle = {
         width: "fit-content",
@@ -686,7 +540,8 @@ const DayAbstractReport: React.FC = () => {
 
         "& .MuiTableHead-root .MuiTableCell-root": {
             fontWeight: 700,
-            backgroundColor: "#E8E8E8",
+            backgroundColor: "#1E3A8A",
+            color: "#fff",
         },
     };
 
@@ -702,7 +557,7 @@ const DayAbstractReport: React.FC = () => {
                         display: "inline-block",
                     }}
                 >
-                    <SectionTitle title="Data 1 - Summary" />
+
 
                     <Box p={3}>
                         <Typography align="center">
@@ -727,7 +582,6 @@ const DayAbstractReport: React.FC = () => {
                     display: "inline-block",
                 }}
             >
-                <SectionTitle title="Data 1 - Summary" />
 
                 <TableContainer>
                     <Table
@@ -743,6 +597,12 @@ const DayAbstractReport: React.FC = () => {
                                     backgroundColor: "#E2E8F0",
                                 }}
                             >
+                                <TableCell
+                                    rowSpan={2}
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    S.No
+                                </TableCell>
                                 <TableCell
                                     sx={{
                                         fontWeight: 700,
@@ -766,6 +626,10 @@ const DayAbstractReport: React.FC = () => {
                             {reportData.Data1.map(
                                 (row, index) => (
                                     <TableRow key={index}>
+                                        <TableCell>
+                                            {index + 1}
+                                        </TableCell>
+
                                         <TableCell>
                                             {row.Trans_Type}
                                         </TableCell>
@@ -792,6 +656,8 @@ const DayAbstractReport: React.FC = () => {
                                     TOTAL
                                 </TableCell>
 
+                                <TableCell />
+
                                 <TableCell
                                     align="right"
                                     sx={{
@@ -817,7 +683,6 @@ const DayAbstractReport: React.FC = () => {
         if (!reportData?.Data2?.length) {
             return (
                 <Paper sx={{ mb: 2 }}>
-                    <SectionTitle title="Data 2 - Transaction Summary" />
 
                     <Box p={3}>
                         <Typography align="center">
@@ -844,7 +709,6 @@ const DayAbstractReport: React.FC = () => {
 
         return (
             <Paper sx={{ mb: 2 }}>
-                <SectionTitle title="Data 2 - Transaction Summary" />
 
                 <TableContainer>
                     <Table
@@ -860,6 +724,12 @@ const DayAbstractReport: React.FC = () => {
                                     backgroundColor: "#E2E8F0",
                                 }}
                             >
+                                <TableCell
+                                    rowSpan={2}
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    S.No
+                                </TableCell>
                                 <TableCell
                                     sx={{
                                         fontWeight: 700,
@@ -893,6 +763,10 @@ const DayAbstractReport: React.FC = () => {
                                 (row, index) => (
                                     <TableRow key={index}>
                                         <TableCell>
+                                            {index + 1}
+                                        </TableCell>
+
+                                        <TableCell>
                                             {row.Trans_Type}
                                         </TableCell>
 
@@ -921,6 +795,8 @@ const DayAbstractReport: React.FC = () => {
                                 >
                                     TOTAL
                                 </TableCell>
+
+                                <TableCell />
 
                                 <TableCell
                                     align="right"
@@ -951,330 +827,198 @@ const DayAbstractReport: React.FC = () => {
 
     /* ================= DATA3 TABLE ================= */
 
-    const renderData3Table = () => {
+    const getLedgerGroups = () => {
 
-        if (!reportData?.Data3?.length) {
-            return (
-                <Paper sx={{ mb: 2 }}>
-                    <SectionTitle title="Data 3 - Ledger Summary" />
+        if (!reportData?.Data3?.length) return [];
 
-                    <Box p={3}>
-                        <Typography align="center">
-                            No Data Available
-                        </Typography>
-                    </Box>
-                </Paper>
-            );
-        }
+        const grouped = reportData.Data3.reduce(
+            (acc: any, row: any) => {
 
-        type GroupedRow = {
-            transType: string;
-            receiptCredit: number;
-            receiptDebit: number;
-            paymentCredit: number;
-            paymentDebit: number;
-        };
+                const master =
+                    row.Master_Name || "Others";
 
-        const groupedData: GroupedRow[] = Object.values(
-            reportData.Data3.reduce(
-                (
-                    acc: Record<string, GroupedRow>,
-                    row
-                ) => {
+                const group =
+                    row.group_name || "Others";
 
-                    const key = row.Master_Name;
+                if (!acc[master]) {
+                    acc[master] = {};
+                }
 
-                    if (!acc[key]) {
-                        acc[key] = {
-                            transType: key,
-                            receiptCredit: 0,
-                            receiptDebit: 0,
-                            paymentCredit: 0,
-                            paymentDebit: 0,
-                        };
-                    }
+                if (!acc[master][group]) {
+                    acc[master][group] = [];
+                }
 
-                    const transType =
-                        row.Trans_Type?.toUpperCase() || "";
+                acc[master][group].push(row);
 
-                    if (
-                        transType === "RECEIPTS" ||
-                        transType === "RECEIPT"
-                    ) {
-                        acc[key].receiptCredit += Number(
-                            row.Credit_Amount || 0
-                        );
-
-                        acc[key].receiptDebit += Number(
-                            row.Debit_Amount || 0
-                        );
-                    }
-
-                    if (
-                        transType === "PAYMENTS" ||
-                        transType === "PAYMENT"
-                    ) {
-                        acc[key].paymentCredit += Number(
-                            row.Credit_Amount || 0
-                        );
-
-                        acc[key].paymentDebit += Number(
-                            row.Debit_Amount || 0
-                        );
-                    }
-
-                    return acc;
-
-                },
-                {}
-            )
+                return acc;
+            },
+            {}
         );
 
-        const totalReceiptCredit =
-            groupedData.reduce(
-                (sum, row) =>
-                    sum + row.receiptCredit,
-                0
-            );
+        return grouped;
+    };
 
-        const totalReceiptDebit =
-            groupedData.reduce(
-                (sum, row) =>
-                    sum + row.receiptDebit,
-                0
-            );
+    const renderData3Table = () => {
 
-        const totalPaymentCredit =
-            groupedData.reduce(
-                (sum, row) =>
-                    sum + row.paymentCredit,
-                0
-            );
+        const groups = getLedgerGroups();
 
-        const totalPaymentDebit =
-            groupedData.reduce(
-                (sum, row) =>
-                    sum + row.paymentDebit,
-                0
-            );
+        let sno = 1;
 
         return (
-            <Paper
-                sx={{
-                    mb: 2,
-                    display: "inline-block",
-                }}
-            >
-                <SectionTitle title="Data 3 - Ledger Summary" />
+            <Paper sx={{ mb: 2 }}>
 
-                <TableContainer
-                    sx={{
-                        width: "fit-content",
-                    }}
-                >
+                <TableContainer>
                     <Table
                         size="small"
                         sx={{
                             ...compactTableStyle,
-                            width: "fit-content",
+                            minWidth: 900,
                         }}
                     >
                         <TableHead>
-
-                            <TableRow
-                                sx={{
-                                    backgroundColor: "#D9D9D9",
-                                }}
-                            >
-                                <TableCell
-                                    rowSpan={2}
-                                    sx={{
-                                        fontWeight: 700,
-                                        textAlign: "center",
-                                    }}
-                                >
-                                    S.No
-                                </TableCell>
-
-                                <TableCell
-                                    rowSpan={2}
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    Trans Type
-                                </TableCell>
-
-                                <TableCell
-                                    colSpan={2}
-                                    align="center"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    Receipt
-                                </TableCell>
-
-                                <TableCell
-                                    colSpan={2}
-                                    align="center"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    Payment
-                                </TableCell>
-                            </TableRow>
-
-                            <TableRow
-                                sx={{
-                                    backgroundColor: "#E5E5E5",
-                                }}
-                            >
-                                <TableCell
-                                    align="right"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
+                            <TableRow>
+                                <TableCell>S No</TableCell>
+                                <TableCell>Expenses</TableCell>
+                                <TableCell align="right">
                                     Credit
                                 </TableCell>
-
-                                <TableCell
-                                    align="right"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    Debit
-                                </TableCell>
-
-                                <TableCell
-                                    align="right"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    Credit
-                                </TableCell>
-
-                                <TableCell
-                                    align="right"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
+                                <TableCell align="right">
                                     Debit
                                 </TableCell>
                             </TableRow>
-
                         </TableHead>
 
                         <TableBody>
 
-                            {groupedData.map(
-                                (row, index) => (
-                                    <TableRow key={index}>
+                            {Object.entries(groups).map(
+                                ([master, grpObj]: any) => (
+                                    <React.Fragment key={master}>
 
-                                        <TableCell
-                                            align="center"
+                                        <TableRow
+                                            sx={{
+                                                backgroundColor:
+                                                    "#dbeafe",
+                                            }}
                                         >
-                                            {index + 1}
-                                        </TableCell>
+                                            <TableCell
+                                                colSpan={4}
+                                                sx={{
+                                                    fontWeight: 700,
+                                                    color: "blue",
+                                                }}
+                                            >
+                                                {master}
+                                            </TableCell>
+                                        </TableRow>
 
-                                        <TableCell>
-                                            {row.transType}
-                                        </TableCell>
+                                        {Object.entries(grpObj).map(
+                                            ([group, ledgers]: any) => {
 
-                                        <TableCell align="right">
-                                            {formatAmount(
-                                                row.receiptCredit
-                                            )}
-                                        </TableCell>
+                                                const totalCredit =
+                                                    ledgers.reduce(
+                                                        (
+                                                            s: number,
+                                                            x: any
+                                                        ) =>
+                                                            s +
+                                                            Number(
+                                                                x.Credit_Amount ||
+                                                                0
+                                                            ),
+                                                        0
+                                                    );
 
-                                        <TableCell align="right">
-                                            {formatAmount(
-                                                row.receiptDebit
-                                            )}
-                                        </TableCell>
+                                                const totalDebit =
+                                                    ledgers.reduce(
+                                                        (
+                                                            s: number,
+                                                            x: any
+                                                        ) =>
+                                                            s +
+                                                            Number(
+                                                                x.Debit_Amount ||
+                                                                0
+                                                            ),
+                                                        0
+                                                    );
 
-                                        <TableCell align="right">
-                                            {formatAmount(
-                                                row.paymentCredit
-                                            )}
-                                        </TableCell>
+                                                return (
+                                                    <React.Fragment
+                                                        key={group}
+                                                    >
+                                                        <TableRow
+                                                            sx={{
+                                                                backgroundColor:
+                                                                    "#f3f4f6",
+                                                            }}
+                                                        >
+                                                            <TableCell />
+                                                            <TableCell
+                                                                sx={{
+                                                                    fontWeight:
+                                                                        700,
+                                                                    color:
+                                                                        "blue",
+                                                                }}
+                                                            >
+                                                                {group}
+                                                            </TableCell>
 
-                                        <TableCell align="right">
-                                            {formatAmount(
-                                                row.paymentDebit
-                                            )}
-                                        </TableCell>
+                                                            <TableCell align="right">
+                                                                {formatAmount(
+                                                                    totalCredit
+                                                                )}
+                                                            </TableCell>
 
-                                    </TableRow>
+                                                            <TableCell align="right">
+                                                                {formatAmount(
+                                                                    totalDebit
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+
+                                                        {ledgers.map(
+                                                            (
+                                                                row: any
+                                                            ) => (
+                                                                <TableRow
+                                                                    key={
+                                                                        sno
+                                                                    }
+                                                                >
+                                                                    <TableCell>
+                                                                        {
+                                                                            sno++
+                                                                        }
+                                                                    </TableCell>
+
+                                                                    <TableCell>
+                                                                        {
+                                                                            row.ledger_name
+                                                                        }
+                                                                    </TableCell>
+
+                                                                    <TableCell align="right">
+                                                                        {formatAmount(
+                                                                            row.Credit_Amount
+                                                                        )}
+                                                                    </TableCell>
+
+                                                                    <TableCell align="right">
+                                                                        {formatAmount(
+                                                                            row.Debit_Amount
+                                                                        )}
+                                                                    </TableCell>
+                                                                </TableRow>
+                                                            )
+                                                        )}
+                                                    </React.Fragment>
+                                                );
+                                            }
+                                        )}
+                                    </React.Fragment>
                                 )
                             )}
-
-                            <TableRow
-                                sx={{
-                                    backgroundColor: "#F5F5F5",
-                                }}
-                            >
-                                <TableCell />
-
-                                <TableCell
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    TOTAL
-                                </TableCell>
-
-                                <TableCell
-                                    align="right"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    {formatAmount(
-                                        totalReceiptCredit
-                                    )}
-                                </TableCell>
-
-                                <TableCell
-                                    align="right"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    {formatAmount(
-                                        totalReceiptDebit
-                                    )}
-                                </TableCell>
-
-                                <TableCell
-                                    align="right"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    {formatAmount(
-                                        totalPaymentCredit
-                                    )}
-                                </TableCell>
-
-                                <TableCell
-                                    align="right"
-                                    sx={{
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    {formatAmount(
-                                        totalPaymentDebit
-                                    )}
-                                </TableCell>
-
-                            </TableRow>
-
                         </TableBody>
                     </Table>
                 </TableContainer>
@@ -1289,7 +1033,6 @@ const DayAbstractReport: React.FC = () => {
         if (!reportData?.Data4?.length) {
             return (
                 <Paper sx={{ mb: 2 }}>
-                    <SectionTitle title="Data 4 - Sales Split" />
 
                     <Box p={3}>
                         <Typography align="center">
@@ -1316,7 +1059,6 @@ const DayAbstractReport: React.FC = () => {
 
         return (
             <Paper sx={{ mb: 2 }}>
-                <SectionTitle title="Data 4 - Sales Split" />
 
                 <TableContainer>
                     <Table
@@ -1332,6 +1074,12 @@ const DayAbstractReport: React.FC = () => {
                                     backgroundColor: "#E2E8F0",
                                 }}
                             >
+                                <TableCell
+                                    rowSpan={2}
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    S.No
+                                </TableCell>
                                 <TableCell sx={{ fontWeight: 700 }}>
                                     Transaction Type
                                 </TableCell>
@@ -1355,6 +1103,11 @@ const DayAbstractReport: React.FC = () => {
                         <TableBody>
                             {reportData.Data4.map((row, index) => (
                                 <TableRow key={index}>
+
+                                    <TableCell>
+                                        {index + 1}
+                                    </TableCell>
+
                                     <TableCell>
                                         {row.Trans_Type}
                                     </TableCell>
@@ -1384,6 +1137,8 @@ const DayAbstractReport: React.FC = () => {
                                     TOTAL
                                 </TableCell>
 
+                                <TableCell />
+
                                 <TableCell
                                     align="right"
                                     sx={{
@@ -1406,6 +1161,527 @@ const DayAbstractReport: React.FC = () => {
                     </Table>
                 </TableContainer>
             </Paper>
+        );
+    };
+
+    const renderData7And8 = () => {
+
+        const renderTable = (
+            title: string,
+            rows: any[]
+        ) => {
+
+            const leftHeader =
+                title === "Data 7"
+                    ? "Receipt"
+                    : "Sundry Debtors";
+
+            const rightHeader =
+                title === "Data 7"
+                    ? "Payment"
+                    : "Sundry Creditors";
+
+            return (
+                <Paper sx={{ mb: 2, width: "100%", }}>
+                    <Table
+                        size="small"
+                        sx={{
+                            ...compactTableStyle,
+                            minWidth: 700,
+                        }}
+                    >
+
+                        <TableHead>
+
+                            {/* Main Header */}
+
+                            <TableRow>
+
+                                <TableCell
+                                    rowSpan={2}
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    S.No
+                                </TableCell>
+
+                                <TableCell
+                                    rowSpan={2}
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Trans Type
+                                </TableCell>
+
+                                <TableCell
+                                    colSpan={2}
+                                    align="center"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    {leftHeader}
+                                </TableCell>
+
+                                <TableCell
+                                    colSpan={2}
+                                    align="center"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    {rightHeader}
+                                </TableCell>
+
+                            </TableRow>
+
+                            {/* Sub Header */}
+
+                            <TableRow>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Credit
+                                </TableCell>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Debit
+                                </TableCell>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Credit
+                                </TableCell>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Debit
+                                </TableCell>
+
+                            </TableRow>
+
+                        </TableHead>
+
+                        <TableBody>
+
+                            {rows.map((row, index) => (
+                                <TableRow key={index}>
+
+                                    <TableCell>
+                                        {index + 1}
+                                    </TableCell>
+
+                                    <TableCell>
+                                        {row.Trans_Type}
+                                    </TableCell>
+
+                                    {/* Sundry Debtors */}
+
+                                    <TableCell align="right">
+                                        {formatAmount(
+                                            row.Credit_Amount
+                                        )}
+                                    </TableCell>
+
+                                    <TableCell align="right">
+                                        {formatAmount(
+                                            row.Debit_Amount
+                                        )}
+                                    </TableCell>
+
+                                    {/* Sundry Creditors */}
+
+                                    <TableCell align="right">
+                                        {formatAmount(
+                                            row.Credit_Amount_1
+                                        )}
+                                    </TableCell>
+
+                                    <TableCell align="right">
+                                        {formatAmount(
+                                            row.Debit_Amount_1
+                                        )}
+                                    </TableCell>
+
+                                </TableRow>
+                            ))}
+
+                            <TableRow
+                                sx={{
+                                    backgroundColor: "#F8FAFC",
+                                }}
+                            >
+                                <TableCell
+                                    colSpan={2}
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    TOTAL
+                                </TableCell>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    {formatAmount(
+                                        rows.reduce(
+                                            (s, r) =>
+                                                s +
+                                                Number(
+                                                    r.Credit_Amount || 0
+                                                ),
+                                            0
+                                        )
+                                    )}
+                                </TableCell>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    {formatAmount(
+                                        rows.reduce(
+                                            (s, r) =>
+                                                s +
+                                                Number(
+                                                    r.Debit_Amount || 0
+                                                ),
+                                            0
+                                        )
+                                    )}
+                                </TableCell>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    {formatAmount(
+                                        rows.reduce(
+                                            (s, r) =>
+                                                s +
+                                                Number(
+                                                    r.Credit_Amount_1 || 0
+                                                ),
+                                            0
+                                        )
+                                    )}
+                                </TableCell>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    {formatAmount(
+                                        rows.reduce(
+                                            (s, r) =>
+                                                s +
+                                                Number(
+                                                    r.Debit_Amount_1 || 0
+                                                ),
+                                            0
+                                        )
+                                    )}
+                                </TableCell>
+
+                            </TableRow>
+
+                        </TableBody>
+
+                    </Table>
+                </Paper>
+            );
+        };
+
+        return (
+            <Box>
+                {renderTable(
+                    "Data 7",
+                    reportData?.Data7 || []
+                )}
+
+                {renderTable(
+                    "Data 8",
+                    reportData?.Data8 || []
+                )}
+            </Box>
+        );
+    };
+
+    const renderData5And6 = () => {
+
+        const debtors = reportData?.Data5?.[0];
+        const creditors = reportData?.Data6?.[0];
+
+        if (!debtors && !creditors) return null;
+
+        return (
+            <Box
+                sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1,
+                    minWidth: 500,
+                    width: "100%",
+                }}
+            >
+
+                {/* Top Table */}
+
+                <Paper>
+                    <Table
+                        size="small"
+                        sx={{
+                            ...compactTableStyle,
+                            minWidth: 500,
+                        }}
+                    >
+                        <TableHead>
+
+                            <TableRow
+                                sx={{
+                                    backgroundColor: "#E8E8E8",
+                                }}
+                            >
+                                <TableCell
+                                    colSpan={2}
+                                    align="center"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Sundry Creditors
+                                </TableCell>
+
+                                <TableCell
+                                    colSpan={2}
+                                    align="center"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Sundry Debtors
+                                </TableCell>
+                            </TableRow>
+
+                            <TableRow
+                                sx={{
+                                    backgroundColor: "#F5F5F5",
+                                }}
+                            >
+                                <TableCell sx={{ fontWeight: 700 }}>
+                                    Type
+                                </TableCell>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Amount
+                                </TableCell>
+
+                                <TableCell sx={{ fontWeight: 700 }}>
+                                    Type
+                                </TableCell>
+
+                                <TableCell
+                                    align="right"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Amount
+                                </TableCell>
+                            </TableRow>
+
+                        </TableHead>
+
+                        <TableBody>
+
+                            <TableRow>
+                                <TableCell>
+                                    Receivable
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        creditors?.Cr_Amount
+                                    )}
+                                </TableCell>
+
+                                <TableCell>
+                                    Receivable
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        debtors?.Cr_Amount
+                                    )}
+                                </TableCell>
+                            </TableRow>
+
+                            <TableRow>
+                                <TableCell>
+                                    Payable
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        creditors?.Dr_Amount
+                                    )}
+                                </TableCell>
+
+                                <TableCell>
+                                    Payable
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        debtors?.Dr_Amount
+                                    )}
+                                </TableCell>
+                            </TableRow>
+
+                            <TableRow sx={{
+                                backgroundColor: "#F8FAFC",
+                            }}>
+                                <TableCell>
+                                    Exp
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        creditors?.OPB_Amount
+                                    )}
+                                </TableCell>
+
+                                <TableCell>
+                                    Exp
+                                </TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        debtors?.OPB_Amount
+                                    )}
+                                </TableCell>
+                            </TableRow>
+
+                        </TableBody>
+                    </Table>
+                </Paper>
+
+                {/* Bottom Table */}
+
+                <Paper>
+                    <Table
+                        size="small"
+                        sx={{
+                            ...compactTableStyle,
+                            minWidth: 500,
+                        }}
+                    >
+                        <TableHead>
+
+                            <TableRow
+                                sx={{
+                                    backgroundColor: "#E8E8E8",
+                                }}
+                            >
+                                <TableCell
+                                    colSpan={2}
+                                    align="center"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Sundry Creditors
+                                </TableCell>
+
+                                <TableCell
+                                    colSpan={2}
+                                    align="center"
+                                    sx={{ fontWeight: 700 }}
+                                >
+                                    Sundry Debtors
+                                </TableCell>
+                            </TableRow>
+
+                        </TableHead>
+
+                        <TableBody>
+
+                            <TableRow>
+                                <TableCell>Opening</TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        creditors?.OB_Amount
+                                    )}
+                                </TableCell>
+
+                                <TableCell>Opening</TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        debtors?.OB_Amount
+                                    )}
+                                </TableCell>
+                            </TableRow>
+
+                            <TableRow>
+                                <TableCell>Credit</TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        creditors?.Credit_Amt
+                                    )}
+                                </TableCell>
+
+                                <TableCell>Credit</TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        debtors?.Credit_Amt
+                                    )}
+                                </TableCell>
+                            </TableRow>
+
+                            <TableRow>
+                                <TableCell>Debit</TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        creditors?.Debit_Amt
+                                    )}
+                                </TableCell>
+
+                                <TableCell>Debit</TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        debtors?.Debit_Amt
+                                    )}
+                                </TableCell>
+                            </TableRow>
+
+                            <TableRow sx={{
+                                backgroundColor: "#F8FAFC",
+                            }}>
+                                <TableCell>Closing</TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        creditors?.Bal_Amount
+                                    )}
+                                </TableCell>
+
+                                <TableCell>Closing</TableCell>
+
+                                <TableCell align="right">
+                                    {formatAmount(
+                                        debtors?.Bal_Amount
+                                    )}
+                                </TableCell>
+                            </TableRow>
+
+                        </TableBody>
+                    </Table>
+                </Paper>
+
+            </Box>
         );
     };
 
@@ -1632,30 +1908,60 @@ const DayAbstractReport: React.FC = () => {
                         <Box
                             sx={{
                                 display: "flex",
-                                flexDirection: "column",
-                                gap: 1,
+                                gap: 2,
+                                alignItems: "flex-start",
+                                overflowX: "auto",
                             }}
                         >
+                            {/* LEFT SIDE */}
 
-                            {/* Top Row */}
                             <Box
                                 sx={{
+                                    flex: "0 0 auto",
+                                    minWidth: 850,
                                     display: "flex",
-                                    gap: 1,
-                                    alignItems: "flex-start",
-                                    flexWrap: "wrap",
+                                    flexDirection: "column",
+                                    gap: 2,
                                 }}
                             >
-                                {renderData1Table()}
-                                {renderData2Table()}
-                                {renderData4Table()}
+                                {/* Top Row */}
+
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        gap: 1,
+                                        alignItems: "flex-start",
+                                    }}
+                                >
+                                    {renderData1Table()}
+                                    {renderData2Table()}
+                                    {renderData4Table()}
+                                </Box>
+
+                                {/* Bottom Row */}
+
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        gap: 2,
+                                        alignItems: "flex-start",
+                                    }}
+                                >
+                                    {renderData7And8()}
+                                    {renderData5And6()}
+                                </Box>
                             </Box>
 
-                            {/* Bottom Row */}
-                            <Box>
+                            {/* RIGHT SIDE */}
+
+                            <Box
+                                sx={{
+                                    flex: "0 0 auto",
+                                    minWidth: 900,
+                                }}
+                            >
                                 {renderData3Table()}
                             </Box>
-
                         </Box>
                     )}
                 </Box>
