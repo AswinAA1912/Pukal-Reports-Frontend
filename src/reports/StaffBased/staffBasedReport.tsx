@@ -435,6 +435,7 @@ const StaffBasedReport: React.FC = () => {
         filters.Date.from,
         filters.Date.to,
         selectedTemplateId,
+        useActualQty,
     ]);
 
     /* ================= LOAD DATA ================= */
