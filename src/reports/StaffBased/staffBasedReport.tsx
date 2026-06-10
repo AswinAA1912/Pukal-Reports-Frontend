@@ -435,7 +435,6 @@ const StaffBasedReport: React.FC = () => {
         filters.Date.from,
         filters.Date.to,
         selectedTemplateId,
-        useActualQty
     ]);
 
     /* ================= LOAD DATA ================= */
@@ -935,8 +934,10 @@ const StaffBasedReport: React.FC = () => {
 
                     reportRows.forEach(
                         (row: any) => {
-                            const qty = Number(
-                                row.Qty || 0
+                            const qty = Number(row.Qty || 0);
+
+                            const actQty = Number(
+                                row.Act_Qty || 0
                             );
 
                             const processedStaffs =
@@ -1023,6 +1024,8 @@ const StaffBasedReport: React.FC = () => {
                                             staff;
 
                                         baseRow.Qty = 0;
+                                        baseRow.Act_Qty = 0;
+
                                         baseRow.__qtyInvoiceCount = 0;
 
                                         enabledSplitColumns.forEach(
@@ -1067,9 +1070,11 @@ const StaffBasedReport: React.FC = () => {
                                             qtyKey
                                         )
                                     ) {
+
                                         existing.Qty += qty;
 
-                                        // count invoice
+                                        existing.Act_Qty += actQty;
+
                                         existing.__qtyInvoiceCount += 1;
 
                                         existing.__invoiceTracker.add(
@@ -1088,7 +1093,12 @@ const StaffBasedReport: React.FC = () => {
                                         )
                                     ) {
                                         existing[field] =
-                                            Number(existing[field] || 0) + qty;
+                                            Number(existing[field] || 0) +
+                                            (
+                                                useActualQty
+                                                    ? actQty
+                                                    : qty
+                                            );
 
                                         existing.__categoryInvoiceCount[field] =
                                             (
@@ -1114,6 +1124,7 @@ const StaffBasedReport: React.FC = () => {
                                                     "Journal_no",
                                                     "Stock_Journal_Voucher_type",
                                                     "Qty",
+                                                    "Act_Qty",
                                                     ...categoryFields,
                                                 ].includes(
                                                     key
@@ -2210,7 +2221,12 @@ const StaffBasedReport: React.FC = () => {
                                         if (c.key === "Qty") {
                                             const totalQty = baseRows.reduce(
                                                 (sum, row) =>
-                                                    sum + Number(row.Qty || 0),
+                                                    sum +
+                                                    Number(
+                                                        useActualQty
+                                                            ? row.Act_Qty || 0
+                                                            : row.Qty || 0
+                                                    ),
                                                 0
                                             );
 
@@ -2349,7 +2365,12 @@ const StaffBasedReport: React.FC = () => {
                                                                 if (c.key === "Qty") {
                                                                     const totalQty = row.__rows.reduce(
                                                                         (sum: number, r: any) =>
-                                                                            sum + Number(r.Qty || 0),
+                                                                            sum +
+                                                                            Number(
+                                                                                useActualQty
+                                                                                    ? r.Act_Qty || 0
+                                                                                    : r.Qty || 0
+                                                                            ),
                                                                         0
                                                                     );
 
@@ -2464,11 +2485,17 @@ const StaffBasedReport: React.FC = () => {
 
                                                                         // Qty column
                                                                         if (c.key === "Qty") {
+                                                                            const displayQty = Number(
+                                                                                useActualQty
+                                                                                    ? row.Act_Qty || 0
+                                                                                    : row.Qty || 0
+                                                                            );
+
                                                                             const invoiceCount =
                                                                                 row.__qtyInvoiceCount || 0;
 
-                                                                            return value > 0
-                                                                                ? `${value.toFixed(2)} (${invoiceCount})`
+                                                                            return displayQty > 0
+                                                                                ? `${displayQty.toFixed(2)} (${invoiceCount})`
                                                                                 : "0.00";
                                                                         }
 

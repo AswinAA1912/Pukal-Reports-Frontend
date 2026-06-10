@@ -27,6 +27,7 @@ export interface StaffBasedReport {
   Godown_Id: number;
   Batch_No: string;
   Qty: number;
+  Act_Qty: number;
   Rate: number;
   Amt: number;
   Unit: string;
@@ -83,16 +84,16 @@ export interface StaffBasedCountReport {
 export const costCenterListService = {
   getStaff: () =>
     axios.get<{ success: boolean; data: CostCenter[] }>(
-      //  ` http://192.168.1.5:9001/api/reports/externalAPI/costCenter`,
-      `${getBaseURL()}api/reports/externalAPI/costCenter`
+       ` http://192.168.1.5:9001/api/reports/externalAPI/costCenter`,
+      // `${getBaseURL()}api/reports/externalAPI/costCenter`
     ),
 };
 
 export const staffBasedReportService = {
   getStaffBasedReport: (params?: { Fromdate?: string; Todate?: string }) =>
     axios.get<{ success: boolean; data: StaffBasedReport[] }>(
-      //  ` http://192.168.1.5:9001/api/reports/externalAPI/staffbased`,
-      `${getBaseURL()}api/reports/externalAPI/staffbased`,
+       ` http://192.168.1.5:9001/api/reports/externalAPI/staffbased`,
+      // `${getBaseURL()}api/reports/externalAPI/staffbased`,
       { params }
     ),
 };

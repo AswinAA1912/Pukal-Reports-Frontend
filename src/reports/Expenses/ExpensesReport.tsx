@@ -366,82 +366,128 @@ const ExpensesReport = () => {
     /* ================= EXPORT EXCEL ================= */
 
     const exportExcel = () => {
-
         try {
-
             if (!section) {
                 toast.error("No data available");
                 return;
             }
 
-            const rows: any[] = [];
+            const excelData: any[][] = [];
+
+            excelData.push([
+                `${activeType.toUpperCase()} EXPENSE REPORT`
+            ]);
+
+            excelData.push([
+                `From : ${filters.Date.from}   To : ${filters.Date.to}`
+            ]);
+
+            excelData.push([]);
 
             section.groups.forEach((group: any) => {
 
-                /* GROUP HEADER */
-                rows.push({
-                    TYPE: group.name,
-                    VALUE: formatINR(group.total)
-                });
+                excelData.push([
+                    `${group.name}`,
+                    "",
+                    "",
+                    `DR : ${formatINR(group.dr)}`,
+                    `CR : ${formatINR(group.cr)}`,
+                    `BAL : ${formatINR(group.balance)}`
+                ]);
 
                 group.subGroups.forEach((sub: any) => {
 
-                    /* SUB GROUP HEADER */
-                    rows.push({
-                        TYPE: "   " + sub.name,
-                        VALUE: formatINR(sub.total)
-                    });
+                    excelData.push([
+                        `   ${sub.name}`,
+                        "",
+                        "",
+                        `DR : ${formatINR(sub.dr)}`,
+                        `CR : ${formatINR(sub.cr)}`,
+                        `BAL : ${formatINR(sub.balance)}`
+                    ]);
 
-                    /* COLUMN HEADER */
-                    const headerRow: any = {};
+                    excelData.push([
+                        "S.NO",
+                        ...enabledCols.map(
+                            (col: any) => col.label
+                        )
+                    ]);
 
-                    enabledCols.forEach((col: any) => {
-                        headerRow[col.label] = col.label;
-                    });
+                    sub.ledgers.forEach(
+                        (row: any, index: number) => {
 
-                    rows.push(headerRow);
+                            excelData.push([
+                                index + 1,
 
-                    /* TABLE ROWS */
-                    sub.ledgers.forEach((row: any) => {
+                                ...enabledCols.map(
+                                    (col: any) => {
 
-                        const exportRow: any = {};
+                                        if (
+                                            col.key ===
+                                            "payment_date"
+                                        ) {
+                                            return dayjs(
+                                                row[col.key]
+                                            ).format(
+                                                "DD-MM-YYYY"
+                                            );
+                                        }
 
-                        enabledCols.forEach((col: any) => {
+                                        if (
+                                            col.key ===
+                                            "debit_amount"
+                                        ) {
+                                            return row.entryType ===
+                                                "DR"
+                                                ? row.amount
+                                                : "";
+                                        }
 
-                            exportRow[col.label] =
-                                col.key === "debit_amount"
-                                    ? Number(row[col.key] || 0)
-                                    : col.key === "payment_date"
-                                        ? dayjs(row[col.key]).format("DD-MM-YYYY")
-                                        : row[col.key];
+                                        if (
+                                            col.key ===
+                                            "credit_amount"
+                                        ) {
+                                            return row.entryType ===
+                                                "CR"
+                                                ? row.amount
+                                                : "";
+                                        }
 
-                        });
+                                        return (
+                                            row[col.key] ?? ""
+                                        );
+                                    }
+                                )
+                            ]);
+                        }
+                    );
 
-                        rows.push(exportRow);
-
-                    });
-
-                    /* EMPTY SPACE */
-                    rows.push({});
-
+                    excelData.push([]);
                 });
 
-                rows.push({});
-
+                excelData.push([]);
             });
 
-            const worksheet = XLSX.utils.json_to_sheet(rows);
+            const ws =
+                XLSX.utils.aoa_to_sheet(excelData);
 
-            const workbook = XLSX.utils.book_new();
+            ws["!cols"] = [
+                { wch: 10 },
+                ...enabledCols.map(() => ({
+                    wch: 25,
+                })),
+            ];
+
+            const wb = XLSX.utils.book_new();
 
             XLSX.utils.book_append_sheet(
-                workbook,
-                worksheet,
+                wb,
+                ws,
                 `${activeType} Expenses`
             );
 
             XLSX.writeFile(
-                workbook,
+                wb,
                 `${activeType}_Expenses_Report.xlsx`
             );
 
@@ -466,102 +512,190 @@ const ExpensesReport = () => {
                 return;
             }
 
-            const doc = new jsPDF("l", "mm", "a4");
+            const doc = new jsPDF(
+                "landscape",
+                "mm",
+                "a4"
+            );
 
-            let startY = 10;
-
-            /* TITLE */
-            doc.setFontSize(14);
+            doc.setFontSize(15);
 
             doc.text(
                 `${activeType} Expenses Report`,
                 14,
-                startY
+                12
             );
 
-            startY += 10;
+            doc.setFontSize(10);
 
-            section.groups.forEach((group: any) => {
+            doc.text(
+                `From : ${filters.Date.from}   To : ${filters.Date.to}`,
+                14,
+                18
+            );
 
-                /* GROUP TITLE */
-                doc.setFontSize(12);
+            let startY = 25;
 
-                doc.text(
-                    `${group.name} - ${formatINR(group.total)}`,
-                    14,
-                    startY
-                );
+            section.groups.forEach(
+                (group: any) => {
 
-                startY += 6;
-
-                group.subGroups.forEach((sub: any) => {
-
-                    /* SUB GROUP TITLE */
-                    doc.setFontSize(10);
+                    doc.setFontSize(11);
 
                     doc.text(
-                        `${sub.name} - ${formatINR(sub.total)}`,
-                        18,
+                        `${group.name} | DR : ${formatINR(
+                            group.dr
+                        )} | CR : ${formatINR(
+                            group.cr
+                        )} | BAL : ${formatINR(
+                            group.balance
+                        )}`,
+                        14,
                         startY
                     );
 
-                    startY += 4;
+                    startY += 6;
 
-                    /* TABLE */
-                    autoTable(doc, {
-                        startY,
-                        head: [
-                            enabledCols.map((c: any) => c.label)
-                        ],
+                    group.subGroups.forEach(
+                        (sub: any) => {
 
-                        body: sub.ledgers.map((row: any) =>
-                            enabledCols.map((col: any) => {
+                            doc.setFontSize(10);
 
-                                if (col.key === "debit_amount") {
-                                    return formatINR(row[col.key] || 0);
-                                }
+                            doc.text(
+                                `${sub.name} | DR : ${formatINR(
+                                    sub.dr
+                                )} | CR : ${formatINR(
+                                    sub.cr
+                                )} | BAL : ${formatINR(
+                                    sub.balance
+                                )}`,
+                                18,
+                                startY
+                            );
 
-                                if (col.key === "payment_date") {
-                                    return dayjs(row[col.key])
-                                        .format("DD-MM-YYYY");
-                                }
+                            startY += 4;
 
-                                return row[col.key] ?? "";
+                            autoTable(doc, {
+                                startY,
 
-                            })
-                        ),
+                                head: [[
+                                    "S.NO",
+                                    ...enabledCols.map(
+                                        (c: any) =>
+                                            c.label
+                                    )
+                                ]],
 
-                        styles: {
-                            fontSize: 8,
-                            cellPadding: 2,
-                        },
+                                body:
+                                    sub.ledgers.map(
+                                        (
+                                            row: any,
+                                            index: number
+                                        ) => [
 
-                        headStyles: {
-                            fontStyle: "bold",
-                        },
+                                                index + 1,
 
-                        margin: {
-                            left: 18,
-                            right: 14
+                                                ...enabledCols.map(
+                                                    (
+                                                        col: any
+                                                    ) => {
+
+                                                        if (
+                                                            col.key ===
+                                                            "payment_date"
+                                                        ) {
+                                                            return dayjs(
+                                                                row[
+                                                                col
+                                                                    .key
+                                                                ]
+                                                            ).format(
+                                                                "DD-MM-YYYY"
+                                                            );
+                                                        }
+
+                                                        if (
+                                                            col.key ===
+                                                            "debit_amount"
+                                                        ) {
+                                                            return row.entryType ===
+                                                                "DR"
+                                                                ? formatINR(
+                                                                    row.amount
+                                                                )
+                                                                : "";
+                                                        }
+
+                                                        if (
+                                                            col.key ===
+                                                            "credit_amount"
+                                                        ) {
+                                                            return row.entryType ===
+                                                                "CR"
+                                                                ? formatINR(
+                                                                    row.amount
+                                                                )
+                                                                : "";
+                                                        }
+
+                                                        return row[
+                                                            col
+                                                                .key
+                                                        ] ?? "";
+                                                    }
+                                                )
+                                            ]
+                                    ),
+
+                                styles: {
+                                    fontSize: 7,
+                                    cellPadding: 2,
+                                },
+
+                                headStyles: {
+                                    fontStyle:
+                                        "bold",
+                                },
+
+                                theme: "grid",
+
+                                margin: {
+                                    left: 18,
+                                    right: 10,
+                                },
+                            });
+
+                            startY =
+                                (
+                                    doc as any
+                                ).lastAutoTable
+                                    .finalY + 8;
+
+                            if (
+                                startY > 180
+                            ) {
+                                doc.addPage();
+                                startY = 15;
+                            }
                         }
-                    });
+                    );
 
-                    startY =
-                        (doc as any).lastAutoTable.finalY + 10;
-
-                });
-
-            });
+                    startY += 5;
+                }
+            );
 
             doc.save(
                 `${activeType}_Expenses_Report.pdf`
             );
 
-            toast.success("PDF Exported ✅");
+            toast.success(
+                "PDF Exported ✅"
+            );
 
         } catch (err) {
             console.error(err);
-            toast.error("PDF Export Failed ❌");
+            toast.error(
+                "PDF Export Failed ❌"
+            );
         }
     };
 
