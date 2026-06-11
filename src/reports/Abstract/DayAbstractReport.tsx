@@ -61,13 +61,13 @@ const DayAbstractReport: React.FC = () => {
                 await DayAbstractReportService.getDayAbstractReport({
                     Predate: dayjs(fromDate)
                         .subtract(1, "day")
-                        .format("YYYY/MM/DD"),
+                        .format("YYYY-MM-DD"),
 
                     Fromdate: dayjs(fromDate)
-                        .format("YYYY/MM/DD"),
+                        .format("YYYY-MM-DD"),
 
                     Todate: dayjs(toDate)
-                        .format("YYYY/MM/DD"),
+                        .format("YYYY-MM-DD"),
                 });
 
             setLiveData(result);
