@@ -4,65 +4,101 @@ import { getBaseURL } from "../config/portalBaseURL";
 /* ----------------  DATASET ---------------- */
 
 export interface StockAbstractData1 {
-    Trans_Type: string;
-    Trans_Amount: number;
+    sales_voucher_type_id: number,
+    voucher_name: string,
+    Act_Sal_Qty: number,
+    Act_Alt_Sal_Qty: number,
+    Bill_Alt_Sal_Qty: number,
+    Bill_Sal_Qty: number
 }
 
 
 export interface StockAbstractData2 {
-    Trans_Type: string;
-    Trans_Amount: number;
-    Trans_Count: number;
+    purchase_voucher_type_id: number,
+    voucher_name: string,
+    Act_Pur_Qty: number,
+    Act_Alt_Pur_Qty: number,
+    Bill_Alt_Pur_Qty: number,
+    Bill_Pur_Qty: number
 }
 
 export interface StockAbstractData3 {
-    ledger_name: string;
-    group_name: string;
-    Master_Name: string;
-    Trans_Type: string;
-    Credit_Amount: number;
-    Debit_Amount: number;
+    stock_journal_type_id: number,
+    voucher_name: string,
+    IN_Qty: number,
+    Out_Qty: number,
+    ACt_In_Qty: number,
+    ACt_Out_Qty: number,
+    Group_Name: string
 }
 
 export interface StockAbstractData4 {
-    Trans_Type: string;
-    Trans_Amount: number;
-    Trans_Count: number;
+    godown_id: string;
+    godown_name: string;
+    parent_godown_name: string;
+    IN_Qty: number;
+    Out_Qty: number;
+    ACt_In_Qty: number;
+    ACt_Out_Qty: number;
+    OB_Qty: number;
+    ACt_OB_Qty: number;
+    CL_QTY: number;
+    CL_ACt_QTY: number;
 }
 
 export interface StockAbstractData5 {
-    Dr_Amount: number;
-    Cr_Amount: number;
-    OB_Amount: number;
-    OPB_Amount: number;
-    Credit_Amt: number;
-    Debit_Amt: number;
-    Bal_Amount: number;
+    Sal_Out_Qty: number;
+    Sal_ACt_Out_Qty: number;
+    OWSG_Out_Qty: number;
+    OWSG_ACt_Out_Qty: number;
+    TSG_Out_Qty: number;
+    TSG_ACt_Out_Qty: number;
+    Out_Qty: number;
+    ACt_Out_Qty: number;
+    Bal_Qty: number;
+    Bal_Act_Qty: number;
 }
 
 export interface StockAbstractData6 {
-    Dr_Amount: number;
-    Cr_Amount: number;
-    OB_Amount: number;
-    OPB_Amount: number;
-    Credit_Amt: number;
-    Debit_Amt: number;
-    Bal_Amount: number;
+    ST_In_Qty: number;
+    ST_ACt_In_Qty: number;
+    OWSG_In_Qty: number;
+    OWSG_ACt_In_Qty: number;
+    TSG_In_Qty: number;
+    TSG_ACt_In_Qty: number;
+    In_Qty: number;
+    ACt_In_Qty: number;
+    PSG_In_Qty: number;
+    PSG_ACt_In_Qty: number;
+    Bal_Qty: number;
+    Bal_Act_Qty: number;
 }
 export interface StockAbstractData7 {
-    Trans_Type: string;
-    Credit_Amount: number;
-    Debit_Amount: number;
-    Credit_Amount_1: number;
-    Debit_Amount_1: number;
+    OWSG_Out_Qty: number;
+    OWSG_ACt_Out_Qty: number;
+    TSG_Out_Qty: number;
+    TSG_ACt_Out_Qty: number;
+    Out_Qty: number;
+    ACt_Out_Qty: number;
+    SG_Out_Qty: number;
+    SG_ACt_Out_Qty: number;
+    Bal_Qty: number;
+    Bal_Act_Qty: number;
 }
 
 export interface StockAbstractData8 {
+    Pur_IN_Qty: number;
+    Pur_ACt_IN_Qty: number;
+    IWSG_In_Qty: number;
+    INSG_ACt_In_Qty: number;
+    Bal_Qty: number;
+    Bal_Act_Qty: number;
+}
+
+export interface StockAbstractData9 {
+    Bal_Qty: number;
+    Bal_Act_Qty: number;
     Trans_Type: string;
-    Credit_Amount: number;
-    Debit_Amount: number;
-    Credit_Amount_1: number;
-    Debit_Amount_1: number;
 }
 
 /* ---------------- FINAL RESPONSE TYPE ---------------- */
@@ -76,6 +112,7 @@ export interface StockAbstractReportResponse {
     Data6: StockAbstractData6[];
     Data7: StockAbstractData7[];
     Data8: StockAbstractData8[];
+    Data9: StockAbstractData9[];
 }
 
 /* ---------------- STOCK ABSTRACT REPORT SERVICE ---------------- */
@@ -90,8 +127,8 @@ export const StockAbstractReportService = {
             success: boolean;
             data: any;
         }>(
-            'http://192.168.1.5:9001/api/reports/externalAPI/dayStockAbstract',
-            // `${getBaseURL()}api/reports/externalAPI/dayStockAbstract`,
+            // 'http://192.168.1.5:9001/api/reports/externalAPI/dayStockAbstract',
+            `${getBaseURL()}api/reports/externalAPI/dayStockAbstract`,
             {
                 params,
             }
@@ -138,6 +175,11 @@ export const StockAbstractReportService = {
             Data8:
                 data.Data8 ||
                 data["Data8"] ||
+                [],
+
+            Data9:
+                data.Data9 ||
+                data["Data9"] ||
                 [],
         };
     },
