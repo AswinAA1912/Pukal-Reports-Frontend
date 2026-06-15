@@ -16,7 +16,7 @@ import {
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { toast } from "react-toastify";
 import AppLayout, { useToggleMode } from "../../Layout/appLayout";
 import PageHeader from "../../Layout/PageHeader";
@@ -25,6 +25,194 @@ import {
     DayAbstractReportService,
     DayAbstractReportResponse,
 } from "../../services/dayAbstract.service";
+const styleWorksheet = (ws: XLSX.WorkSheet) => {
+    if (!ws || !ws['!ref']) return;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+
+    const borderStyle = {
+        top: { style: "thin", color: { rgb: "CFCFCF" } },
+        bottom: { style: "thin", color: { rgb: "CFCFCF" } },
+        left: { style: "thin", color: { rgb: "CFCFCF" } },
+        right: { style: "thin", color: { rgb: "CFCFCF" } }
+    };
+
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = ws[cellAddress];
+            if (!cell) continue;
+
+            cell.s = cell.s || {};
+            const val = String(cell.v || "").trim();
+
+            if (R === 0) {
+                cell.s.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "1E3A8A" } };
+                continue;
+            }
+
+            const isSectionHeader = val && (
+                val === "SALES VOUCHER" || 
+                val === "PURCHASE VOUCHER" || 
+                val === "STOCK SUMMARY" || 
+                val === "GODOWN TABLE" || 
+                val === "STOCK JOURNAL" || 
+                val === "OUTWARD SUMMARY 1" || 
+                val === "OUTWARD SUMMARY 2" || 
+                val === "INWARD SUMMARY 1" || 
+                val === "INWARD SUMMARY 2" ||
+                val === "DATA 1" ||
+                val === "DATA 2" ||
+                val === "DATA 3" ||
+                val === "DATA 4" ||
+                val === "DATA 5" ||
+                val === "DATA 6" ||
+                val === "DATA 7" ||
+                val === "DATA 8"
+            );
+
+            if (isSectionHeader) {
+                cell.s.font = { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } };
+                cell.s.fill = { fgColor: { rgb: "1E3A8A" } };
+                cell.s.alignment = { horizontal: "left", vertical: "center" };
+                continue;
+            }
+
+            const isHeaderCell = val && (
+                val === "S.No" ||
+                val === "S No" ||
+                val === "Trans Type" ||
+                val === "Transaction Type" ||
+                val === "Sales Voucher Name" ||
+                val === "Purchase Voucher Name" ||
+                val === "Journal Vouchers" ||
+                val === "Godown Name" ||
+                val === "Act In" ||
+                val === "Act Out" ||
+                val === "In qty" ||
+                val === "Out qty" ||
+                val === "ACT ALT QTY" ||
+                val === "BILL ALT QTY" ||
+                val === "ACT QTY" ||
+                val === "BILL QTY" ||
+                val === "Qty" ||
+                val === "Alt Qty" ||
+                val === "OP" ||
+                val === "IN" ||
+                val === "Out" ||
+                val === "CL" ||
+                val === "Act OB" ||
+                val === "Act IN" ||
+                val === "Act out" ||
+                val === "Act CL" ||
+                val === "Outward Godown Qty" ||
+                val === "Outward Godown ALT" ||
+                val === "Pending Godown Qty" ||
+                val === "Pending Godown ALT" ||
+                val === "Sales Out Qty" ||
+                val === "Sales Out ALT" ||
+                val === "Journal Out Qty" ||
+                val === "Journal Out ALT" ||
+                val === "BAL QTY Qty" ||
+                val === "BAL QTY ALT" ||
+                val === "Transfer Godown Qty" ||
+                val === "Transfer Godown ALT" ||
+                val === "Inward Godown Qty" ||
+                val === "Inward Godown ALT" ||
+                val === "Storage Godown Qty" ||
+                val === "Storage Godown ALT" ||
+                val === "Outward Godown IN Qty" ||
+                val === "Outward Godown IN ALT" ||
+                val === "Pending Godown IN Qty" ||
+                val === "Pending Godown IN ALT" ||
+                val === "Transfer Godown IN Qty" ||
+                val === "Transfer Godown IN ALT" ||
+                val === "Storage Godown IN Qty" ||
+                val === "Storage Godown IN ALT" ||
+                val === "Journal IN Qty" ||
+                val === "Journal IN ALT" ||
+                val === "Inward Godown IN Qty" ||
+                val === "Inward Godown IN ALT" ||
+                val === "Purchase IN Qty" ||
+                val === "Purchase IN ALT" ||
+                val === "Receipt Credit" ||
+                val === "Receipt Debit" ||
+                val === "Payment Credit" ||
+                val === "Payment Debit" ||
+                val === "Debtors Credit" ||
+                val === "Debtors Debit" ||
+                val === "Creditors Credit" ||
+                val === "Creditors Debit" ||
+                val === "Expenses" ||
+                val === "Credit" ||
+                val === "Debit" ||
+                val === "Count" ||
+                val === "Amount" ||
+                val === "Sundry Creditors Type" ||
+                val === "Sundry Creditors Amount" ||
+                val === "Sundry Debtors Type" ||
+                val === "Sundry Debtors Amount"
+            );
+
+            if (isHeaderCell) {
+                cell.s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "000000" } };
+                cell.s.fill = { fgColor: { rgb: "E2E8F0" } };
+                cell.s.alignment = { horizontal: "center", vertical: "center" };
+                cell.s.border = borderStyle;
+                continue;
+            }
+
+            const firstCellOfRow = ws[XLSX.utils.encode_cell({ r: R, c: range.s.c })];
+            const isRowTotal = firstCellOfRow && String(firstCellOfRow.v || "").trim() === "TOTAL";
+
+            if (isRowTotal) {
+                cell.s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "000000" } };
+                cell.s.fill = { fgColor: { rgb: "F8FAFC" } };
+                cell.s.border = borderStyle;
+                if (typeof cell.v === "number") {
+                    cell.s.alignment = { horizontal: "right", vertical: "center" };
+                }
+                continue;
+            }
+
+            // Check if it is a group/parent row (non-empty first/second cell, other columns empty)
+            let isGroupRow = false;
+            if (val && !isRowTotal) {
+                let hasOtherValues = false;
+                for (let col = range.s.c; col <= range.e.c; ++col) {
+                    const addr = XLSX.utils.encode_cell({ r: R, c: col });
+                    const cellInCol = ws[addr];
+                    if (cellInCol && cellInCol.v !== undefined && cellInCol.v !== null && String(cellInCol.v).trim() !== "") {
+                        const cellColVal = String(cellInCol.v).trim();
+                        if (cellColVal !== val && cellColVal !== "") {
+                            hasOtherValues = true;
+                            break;
+                        }
+                    }
+                }
+                if (!hasOtherValues) {
+                    isGroupRow = true;
+                }
+            }
+
+            if (isGroupRow) {
+                cell.s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "1E3A8A" } };
+                cell.s.fill = { fgColor: { rgb: "F1F5F9" } };
+                cell.s.border = borderStyle;
+                continue;
+            }
+
+            cell.s.font = { name: "Arial", sz: 10, color: { rgb: "000000" } };
+            cell.s.border = borderStyle;
+
+            if (typeof cell.v === "number") {
+                cell.s.alignment = { horizontal: "right", vertical: "center" };
+            } else {
+                cell.s.alignment = { horizontal: "left", vertical: "center" };
+            }
+        }
+    }
+};
+
 const DayAbstractReport: React.FC = () => {
 
     const today = dayjs().format("YYYY-MM-DD");
@@ -122,174 +310,180 @@ const DayAbstractReport: React.FC = () => {
 
         row += 2;
 
-        /* =========================
-           DATA 1
-        ========================= */
+        /* ================= DATA 1 ================= */
+        XLSX.utils.sheet_add_aoa(ws, [["DATA 1"]], { origin: `A${row}` });
+        row += 1;
+        XLSX.utils.sheet_add_aoa(ws, [["S.No", "Transaction Type", "Amount"]], { origin: `A${row}` });
+        row += 1;
+        const data1Rows = (reportData.Data1 || []).map((r, i) => [
+            i + 1,
+            r.Trans_Type,
+            r.Trans_Amount
+        ]);
+        const data1Total = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Trans_Amount || 0), 0);
+        data1Rows.push(["TOTAL", "", data1Total]);
+        XLSX.utils.sheet_add_json(ws, data1Rows, { origin: `A${row}`, skipHeader: true });
+        row += data1Rows.length + 2;
 
-        XLSX.utils.sheet_add_aoa(
-            ws,
-            [["DATA 1"]],
-            { origin: `A${row}` }
-        );
+        /* ================= DATA 2 ================= */
+        XLSX.utils.sheet_add_aoa(ws, [["DATA 2"]], { origin: `A${row}` });
+        row += 1;
+        XLSX.utils.sheet_add_aoa(ws, [["S.No", "Transaction Type", "Count", "Amount"]], { origin: `A${row}` });
+        row += 1;
+        const data2Rows = (reportData.Data2 || []).map((r, i) => [
+            i + 1,
+            r.Trans_Type,
+            r.Trans_Count,
+            r.Trans_Amount
+        ]);
+        const data2TotalCount = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Trans_Count || 0), 0);
+        const data2TotalAmount = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Trans_Amount || 0), 0);
+        data2Rows.push(["TOTAL", "", data2TotalCount, data2TotalAmount]);
+        XLSX.utils.sheet_add_json(ws, data2Rows, { origin: `A${row}`, skipHeader: true });
+        row += data2Rows.length + 2;
 
-        XLSX.utils.sheet_add_json(
-            ws,
-            reportData.Data1 || [],
-            {
-                origin: `A${row + 1}`,
-                skipHeader: false,
-            }
-        );
+        /* ================= DATA 4 ================= */
+        XLSX.utils.sheet_add_aoa(ws, [["DATA 4"]], { origin: `A${row}` });
+        row += 1;
+        XLSX.utils.sheet_add_aoa(ws, [["S.No", "Transaction Type", "Count", "Amount"]], { origin: `A${row}` });
+        row += 1;
+        const data4Rows = (reportData.Data4 || []).map((r, i) => [
+            i + 1,
+            r.Trans_Type,
+            r.Trans_Count,
+            r.Trans_Amount
+        ]);
+        const data4TotalCount = (reportData.Data4 || []).reduce((sum, r) => sum + Number(r.Trans_Count || 0), 0);
+        const data4TotalAmount = (reportData.Data4 || []).reduce((sum, r) => sum + Number(r.Trans_Amount || 0), 0);
+        data4Rows.push(["TOTAL", "", data4TotalCount, data4TotalAmount]);
+        XLSX.utils.sheet_add_json(ws, data4Rows, { origin: `A${row}`, skipHeader: true });
+        row += data4Rows.length + 2;
 
-        /* =========================
-           DATA 2
-        ========================= */
+        /* ================= DATA 7 ================= */
+        XLSX.utils.sheet_add_aoa(ws, [["DATA 7"]], { origin: `A${row}` });
+        row += 1;
+        XLSX.utils.sheet_add_aoa(ws, [[
+            "S.No",
+            "Trans Type",
+            "Receipt Credit",
+            "Receipt Debit",
+            "Payment Credit",
+            "Payment Debit"
+        ]], { origin: `A${row}` });
+        row += 1;
+        const data7Rows = (reportData.Data7 || []).map((r, i) => [
+            i + 1,
+            r.Trans_Type,
+            r.Credit_Amount,
+            r.Debit_Amount,
+            r.Credit_Amount_1,
+            r.Debit_Amount_1
+        ]);
+        const data7SumCredit = (reportData.Data7 || []).reduce((sum, r) => sum + Number(r.Credit_Amount || 0), 0);
+        const data7SumDebit = (reportData.Data7 || []).reduce((sum, r) => sum + Number(r.Debit_Amount || 0), 0);
+        const data7SumCredit1 = (reportData.Data7 || []).reduce((sum, r) => sum + Number(r.Credit_Amount_1 || 0), 0);
+        const data7SumDebit1 = (reportData.Data7 || []).reduce((sum, r) => sum + Number(r.Debit_Amount_1 || 0), 0);
+        data7Rows.push(["TOTAL", "", data7SumCredit, data7SumDebit, data7SumCredit1, data7SumDebit1]);
+        XLSX.utils.sheet_add_json(ws, data7Rows, { origin: `A${row}`, skipHeader: true });
+        row += data7Rows.length + 2;
 
-        XLSX.utils.sheet_add_aoa(
-            ws,
-            [["DATA 2"]],
-            { origin: `E${row}` }
-        );
+        /* ================= DATA 8 ================= */
+        XLSX.utils.sheet_add_aoa(ws, [["DATA 8"]], { origin: `A${row}` });
+        row += 1;
+        XLSX.utils.sheet_add_aoa(ws, [[
+            "S.No",
+            "Trans Type",
+            "Debtors Credit",
+            "Debtors Debit",
+            "Creditors Credit",
+            "Creditors Debit"
+        ]], { origin: `A${row}` });
+        row += 1;
+        const data8Rows = (reportData.Data8 || []).map((r, i) => [
+            i + 1,
+            r.Trans_Type,
+            r.Credit_Amount,
+            r.Debit_Amount,
+            r.Credit_Amount_1,
+            r.Debit_Amount_1
+        ]);
+        const data8SumCredit = (reportData.Data8 || []).reduce((sum, r) => sum + Number(r.Credit_Amount || 0), 0);
+        const data8SumDebit = (reportData.Data8 || []).reduce((sum, r) => sum + Number(r.Debit_Amount || 0), 0);
+        const data8SumCredit1 = (reportData.Data8 || []).reduce((sum, r) => sum + Number(r.Credit_Amount_1 || 0), 0);
+        const data8SumDebit1 = (reportData.Data8 || []).reduce((sum, r) => sum + Number(r.Debit_Amount_1 || 0), 0);
+        data8Rows.push(["TOTAL", "", data8SumCredit, data8SumDebit, data8SumCredit1, data8SumDebit1]);
+        XLSX.utils.sheet_add_json(ws, data8Rows, { origin: `A${row}`, skipHeader: true });
+        row += data8Rows.length + 2;
 
-        XLSX.utils.sheet_add_json(
-            ws,
-            reportData.Data2 || [],
-            {
-                origin: `E${row + 1}`,
-                skipHeader: false,
-            }
-        );
+        /* ================= DATA 3 ================= */
+        XLSX.utils.sheet_add_aoa(ws, [["DATA 3"]], { origin: `A${row}` });
+        row += 1;
+        XLSX.utils.sheet_add_aoa(ws, [["S No", "Expenses", "Credit", "Debit"]], { origin: `A${row}` });
+        row += 1;
+        
+        const data3Rows: any[] = [];
+        const groups = getLedgerGroups();
+        let sno = 1;
 
-        /* =========================
-           DATA 4
-        ========================= */
-
-        XLSX.utils.sheet_add_aoa(
-            ws,
-            [["DATA 4"]],
-            { origin: `J${row}` }
-        );
-
-        XLSX.utils.sheet_add_json(
-            ws,
-            reportData.Data4 || [],
-            {
-                origin: `J${row + 1}`,
-                skipHeader: false,
-            }
-        );
-
-        row += Math.max(
-            reportData.Data1?.length || 0,
-            reportData.Data2?.length || 0,
-            reportData.Data4?.length || 0
-        ) + 6;
-
-        /* =========================
-           DATA 7
-        ========================= */
-
-        XLSX.utils.sheet_add_aoa(
-            ws,
-            [["DATA 7"]],
-            { origin: `A${row}` }
-        );
-
-        XLSX.utils.sheet_add_json(
-            ws,
-            reportData.Data7 || [],
-            {
-                origin: `A${row + 1}`,
-                skipHeader: false,
-            }
-        );
-
-        row += (reportData.Data7?.length || 0) + 5;
-
-        /* =========================
-           DATA 8
-        ========================= */
-
-        XLSX.utils.sheet_add_aoa(
-            ws,
-            [["DATA 8"]],
-            { origin: `A${row}` }
-        );
-
-        XLSX.utils.sheet_add_json(
-            ws,
-            reportData.Data8 || [],
-            {
-                origin: `A${row + 1}`,
-                skipHeader: false,
-            }
-        );
-
-        /* =========================
-           RIGHT SIDE TABLES
-        ========================= */
-
-        let rightRow = 4;
-
-        XLSX.utils.sheet_add_aoa(
-            ws,
-            [["DATA 3"]],
-            { origin: `P${rightRow}` }
-        );
-
-        XLSX.utils.sheet_add_json(
-            ws,
-            reportData.Data3 || [],
-            {
-                origin: `P${rightRow + 1}`,
-                skipHeader: false,
-            }
-        );
-
-        rightRow += (reportData.Data3?.length || 0) + 6;
-
-        XLSX.utils.sheet_add_aoa(
-            ws,
-            [["DATA 5"]],
-            { origin: `P${rightRow}` }
-        );
-
-        XLSX.utils.sheet_add_json(
-            ws,
-            reportData.Data5 || [],
-            {
-                origin: `P${rightRow + 1}`,
-                skipHeader: false,
-            }
-        );
-
-        rightRow += 8;
-
-        XLSX.utils.sheet_add_aoa(
-            ws,
-            [["DATA 6"]],
-            { origin: `P${rightRow}` }
-        );
-
-        XLSX.utils.sheet_add_json(
-            ws,
-            reportData.Data6 || [],
-            {
-                origin: `P${rightRow + 1}`,
-                skipHeader: false,
-            }
-        );
-
-        ws["!cols"] = Array(30).fill({
-            wch: 20,
+        Object.entries(groups).forEach(([master, grpObj]: any) => {
+            data3Rows.push([master, "", "", ""]);
+            Object.entries(grpObj).forEach(([group, ledgers]: any) => {
+                const totalCredit = ledgers.reduce((s: number, x: any) => s + Number(x.Credit_Amount || 0), 0);
+                const totalDebit = ledgers.reduce((s: number, x: any) => s + Number(x.Debit_Amount || 0), 0);
+                data3Rows.push(["", group, totalCredit, totalDebit]);
+                ledgers.forEach((rowItem: any) => {
+                    data3Rows.push([sno++, rowItem.ledger_name, rowItem.Credit_Amount, rowItem.Debit_Amount]);
+                });
+            });
         });
 
-        XLSX.utils.book_append_sheet(
-            wb,
-            ws,
-            "Day Abstract"
-        );
+        const data3SumCredit = (reportData.Data3 || []).reduce((sum, r) => sum + Number(r.Credit_Amount || 0), 0);
+        const data3SumDebit = (reportData.Data3 || []).reduce((sum, r) => sum + Number(r.Debit_Amount || 0), 0);
+        data3Rows.push(["TOTAL", "", data3SumCredit, data3SumDebit]);
+        XLSX.utils.sheet_add_json(ws, data3Rows, { origin: `A${row}`, skipHeader: true });
+        row += data3Rows.length + 2;
 
+        /* ================= DATA 5 & 6 ================= */
+        const debtors = reportData.Data5?.[0];
+        const creditors = reportData.Data6?.[0];
+
+        XLSX.utils.sheet_add_aoa(ws, [["DATA 5"]], { origin: `A${row}` });
+        row += 1;
+        XLSX.utils.sheet_add_aoa(ws, [[
+            "Sundry Creditors Type",
+            "Sundry Creditors Amount",
+            "Sundry Debtors Type",
+            "Sundry Debtors Amount"
+        ]], { origin: `A${row}` });
+        row += 1;
+        const data56Rows = [
+            ["Receivable", creditors?.Cr_Amount || 0, "Receivable", debtors?.Cr_Amount || 0],
+            ["Payable", creditors?.Dr_Amount || 0, "Payable", debtors?.Dr_Amount || 0],
+            ["Exp", creditors?.OPB_Amount || 0, "Exp", debtors?.OPB_Amount || 0]
+        ];
+        XLSX.utils.sheet_add_json(ws, data56Rows, { origin: `A${row}`, skipHeader: true });
+        row += data56Rows.length + 2;
+
+        XLSX.utils.sheet_add_aoa(ws, [["DATA 6"]], { origin: `A${row}` });
+        row += 1;
+        XLSX.utils.sheet_add_aoa(ws, [[
+            "Sundry Creditors Type",
+            "Sundry Creditors Amount",
+            "Sundry Debtors Type",
+            "Sundry Debtors Amount"
+        ]], { origin: `A${row}` });
+        row += 1;
+        const data6Rows = [
+            ["Opening", creditors?.OB_Amount || 0, "Opening", debtors?.OB_Amount || 0],
+            ["Credit", creditors?.Credit_Amt || 0, "Credit", debtors?.Credit_Amt || 0],
+            ["Debit", creditors?.Debit_Amt || 0, "Debit", debtors?.Debit_Amt || 0],
+            ["Closing", creditors?.Bal_Amount || 0, "Closing", debtors?.Bal_Amount || 0]
+        ];
+        XLSX.utils.sheet_add_json(ws, data6Rows, { origin: `A${row}`, skipHeader: true });
+
+        ws["!cols"] = Array(10).fill({ wch: 20 });
+        styleWorksheet(ws);
+        XLSX.utils.book_append_sheet(wb, ws, "Day Abstract");
         XLSX.writeFile(
             wb,
             `Day_Abstract_Report_${dayjs().format(

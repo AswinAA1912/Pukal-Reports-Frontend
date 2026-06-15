@@ -18,7 +18,7 @@ import {
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import { toast } from "react-toastify";
 import AppLayout, { useToggleMode } from "../../Layout/appLayout";
 import PageHeader from "../../Layout/PageHeader";
@@ -29,6 +29,195 @@ import {
     StockAbstractData3,
     StockAbstractData4
 } from "../../services/dayStockAbstract.service";
+
+
+const styleWorksheet = (ws: XLSX.WorkSheet) => {
+    if (!ws || !ws['!ref']) return;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+
+    const borderStyle = {
+        top: { style: "thin", color: { rgb: "CFCFCF" } },
+        bottom: { style: "thin", color: { rgb: "CFCFCF" } },
+        left: { style: "thin", color: { rgb: "CFCFCF" } },
+        right: { style: "thin", color: { rgb: "CFCFCF" } }
+    };
+
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+            const cell = ws[cellAddress];
+            if (!cell) continue;
+
+            cell.s = cell.s || {};
+            const val = String(cell.v || "").trim();
+
+            if (R === 0) {
+                cell.s.font = { name: "Arial", sz: 12, bold: true, color: { rgb: "1E3A8A" } };
+                continue;
+            }
+
+            const isSectionHeader = val && (
+                val === "SALES VOUCHER" || 
+                val === "PURCHASE VOUCHER" || 
+                val === "STOCK SUMMARY" || 
+                val === "GODOWN TABLE" || 
+                val === "STOCK JOURNAL" || 
+                val === "OUTWARD SUMMARY 1" || 
+                val === "OUTWARD SUMMARY 2" || 
+                val === "INWARD SUMMARY 1" || 
+                val === "INWARD SUMMARY 2" ||
+                val === "DATA 1" ||
+                val === "DATA 2" ||
+                val === "DATA 3" ||
+                val === "DATA 4" ||
+                val === "DATA 5" ||
+                val === "DATA 6" ||
+                val === "DATA 7" ||
+                val === "DATA 8"
+            );
+
+            if (isSectionHeader) {
+                cell.s.font = { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } };
+                cell.s.fill = { fgColor: { rgb: "1E3A8A" } };
+                cell.s.alignment = { horizontal: "left", vertical: "center" };
+                continue;
+            }
+
+            const isHeaderCell = val && (
+                val === "S.No" ||
+                val === "S No" ||
+                val === "Trans Type" ||
+                val === "Transaction Type" ||
+                val === "Sales Voucher Name" ||
+                val === "Purchase Voucher Name" ||
+                val === "Journal Vouchers" ||
+                val === "Godown Name" ||
+                val === "Act In" ||
+                val === "Act Out" ||
+                val === "In qty" ||
+                val === "Out qty" ||
+                val === "ACT ALT QTY" ||
+                val === "BILL ALT QTY" ||
+                val === "ACT QTY" ||
+                val === "BILL QTY" ||
+                val === "Qty" ||
+                val === "Alt Qty" ||
+                val === "OP" ||
+                val === "IN" ||
+                val === "Out" ||
+                val === "CL" ||
+                val === "Act OB" ||
+                val === "Act IN" ||
+                val === "Act out" ||
+                val === "Act CL" ||
+                val === "Outward Godown Qty" ||
+                val === "Outward Godown ALT" ||
+                val === "Pending Godown Qty" ||
+                val === "Pending Godown ALT" ||
+                val === "Sales Out Qty" ||
+                val === "Sales Out ALT" ||
+                val === "Journal Out Qty" ||
+                val === "Journal Out ALT" ||
+                val === "BAL QTY Qty" ||
+                val === "BAL QTY ALT" ||
+                val === "Transfer Godown Qty" ||
+                val === "Transfer Godown ALT" ||
+                val === "Inward Godown Qty" ||
+                val === "Inward Godown ALT" ||
+                val === "Storage Godown Qty" ||
+                val === "Storage Godown ALT" ||
+                val === "Outward Godown IN Qty" ||
+                val === "Outward Godown IN ALT" ||
+                val === "Pending Godown IN Qty" ||
+                val === "Pending Godown IN ALT" ||
+                val === "Transfer Godown IN Qty" ||
+                val === "Transfer Godown IN ALT" ||
+                val === "Storage Godown IN Qty" ||
+                val === "Storage Godown IN ALT" ||
+                val === "Journal IN Qty" ||
+                val === "Journal IN ALT" ||
+                val === "Inward Godown IN Qty" ||
+                val === "Inward Godown IN ALT" ||
+                val === "Purchase IN Qty" ||
+                val === "Purchase IN ALT" ||
+                val === "Receipt Credit" ||
+                val === "Receipt Debit" ||
+                val === "Payment Credit" ||
+                val === "Payment Debit" ||
+                val === "Debtors Credit" ||
+                val === "Debtors Debit" ||
+                val === "Creditors Credit" ||
+                val === "Creditors Debit" ||
+                val === "Expenses" ||
+                val === "Credit" ||
+                val === "Debit" ||
+                val === "Count" ||
+                val === "Amount" ||
+                val === "Sundry Creditors Type" ||
+                val === "Sundry Creditors Amount" ||
+                val === "Sundry Debtors Type" ||
+                val === "Sundry Debtors Amount"
+            );
+
+            if (isHeaderCell) {
+                cell.s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "000000" } };
+                cell.s.fill = { fgColor: { rgb: "E2E8F0" } };
+                cell.s.alignment = { horizontal: "center", vertical: "center" };
+                cell.s.border = borderStyle;
+                continue;
+            }
+
+            const firstCellOfRow = ws[XLSX.utils.encode_cell({ r: R, c: range.s.c })];
+            const isRowTotal = firstCellOfRow && String(firstCellOfRow.v || "").trim() === "TOTAL";
+
+            if (isRowTotal) {
+                cell.s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "000000" } };
+                cell.s.fill = { fgColor: { rgb: "F8FAFC" } };
+                cell.s.border = borderStyle;
+                if (typeof cell.v === "number") {
+                    cell.s.alignment = { horizontal: "right", vertical: "center" };
+                }
+                continue;
+            }
+
+            // Check if it is a group/parent row (non-empty first/second cell, other columns empty)
+            let isGroupRow = false;
+            if (val && !isRowTotal) {
+                let hasOtherValues = false;
+                for (let col = range.s.c; col <= range.e.c; ++col) {
+                    const addr = XLSX.utils.encode_cell({ r: R, c: col });
+                    const cellInCol = ws[addr];
+                    if (cellInCol && cellInCol.v !== undefined && cellInCol.v !== null && String(cellInCol.v).trim() !== "") {
+                        const cellColVal = String(cellInCol.v).trim();
+                        if (cellColVal !== val && cellColVal !== "") {
+                            hasOtherValues = true;
+                            break;
+                        }
+                    }
+                }
+                if (!hasOtherValues) {
+                    isGroupRow = true;
+                }
+            }
+
+            if (isGroupRow) {
+                cell.s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "1E3A8A" } };
+                cell.s.fill = { fgColor: { rgb: "F1F5F9" } };
+                cell.s.border = borderStyle;
+                continue;
+            }
+
+            cell.s.font = { name: "Arial", sz: 10, color: { rgb: "000000" } };
+            cell.s.border = borderStyle;
+
+            if (typeof cell.v === "number") {
+                cell.s.alignment = { horizontal: "right", vertical: "center" };
+            } else {
+                cell.s.alignment = { horizontal: "left", vertical: "center" };
+            }
+        }
+    }
+};
 
 
 const StockAbstractReport: React.FC = () => {
@@ -591,6 +780,7 @@ const StockAbstractReport: React.FC = () => {
         XLSX.utils.sheet_add_json(ws, data8Rows, { origin: `A${row}`, skipHeader: true });
 
         ws["!cols"] = Array(15).fill({ wch: 20 });
+        styleWorksheet(ws);
         XLSX.utils.book_append_sheet(wb, ws, "Stock Abstract");
         XLSX.writeFile(wb, `Stock_Abstract_Report_${dayjs().format("DDMMYYYY_HHmmss")}.xlsx`);
     };
