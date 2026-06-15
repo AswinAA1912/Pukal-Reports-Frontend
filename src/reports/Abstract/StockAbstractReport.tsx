@@ -151,12 +151,12 @@ const StockAbstractReport: React.FC = () => {
         const getSalesPurchaseHeaders = (voucherColName: string) => {
             const cols = ["S.No", voucherColName];
             if (unitMode === "All" || unitMode === "Chippam") {
-                cols.push("ACT QTY");
-                cols.push("BILL QTY");
-            }
-            if (unitMode === "All" || unitMode === "Kg") {
                 cols.push("ACT ALT QTY");
                 cols.push("BILL ALT QTY");
+            }
+            if (unitMode === "All" || unitMode === "Kg") {
+                cols.push("ACT QTY");
+                cols.push("BILL QTY");
             }
             return [cols];
         };
@@ -172,24 +172,24 @@ const StockAbstractReport: React.FC = () => {
         const data1Rows = (reportData.Data1 || []).map((r, i) => {
             const line = [i + 1, r.voucher_name];
             if (unitMode === "All" || unitMode === "Chippam") {
-                line.push(r.Act_Sal_Qty, r.Bill_Sal_Qty);
+                line.push(r.Act_Alt_Sal_Qty, r.Bill_Alt_Sal_Qty);
             }
             if (unitMode === "All" || unitMode === "Kg") {
-                line.push(r.Act_Alt_Sal_Qty, r.Bill_Alt_Sal_Qty);
+                line.push(r.Act_Sal_Qty, r.Bill_Sal_Qty);
             }
             return line;
         });
 
         const data1Total: any[] = ["TOTAL", ""];
         if (unitMode === "All" || unitMode === "Chippam") {
-            const totalActSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Act_Sal_Qty || 0), 0);
-            const totalBillSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Bill_Sal_Qty || 0), 0);
-            data1Total.push(totalActSalQty, totalBillSalQty);
-        }
-        if (unitMode === "All" || unitMode === "Kg") {
             const totalActAltSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Act_Alt_Sal_Qty || 0), 0);
             const totalBillAltSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Bill_Alt_Sal_Qty || 0), 0);
             data1Total.push(totalActAltSalQty, totalBillAltSalQty);
+        }
+        if (unitMode === "All" || unitMode === "Kg") {
+            const totalActSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Act_Sal_Qty || 0), 0);
+            const totalBillSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Bill_Sal_Qty || 0), 0);
+            data1Total.push(totalActSalQty, totalBillSalQty);
         }
         data1Rows.push(data1Total);
 
@@ -207,24 +207,24 @@ const StockAbstractReport: React.FC = () => {
         const data2Rows = (reportData.Data2 || []).map((r, i) => {
             const line = [i + 1, r.voucher_name];
             if (unitMode === "All" || unitMode === "Chippam") {
-                line.push(r.Act_Pur_Qty, r.Bill_Pur_Qty);
+                line.push(r.Act_Alt_Pur_Qty, r.Bill_Alt_Pur_Qty);
             }
             if (unitMode === "All" || unitMode === "Kg") {
-                line.push(r.Act_Alt_Pur_Qty, r.Bill_Alt_Pur_Qty);
+                line.push(r.Act_Pur_Qty, r.Bill_Pur_Qty);
             }
             return line;
         });
 
         const data2Total: any[] = ["TOTAL", ""];
         if (unitMode === "All" || unitMode === "Chippam") {
-            const totalActPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Act_Pur_Qty || 0), 0);
-            const totalBillPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Bill_Pur_Qty || 0), 0);
-            data2Total.push(totalActPurQty, totalBillPurQty);
-        }
-        if (unitMode === "All" || unitMode === "Kg") {
             const totalActAltPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Act_Alt_Pur_Qty || 0), 0);
             const totalBillAltPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Bill_Alt_Pur_Qty || 0), 0);
             data2Total.push(totalActAltPurQty, totalBillAltPurQty);
+        }
+        if (unitMode === "All" || unitMode === "Kg") {
+            const totalActPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Act_Pur_Qty || 0), 0);
+            const totalBillPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Bill_Pur_Qty || 0), 0);
+            data2Total.push(totalActPurQty, totalBillPurQty);
         }
         data2Rows.push(data2Total);
 
@@ -631,10 +631,10 @@ const StockAbstractReport: React.FC = () => {
         const getSalesPurchasePDFHeaders = (voucherColName: string) => {
             const cols = ["S.No", voucherColName];
             if (unitMode === "All" || unitMode === "Chippam") {
-                cols.push("ACT QTY", "BILL QTY");
+                cols.push("ACT ALT QTY", "BILL ALT QTY");
             }
             if (unitMode === "All" || unitMode === "Kg") {
-                cols.push("ACT ALT QTY", "BILL ALT QTY");
+                cols.push("ACT QTY", "BILL QTY");
             }
             return cols;
         };
@@ -645,24 +645,24 @@ const StockAbstractReport: React.FC = () => {
         const data1Body = (reportData.Data1 || []).map((r, i) => {
             const line: any[] = [i + 1, r.voucher_name];
             if (unitMode === "All" || unitMode === "Chippam") {
-                line.push(r.Act_Sal_Qty, r.Bill_Sal_Qty);
+                line.push(r.Act_Alt_Sal_Qty, r.Bill_Alt_Sal_Qty);
             }
             if (unitMode === "All" || unitMode === "Kg") {
-                line.push(r.Act_Alt_Sal_Qty, r.Bill_Alt_Sal_Qty);
+                line.push(r.Act_Sal_Qty, r.Bill_Sal_Qty);
             }
             return line;
         });
 
         const data1Total: any[] = ["TOTAL", ""];
         if (unitMode === "All" || unitMode === "Chippam") {
-            const totalActSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Act_Sal_Qty || 0), 0);
-            const totalBillSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Bill_Sal_Qty || 0), 0);
-            data1Total.push(totalActSalQty, totalBillSalQty);
-        }
-        if (unitMode === "All" || unitMode === "Kg") {
             const totalActAltSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Act_Alt_Sal_Qty || 0), 0);
             const totalBillAltSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Bill_Alt_Sal_Qty || 0), 0);
             data1Total.push(totalActAltSalQty, totalBillAltSalQty);
+        }
+        if (unitMode === "All" || unitMode === "Kg") {
+            const totalActSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Act_Sal_Qty || 0), 0);
+            const totalBillSalQty = (reportData.Data1 || []).reduce((sum, r) => sum + Number(r.Bill_Sal_Qty || 0), 0);
+            data1Total.push(totalActSalQty, totalBillSalQty);
         }
         data1Body.push(data1Total);
 
@@ -685,24 +685,24 @@ const StockAbstractReport: React.FC = () => {
         const data2Body = (reportData.Data2 || []).map((r, i) => {
             const line: any[] = [i + 1, r.voucher_name];
             if (unitMode === "All" || unitMode === "Chippam") {
-                line.push(r.Act_Pur_Qty, r.Bill_Pur_Qty);
+                line.push(r.Act_Alt_Pur_Qty, r.Bill_Alt_Pur_Qty);
             }
             if (unitMode === "All" || unitMode === "Kg") {
-                line.push(r.Act_Alt_Pur_Qty, r.Bill_Alt_Pur_Qty);
+                line.push(r.Act_Pur_Qty, r.Bill_Pur_Qty);
             }
             return line;
         });
 
         const data2Total: any[] = ["TOTAL", ""];
         if (unitMode === "All" || unitMode === "Chippam") {
-            const totalActPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Act_Pur_Qty || 0), 0);
-            const totalBillPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Bill_Pur_Qty || 0), 0);
-            data2Total.push(totalActPurQty, totalBillPurQty);
-        }
-        if (unitMode === "All" || unitMode === "Kg") {
             const totalActAltPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Act_Alt_Pur_Qty || 0), 0);
             const totalBillAltPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Bill_Alt_Pur_Qty || 0), 0);
             data2Total.push(totalActAltPurQty, totalBillAltPurQty);
+        }
+        if (unitMode === "All" || unitMode === "Kg") {
+            const totalActPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Act_Pur_Qty || 0), 0);
+            const totalBillPurQty = (reportData.Data2 || []).reduce((sum, r) => sum + Number(r.Bill_Pur_Qty || 0), 0);
+            data2Total.push(totalActPurQty, totalBillPurQty);
         }
         data2Body.push(data2Total);
 
@@ -1196,14 +1196,14 @@ const StockAbstractReport: React.FC = () => {
                                 <TableCell sx={{ width: 250 }}>Sales Voucher Name</TableCell>
                                 {(unitMode === "All" || unitMode === "Chippam") && (
                                     <>
-                                        <TableCell align="right" sx={{ width: 100 }}>ACT QTY</TableCell>
-                                        <TableCell align="right" sx={{ width: 100 }}>BILL QTY</TableCell>
+                                        <TableCell align="right" sx={{ width: 100 }}>ACT ALT QTY</TableCell>
+                                        <TableCell align="right" sx={{ width: 100 }}>BILL ALT QTY</TableCell>
                                     </>
                                 )}
                                 {(unitMode === "All" || unitMode === "Kg") && (
                                     <>
-                                        <TableCell align="right" sx={{ width: 100 }}>ACT ALT QTY</TableCell>
-                                        <TableCell align="right" sx={{ width: 100 }}>BILL ALT QTY</TableCell>
+                                        <TableCell align="right" sx={{ width: 100 }}>ACT QTY</TableCell>
+                                        <TableCell align="right" sx={{ width: 100 }}>BILL QTY</TableCell>
                                     </>
                                 )}
                             </TableRow>
@@ -1215,14 +1215,14 @@ const StockAbstractReport: React.FC = () => {
                                     <TableCell>{row.voucher_name}</TableCell>
                                     {(unitMode === "All" || unitMode === "Chippam") && (
                                         <>
-                                            <TableCell align="right">{formatQty(row.Act_Sal_Qty)}</TableCell>
-                                            <TableCell align="right">{formatQty(row.Bill_Sal_Qty)}</TableCell>
+                                            <TableCell align="right">{formatQty(row.Act_Alt_Sal_Qty)}</TableCell>
+                                            <TableCell align="right">{formatQty(row.Bill_Alt_Sal_Qty)}</TableCell>
                                         </>
                                     )}
                                     {(unitMode === "All" || unitMode === "Kg") && (
                                         <>
-                                            <TableCell align="right">{formatQty(row.Act_Alt_Sal_Qty)}</TableCell>
-                                            <TableCell align="right">{formatQty(row.Bill_Alt_Sal_Qty)}</TableCell>
+                                            <TableCell align="right">{formatQty(row.Act_Sal_Qty)}</TableCell>
+                                            <TableCell align="right">{formatQty(row.Bill_Sal_Qty)}</TableCell>
                                         </>
                                     )}
                                 </TableRow>
@@ -1232,14 +1232,14 @@ const StockAbstractReport: React.FC = () => {
                                 <TableCell />
                                 {(unitMode === "All" || unitMode === "Chippam") && (
                                     <>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalActSalQty)}</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalBillSalQty)}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalActAltSalQty)}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalBillAltSalQty)}</TableCell>
                                     </>
                                 )}
                                 {(unitMode === "All" || unitMode === "Kg") && (
                                     <>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalActAltSalQty)}</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalBillAltSalQty)}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalActSalQty)}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalBillSalQty)}</TableCell>
                                     </>
                                 )}
                             </TableRow>
@@ -1277,14 +1277,14 @@ const StockAbstractReport: React.FC = () => {
                                 <TableCell sx={{ width: 250 }}>Purchase Voucher Name</TableCell>
                                 {(unitMode === "All" || unitMode === "Chippam") && (
                                     <>
-                                        <TableCell align="right" sx={{ width: 100 }}>ACT QTY</TableCell>
-                                        <TableCell align="right" sx={{ width: 100 }}>BILL QTY</TableCell>
+                                        <TableCell align="right" sx={{ width: 100 }}>ACT ALT QTY</TableCell>
+                                        <TableCell align="right" sx={{ width: 100 }}>BILL ALT QTY</TableCell>
                                     </>
                                 )}
                                 {(unitMode === "All" || unitMode === "Kg") && (
                                     <>
-                                        <TableCell align="right" sx={{ width: 100 }}>ACT ALT QTY</TableCell>
-                                        <TableCell align="right" sx={{ width: 100 }}>BILL ALT QTY</TableCell>
+                                        <TableCell align="right" sx={{ width: 100 }}>ACT QTY</TableCell>
+                                        <TableCell align="right" sx={{ width: 100 }}>BILL QTY</TableCell>
                                     </>
                                 )}
                             </TableRow>
@@ -1296,14 +1296,14 @@ const StockAbstractReport: React.FC = () => {
                                     <TableCell>{row.voucher_name}</TableCell>
                                     {(unitMode === "All" || unitMode === "Chippam") && (
                                         <>
-                                            <TableCell align="right">{formatQty(row.Act_Pur_Qty)}</TableCell>
-                                            <TableCell align="right">{formatQty(row.Bill_Pur_Qty)}</TableCell>
+                                            <TableCell align="right">{formatQty(row.Act_Alt_Pur_Qty)}</TableCell>
+                                            <TableCell align="right">{formatQty(row.Bill_Alt_Pur_Qty)}</TableCell>
                                         </>
                                     )}
                                     {(unitMode === "All" || unitMode === "Kg") && (
                                         <>
-                                            <TableCell align="right">{formatQty(row.Act_Alt_Pur_Qty)}</TableCell>
-                                            <TableCell align="right">{formatQty(row.Bill_Alt_Pur_Qty)}</TableCell>
+                                            <TableCell align="right">{formatQty(row.Act_Pur_Qty)}</TableCell>
+                                            <TableCell align="right">{formatQty(row.Bill_Pur_Qty)}</TableCell>
                                         </>
                                     )}
                                 </TableRow>
@@ -1313,14 +1313,14 @@ const StockAbstractReport: React.FC = () => {
                                 <TableCell />
                                 {(unitMode === "All" || unitMode === "Chippam") && (
                                     <>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalActPurQty)}</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalBillPurQty)}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalActAltPurQty)}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalBillAltPurQty)}</TableCell>
                                     </>
                                 )}
                                 {(unitMode === "All" || unitMode === "Kg") && (
                                     <>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalActAltPurQty)}</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalBillAltPurQty)}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalActPurQty)}</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700 }}>{formatQty(totalBillPurQty)}</TableCell>
                                     </>
                                 )}
                             </TableRow>
