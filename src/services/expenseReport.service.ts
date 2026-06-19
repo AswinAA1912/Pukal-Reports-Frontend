@@ -113,6 +113,8 @@ export interface OnlinePaymentReportResponse {
 
     IndirectExpense: ExpenseAccount[];
     DirectExpense: ExpenseAccount[];
+    OpeningBalance?: number;
+    ClosingBalance?: number;
 }
 
 /* ---------------- COSTING REPORT RESPONSE ---------------- */
@@ -152,6 +154,20 @@ export const onlinePaymentReportService = {
                 data.DirectExpense ||
                 data["Direct Expense"] ||
                 [],
+
+            OpeningBalance:
+                data.OpeningBalance ??
+                data.openingBalance ??
+                data.Opening ??
+                data.opening ??
+                0,
+
+            ClosingBalance:
+                data.ClosingBalance ??
+                data.closingBalance ??
+                data.Closing ??
+                data.closing ??
+                0,
         };
     },
 };

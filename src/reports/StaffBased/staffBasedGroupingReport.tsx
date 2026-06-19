@@ -172,20 +172,6 @@ const SortableColumnRow = ({
     );
 };
 
-/* ================= HELPERS ================= */
-
-const CURRENCY_KEYS = [
-    "Total_Invoice_value",
-    "Amount",
-    "Rate",
-];
-
-const formatINR = (value: number) =>
-    new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-    }).format(value);
-
 /* ================= COMPONENT ================= */
 
 const StaffBasedGroupingReport: React.FC = () => {
@@ -449,7 +435,7 @@ const StaffBasedGroupingReport: React.FC = () => {
         filters.Date.from,
         filters.Date.to,
         selectedTemplateId,
-        useActualQty
+        useActualQty,
     ]);
 
     /* ================= LOAD DATA ================= */
@@ -949,8 +935,10 @@ const StaffBasedGroupingReport: React.FC = () => {
 
                     reportRows.forEach(
                         (row: any) => {
-                            const qty = Number(
-                                row.Qty || 0
+                            const qty = Number(row.Qty || 0);
+
+                            const actQty = Number(
+                                row.Act_Qty || 0
                             );
 
                             const processedStaffs =
@@ -1037,6 +1025,9 @@ const StaffBasedGroupingReport: React.FC = () => {
                                             staff;
 
                                         baseRow.Qty = 0;
+                                        baseRow.Act_Qty = 0;
+
+                                        baseRow.__qtyInvoiceCount = 0;
 
                                         enabledSplitColumns.forEach(
                                             (col) => {
@@ -1050,14 +1041,13 @@ const StaffBasedGroupingReport: React.FC = () => {
                                         );
 
                                         baseRow.__invoiceTracker =
-                                            new Set<
-                                                string
-                                            >();
+                                            new Set<string>();
 
                                         baseRow.__categoryTracker =
-                                            new Set<
-                                                string
-                                            >();
+                                            new Set<string>();
+
+                                        baseRow.__categoryInvoiceCount =
+                                            {};
 
                                         pivotMap.set(
                                             pivotKey,
@@ -1081,7 +1071,12 @@ const StaffBasedGroupingReport: React.FC = () => {
                                             qtyKey
                                         )
                                     ) {
+
                                         existing.Qty += qty;
+
+                                        existing.Act_Qty += actQty;
+
+                                        existing.__qtyInvoiceCount += 1;
 
                                         existing.__invoiceTracker.add(
                                             qtyKey
@@ -1098,7 +1093,20 @@ const StaffBasedGroupingReport: React.FC = () => {
                                             categoryKey
                                         )
                                     ) {
-                                        existing[field] += qty;
+                                        existing[field] =
+                                            Number(existing[field] || 0) +
+                                            (
+                                                useActualQty
+                                                    ? actQty
+                                                    : qty
+                                            );
+
+                                        existing.__categoryInvoiceCount[field] =
+                                            (
+                                                existing.__categoryInvoiceCount[
+                                                field
+                                                ] || 0
+                                            ) + 1;
 
                                         existing.__categoryTracker.add(
                                             categoryKey
@@ -1117,6 +1125,7 @@ const StaffBasedGroupingReport: React.FC = () => {
                                                     "Journal_no",
                                                     "Stock_Journal_Voucher_type",
                                                     "Qty",
+                                                    "Act_Qty",
                                                     ...categoryFields,
                                                 ].includes(
                                                     key
@@ -1663,65 +1672,21 @@ const StaffBasedGroupingReport: React.FC = () => {
         label: c.label,
     }));
 
-    const exportRows = useMemo(() => {
-        // Use grouped rows if grouping exists
-        const sourceRows = grouping.length
-            ? flattenRows(groupedRows)
-            : sortedRows;
+    const exportRows = sortedRows.map((row) => {
+        const obj: any = {};
 
-        return sourceRows.map((row: any) => {
-            const obj: any = {};
+        exportColumns.forEach((col) => {
+            let value = row[col.key];
 
-            // ================= GROUP HEADER ROW =================
-            if (row.__group) {
-                exportColumns.forEach((col) => {
-                    const currentGroupKey =
-                        grouping[row.__level];
-
-                    if (col.key === currentGroupKey) {
-                        obj[col.label] =
-                            row.__value;
-                    } else if (columns.find(c => c.key === col.key)?.isNumeric) {
-                        const total = row.__rows.reduce(
-                            (sum: number, r: any) =>
-                                sum + Number(r[col.key] || 0),
-                            0
-                        );
-
-                        obj[col.label] =
-                            Number(total).toFixed(2);
-                    } else {
-                        obj[col.label] = "";
-                    }
-                });
-
-                return obj;
+            if (col.key === "Ledger_Date") {
+                value = dayjs(value).format("DD/MM/YYYY");
             }
 
-            // ================= NORMAL DATA ROW =================
-            exportColumns.forEach((col) => {
-                let value = row[col.key];
-
-                if (col.key === "Ledger_Date") {
-                    value = dayjs(value).format(
-                        "DD/MM/YYYY"
-                    );
-                }
-
-                obj[col.label] =
-                    value ?? "";
-            });
-
-            return obj;
+            obj[col.label] = value ?? "";
         });
-    }, [
-        groupedRows,
-        sortedRows,
-        grouping,
-        exportColumns,
-        columns,
-        expandedKeys,
-    ]);
+
+        return obj;
+    });
 
     /* ================= EXPORT EXCEL ================= */
 
@@ -1741,7 +1706,7 @@ const StaffBasedGroupingReport: React.FC = () => {
 
         XLSX.writeFile(
             workbook,
-            `Staff Based Grouped Report_${toggleMode}_${dayjs().format(
+            `Staff Based Report_${toggleMode}_${dayjs().format(
                 "DDMMYYYY"
             )}.xlsx`
         );
@@ -1753,7 +1718,7 @@ const StaffBasedGroupingReport: React.FC = () => {
         const doc = new jsPDF("l", "mm", "a4");
 
         doc.text(
-            `Staff Based Grouped Report (${toggleMode})`,
+            `Staff Based Report (${toggleMode})`,
             14,
             10
         );
@@ -1769,7 +1734,7 @@ const StaffBasedGroupingReport: React.FC = () => {
         });
 
         doc.save(
-            `Staff Based Grouped Report_${toggleMode}_${dayjs().format(
+            `Staff Based Report_${toggleMode}_${dayjs().format(
                 "DDMMYYYY"
             )}.pdf`
         );
@@ -2018,8 +1983,6 @@ const StaffBasedGroupingReport: React.FC = () => {
 
     /* ================= USE EFFECT (GROUP AUTO INIT) ================= */
 
-    /* ================= USE EFFECT (GROUP AUTO INIT) ================= */
-
     useEffect(() => {
         if (!columns.length) return;
 
@@ -2246,15 +2209,105 @@ const StaffBasedGroupingReport: React.FC = () => {
                                     }}
                                 >
                                     <TableCell>Total</TableCell>
-                                    {enabledColumns.map((c) => (
-                                        <TableCell key={c.key}>
-                                            {c.isNumeric
-                                                ? CURRENCY_KEYS.includes(c.key)
-                                                    ? formatINR(getTotal(c.key))
-                                                    : Number(getTotal(c.key)).toFixed(2)
-                                                : ""}
-                                        </TableCell>
-                                    ))}
+                                    {enabledColumns.map((c) => {
+                                        if (!c.isNumeric) {
+                                            return (
+                                                <TableCell key={c.key}>
+                                                    -
+                                                </TableCell>
+                                            );
+                                        }
+
+                                        const workColumns = [
+                                            "Load_Man",
+                                            "Others1",
+                                            "Others2",
+                                            "Others3",
+                                            "Others4",
+                                            "Others5",
+                                            "Checker",
+                                            "Delivery_Man",
+                                            "Others6",
+                                            "Driver",
+                                            "Created_By",
+                                        ];
+
+                                        // ===== TOTAL QTY =====
+                                        if (c.key === "Qty") {
+                                            const totalQty = baseRows.reduce(
+                                                (sum, row) =>
+                                                    sum +
+                                                    Number(
+                                                        useActualQty
+                                                            ? row.Act_Qty || 0
+                                                            : row.Qty || 0
+                                                    ),
+                                                0
+                                            );
+
+                                            const totalInvoiceCount =
+                                                baseRows.reduce(
+                                                    (sum, row) =>
+                                                        sum +
+                                                        Number(
+                                                            row.__qtyInvoiceCount || 0
+                                                        ),
+                                                    0
+                                                );
+
+                                            return (
+                                                <TableCell key={c.key}>
+                                                    {totalQty > 0
+                                                        ? `${totalQty.toFixed(2)} (${totalInvoiceCount})`
+                                                        : "-"}
+                                                </TableCell>
+                                            );
+                                        }
+
+                                        // ===== WORK COLUMNS =====
+                                        if (workColumns.includes(c.key)) {
+                                            const totalQty = baseRows.reduce(
+                                                (sum, row) =>
+                                                    sum +
+                                                    Number(row[c.key] || 0),
+                                                0
+                                            );
+
+                                            const invoiceCount =
+                                                baseRows.reduce(
+                                                    (sum, row) =>
+                                                        sum +
+                                                        Number(
+                                                            row
+                                                                .__categoryInvoiceCount?.[
+                                                            c.key
+                                                            ] || 0
+                                                        ),
+                                                    0
+                                                );
+
+                                            return (
+                                                <TableCell key={c.key}>
+                                                    {totalQty > 0
+                                                        ? `${totalQty.toFixed(2)} (${invoiceCount})`
+                                                        : "-"}
+                                                </TableCell>
+                                            );
+                                        }
+
+                                        // ===== NORMAL NUMERIC =====
+                                        const total = Number(
+                                            getTotal(c.key)
+                                        );
+
+                                        return (
+                                            <TableCell key={c.key}>
+                                                {total > 0
+                                                    ? total.toFixed(2)
+                                                    : "-"}
+                                            </TableCell>
+                                        );
+                                    })}
                                 </TableRow>
                             </TableHead>
 
@@ -2309,6 +2362,77 @@ const StaffBasedGroupingReport: React.FC = () => {
                                                             }
 
                                                             if (c.isNumeric) {
+                                                                const workColumns = [
+                                                                    "Load_Man",
+                                                                    "Others1",
+                                                                    "Others2",
+                                                                    "Others3",
+                                                                    "Others4",
+                                                                    "Others5",
+                                                                    "Checker",
+                                                                    "Delivery_Man",
+                                                                    "Others6",
+                                                                    "Driver",
+                                                                    "Created_By",
+                                                                ];
+
+                                                                // ===== QTY COLUMN =====
+                                                                if (c.key === "Qty") {
+                                                                    const totalQty = row.__rows.reduce(
+                                                                        (sum: number, r: any) =>
+                                                                            sum +
+                                                                            Number(
+                                                                                useActualQty
+                                                                                    ? r.Act_Qty || 0
+                                                                                    : r.Qty || 0
+                                                                            ),
+                                                                        0
+                                                                    );
+
+                                                                    const invoiceCount = row.__rows.reduce(
+                                                                        (sum: number, r: any) =>
+                                                                            sum + Number(r.__qtyInvoiceCount || 0),
+                                                                        0
+                                                                    );
+
+                                                                    return (
+                                                                        <TableCell key={c.key}>
+                                                                            {totalQty > 0
+                                                                                ? `${totalQty.toFixed(2)} (${invoiceCount})`
+                                                                                : "-"}
+                                                                        </TableCell>
+                                                                    );
+                                                                }
+
+                                                                // ===== STAFF WORK COLUMNS =====
+                                                                if (workColumns.includes(c.key)) {
+                                                                    const totalQty = row.__rows.reduce(
+                                                                        (sum: number, r: any) =>
+                                                                            sum + Number(r[c.key] || 0),
+                                                                        0
+                                                                    );
+
+                                                                    const invoiceCount = row.__rows.reduce(
+                                                                        (sum: number, r: any) =>
+                                                                            sum +
+                                                                            Number(
+                                                                                r.__categoryInvoiceCount?.[
+                                                                                c.key
+                                                                                ] || 0
+                                                                            ),
+                                                                        0
+                                                                    );
+
+                                                                    return (
+                                                                        <TableCell key={c.key}>
+                                                                            {totalQty > 0
+                                                                                ? `${totalQty.toFixed(2)} (${invoiceCount})`
+                                                                                : "-"}
+                                                                        </TableCell>
+                                                                    );
+                                                                }
+
+                                                                // ===== NORMAL NUMERIC =====
                                                                 const total = row.__rows.reduce(
                                                                     (s: number, r: any) =>
                                                                         s + Number(r[c.key] || 0),
@@ -2317,7 +2441,9 @@ const StaffBasedGroupingReport: React.FC = () => {
 
                                                                 return (
                                                                     <TableCell key={c.key}>
-                                                                        {Number(total).toFixed(2)}
+                                                                        {total > 0
+                                                                            ? total.toFixed(2)
+                                                                            : "-"}
                                                                     </TableCell>
                                                                 );
                                                             }
@@ -2338,15 +2464,84 @@ const StaffBasedGroupingReport: React.FC = () => {
                                                         <TableCell key={c.key}>
                                                             {c.key === "Ledger_Date"
                                                                 ? dayjs(row[c.key]).format("DD/MM/YYYY")
+
                                                                 : c.isNumeric
                                                                     ? (() => {
-                                                                        const value = Number(row[c.key]);
 
-                                                                        return Number.isFinite(value)
+                                                                        const workColumns = [
+                                                                            "Load_Man",
+                                                                            "Others1",
+                                                                            "Others2",
+                                                                            "Others3",
+                                                                            "Others4",
+                                                                            "Others5",
+                                                                            "Checker",
+                                                                            "Delivery_Man",
+                                                                            "Others6",
+                                                                            "Driver",
+                                                                            "Created_By",
+                                                                        ];
+
+                                                                        const value =
+                                                                            Number(row[c.key] || 0);
+
+                                                                        // Show qty + invoice count
+                                                                        if (workColumns.includes(c.key)) {
+                                                                            const invoiceCount =
+                                                                                row.__categoryInvoiceCount?.[
+                                                                                c.key
+                                                                                ] || 0;
+
+                                                                            return value > 0
+                                                                                ? `${value.toFixed(2)} (${invoiceCount})`
+                                                                                : "-";
+                                                                        }
+
+
+                                                                        // Qty column
+                                                                        if (c.key === "Qty") {
+                                                                            const displayQty = Number(
+                                                                                useActualQty
+                                                                                    ? row.Act_Qty || 0
+                                                                                    : row.Qty || 0
+                                                                            );
+
+                                                                            const invoiceCount =
+                                                                                row.__qtyInvoiceCount || 0;
+
+                                                                            return displayQty > 0
+                                                                                ? `${displayQty.toFixed(2)} (${invoiceCount})`
+                                                                                : "0.00";
+                                                                        }
+
+                                                                        // work columns
+                                                                        if (
+                                                                            workColumns.includes(c.key)
+                                                                        ) {
+                                                                            const invoiceCount =
+                                                                                row.__categoryInvoiceCount?.[
+                                                                                c.key
+                                                                                ] || 0;
+
+                                                                            return value > 0
+                                                                                ? `${value.toFixed(2)} (${invoiceCount})`
+                                                                                : "";
+                                                                        }
+
+                                                                        return Number.isFinite(value) &&
+                                                                            value > 0
                                                                             ? value.toFixed(2)
-                                                                            : "0.00";
+                                                                            : "-";
                                                                     })()
-                                                                    : (row[c.key] ?? "")}
+
+                                                                    : (
+                                                                        row[c.key] !== null &&
+                                                                        row[c.key] !== undefined &&
+                                                                        row[c.key] !== ""
+                                                                    )
+                                                                        ? row[c.key]
+                                                                        : "-"
+                                                            }
                                                         </TableCell>
                                                     ))}
                                                 </TableRow>

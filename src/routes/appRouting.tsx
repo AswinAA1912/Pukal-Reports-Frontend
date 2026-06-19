@@ -34,6 +34,7 @@ import StaffBasedGroupingReport from "../reports/StaffBased/staffBasedGroupingRe
 import StaffBasedCountReport from "../reports/StaffBased/staffBasedCountReport";
 import DayAbstractReport from "../reports/Abstract/DayAbstractReport";
 import StockAbstractReport from "../reports/Abstract/StockAbstractReport";
+import CashBoxReport from "../reports/Abstract/CashBoxReport";
 
 
 interface AppRoutingProps {
@@ -410,7 +411,9 @@ const AppRouting: React.FC<AppRoutingProps> = ({
           path="/staffBasedGrouping"
           element={
             <RequireAuth>
-              <AppLayout>
+              <AppLayout
+                fullWidth
+              >
                 <StaffBasedGroupingReport />
               </AppLayout>
             </RequireAuth>
@@ -445,6 +448,17 @@ const AppRouting: React.FC<AppRoutingProps> = ({
             <RequireAuth>
               <AppLayout>
                 <StockAbstractReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/cashbox"
+          element={
+            <RequireAuth>
+              <AppLayout fullWidth>
+                <CashBoxReport />
               </AppLayout>
             </RequireAuth>
           }
