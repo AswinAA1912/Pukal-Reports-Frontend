@@ -26,8 +26,9 @@ interface ReportFilterDrawerProps {
     onToggle: () => void;
     onClose: () => void;
 
-    fromDate: string;
-    onFromDateChange: (value: string) => void;
+    fromDate?: string;
+    onFromDateChange?: (value: string) => void;
+    hideFromDate?: boolean;
 
     // OLD (keep for compatibility)
     dropdownLabel?: string;
@@ -47,6 +48,11 @@ interface ReportFilterDrawerProps {
 
     toDate?: string;
     onToDateChange?: (value: string) => void;
+
+    // SALE ORDER STATUS FILTER PROPS SPECIFIC TO PENDING SALE ORDER SCREEN
+    showSaleOrderStatusFilter?: boolean;
+    saleOrderStatusValue?: "pending" | "cancelled";
+    onSaleOrderStatusChange?: (value: "pending" | "cancelled") => void;
 }
 
 const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
@@ -57,6 +63,7 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
     toDate,
     onFromDateChange,
     onToDateChange,
+    hideFromDate = false,
 
     // OLD
     dropdownLabel,
@@ -72,6 +79,11 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
     stockFilter,
     onStockFilterChange,
     onApply,
+
+    // SALE ORDER STATUS FILTER PROPS SPECIFIC TO PENDING SALE ORDER SCREEN
+    showSaleOrderStatusFilter,
+    saleOrderStatusValue,
+    onSaleOrderStatusChange,
 }) => {
     return (
         <>
@@ -115,15 +127,17 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                         Filters
                     </Typography>
 
-                    <TextField
-                        type="date"
-                        label="From Date"
-                        fullWidth
-                        InputLabelProps={{ shrink: true }}
-                        value={fromDate}
-                        onChange={(e) => onFromDateChange(e.target.value)}
-                        sx={{ mb: 2 }}
-                    />
+                    {!hideFromDate && fromDate !== undefined && onFromDateChange && (
+                        <TextField
+                            type="date"
+                            label="From Date"
+                            fullWidth
+                            InputLabelProps={{ shrink: true }}
+                            value={fromDate}
+                            onChange={(e) => onFromDateChange(e.target.value)}
+                            sx={{ mb: 2 }}
+                        />
+                    )}
 
                     {toDate !== undefined && onToDateChange && (
                         <TextField
@@ -135,6 +149,32 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                             onChange={(e) => onToDateChange(e.target.value)}
                             sx={{ mb: 2 }}
                         />
+                    )}
+
+                    {/* SALE ORDER STATUS FILTER FOR PENDING SALE ORDER REPORT */}
+                    {showSaleOrderStatusFilter && onSaleOrderStatusChange && (
+                        <FormControl sx={{ mb: 2, display: "block" }}>
+                            <FormLabel sx={{ fontWeight: 600, color: "#1E3A8A", fontSize: "0.875rem", display: "block", mb: 0.5 }}>
+                                Sale Order Status
+                            </FormLabel>
+                            <RadioGroup
+                                value={saleOrderStatusValue || "pending"}
+                                onChange={(e) =>
+                                    onSaleOrderStatusChange(e.target.value as "pending" | "cancelled")
+                                }
+                            >
+                                <FormControlLabel
+                                    value="pending"
+                                    control={<Radio size="small" sx={{ color: "#1E3A8A", "&.Mui-checked": { color: "#1E3A8A" } }} />}
+                                    label={<Typography sx={{ fontSize: "0.825rem" }}>Pending Sale Order</Typography>}
+                                />
+                                <FormControlLabel
+                                    value="cancelled"
+                                    control={<Radio size="small" sx={{ color: "#1E3A8A", "&.Mui-checked": { color: "#1E3A8A" } }} />}
+                                    label={<Typography sx={{ fontSize: "0.825rem" }}>Cancelled</Typography>}
+                                />
+                            </RadioGroup>
+                        </FormControl>
                     )}
 
                     {/* ✅ DYNAMIC FILTERS */}

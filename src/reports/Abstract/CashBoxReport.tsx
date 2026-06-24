@@ -11,7 +11,10 @@ import {
     Typography,
     Button,
     CircularProgress,
-    Grid,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
 } from "@mui/material";
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
@@ -20,17 +23,30 @@ import * as XLSX from "xlsx";
 import { toast } from "react-toastify";
 import PageHeader from "../../Layout/PageHeader";
 import ReportFilterDrawer from "../../Components/ReportFilterDrawer";
-import { cashboxService, CashBoxItem } from "../../services/cashbox.service";
+import { cashboxService, CashBoxReportResponse, CashBoxTransaction } from "../../services/cashbox.service";
 
-const formatINR = (v: number) =>
-    new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    }).format(v);
+interface GroupConfig {
+    key: string;
+    label: string;
+    side: "debit" | "credit";
+    masterKey: "Cash" | "Bank" | "LedgerGrp" | "DEX" | "IDEX";
+}
 
-const normalizeStr = (s: any) => String(s ?? "").trim().toLowerCase();
+const DEBIT_GROUPS: GroupConfig[] = [
+    { key: "cash_paid", label: "Cash Trf (Paid)", side: "debit", masterKey: "Cash" },
+    { key: "bank_dep", label: "Bank Dep (Contra)", side: "debit", masterKey: "Bank" },
+    { key: "ledger_pay", label: "Ledger Groups (Payment)", side: "debit", masterKey: "LedgerGrp" },
+    { key: "dex_deb", label: "Direct Exp (debit)", side: "debit", masterKey: "DEX" },
+    { key: "idex_deb", label: "In-Direct Exp (debit)", side: "debit", masterKey: "IDEX" }
+];
+
+const CREDIT_GROUPS: GroupConfig[] = [
+    { key: "cash_rec", label: "Cash Trf (Received)", side: "credit", masterKey: "Cash" },
+    { key: "bank_rec", label: "Bank Rece (Contra)", side: "credit", masterKey: "Bank" },
+    { key: "ledger_rec", label: "Ledger Groups (Receipts)", side: "credit", masterKey: "LedgerGrp" },
+    { key: "dex_cred", label: "Direct Exp Income (Credit)", side: "credit", masterKey: "DEX" },
+    { key: "idex_cred", label: "InDirect Exp Income (Credit)", side: "credit", masterKey: "IDEX" }
+];
 
 const CashBoxReport: React.FC = () => {
     const today = dayjs().format("YYYY-MM-DD");
@@ -43,8 +59,69 @@ const CashBoxReport: React.FC = () => {
         Date: { from: today, to: today },
     });
 
-    const [items, setItems] = useState<CashBoxItem[]>([]);
-    const [selectedCashBox, setSelectedCashBox] = useState<string>("All");
+    const [reportData, setReportData] = useState<CashBoxReportResponse | null>(null);
+
+    // Selected groups for multi-select filter
+    const [selectedGroups] = useState<string[]>(["All"]);
+
+    // Extract all unique Group Names from datasets (commented out as chips UI is currently commented out)
+    /*
+    const allGroupNames = useMemo(() => {
+        if (!reportData) return [];
+        const names = new Set<string>();
+        [
+            ...(reportData.Cash || []),
+            ...(reportData.Bank || []),
+            ...(reportData.LedgerGrp || []),
+            ...(reportData.DEX || []),
+            ...(reportData.IDEX || [])
+        ].forEach((acc) => {
+            if (acc.Group_Name) {
+                names.add(acc.Group_Name.trim());
+            }
+        });
+        return Array.from(names).sort();
+    }, [reportData]);
+
+    const handleGroupChipClick = (groupName: string) => {
+        if (groupName === "All") {
+            setSelectedGroups(["All"]);
+            return;
+        }
+
+        setSelectedGroups((prev) => {
+            const next = prev.filter((g) => g !== "All");
+            if (next.includes(groupName)) {
+                const updated = next.filter((g) => g !== groupName);
+                return updated.length === 0 ? ["All"] : updated;
+            } else {
+                return [...next, groupName];
+            }
+        });
+    };
+    */
+
+    // Expansion state for each group key
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({
+        cash_paid: false,
+        cash_rec: false,
+        bank_dep: false,
+        bank_rec: false,
+        ledger_pay: false,
+        ledger_rec: false,
+        dex_deb: false,
+        dex_cred: false,
+        idex_deb: false,
+        idex_cred: false,
+    });
+
+    // Details Modal State
+    const [detailModalOpen, setDetailModalOpen] = useState(false);
+    const [selectedLedger, setSelectedLedger] = useState<{
+        accId: string;
+        name: string;
+        side: "debit" | "credit";
+    } | null>(null);
 
     // Fetch transactions
     const fetchData = async () => {
@@ -54,8 +131,13 @@ const CashBoxReport: React.FC = () => {
                 Fromdate: filters.Date.from,
                 Todate: filters.Date.to,
             });
-            setItems(res || []);
-        } catch {
+            if (res && !Array.isArray(res)) {
+                setReportData(res);
+            } else {
+                setReportData(null);
+            }
+        } catch (err) {
+            console.error(err);
             toast.error("Failed to load cash box data ❌");
         } finally {
             setLoading(false);
@@ -66,48 +148,177 @@ const CashBoxReport: React.FC = () => {
         fetchData();
     }, [filters.Date.from, filters.Date.to]);
 
-    // Unique cash box Group_Names from items
-    const cashBoxes = useMemo(() => {
-        const groups = new Set<string>();
-        items.forEach((item) => {
-            if (item.Group_Name) {
-                groups.add(item.Group_Name.trim());
-            }
-        });
-        return Array.from(groups);
-    }, [items]);
+    // Format helpers
+    const formatNum = (v: number) => {
+        if (v === 0) return "-";
+        return new Intl.NumberFormat("en-IN", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(v);
+    };
 
-    // Parse Debit and Credit lists based on selection
+    const formatTime = (dateStr: string) => {
+        if (!dateStr) return "-";
+        if (dateStr.includes("T00:00:00")) return "-";
+        const d = dayjs(dateStr);
+        if (!d.isValid()) return "-";
+        return d.format("hh:mm A");
+    };
+
+    const toggleGroup = (key: string) => {
+        setExpanded((prev) => ({
+            ...prev,
+            [key]: !prev[key],
+        }));
+    };
+
+    // Calculate groups and balances
     const parsedData = useMemo(() => {
-        const isAll = selectedCashBox === "All";
-        const normSel = normalizeStr(selectedCashBox);
+        const obList = reportData?.OB || [];
+        const transactions = reportData?.Data1 || [];
 
-        const filtered = items.filter((x) => {
-            if (isAll) return true;
-            return normalizeStr(x.Group_Name) === normSel;
-        });
+        // Check if filtering is active
+        const isFiltered = !selectedGroups.includes("All") && selectedGroups.length > 0;
 
-        const debitList = filtered.filter((x) => normalizeStr(x.CR_DR) === "dr" && x.Dr_Amount > 0);
-        const creditList = filtered.filter((x) => normalizeStr(x.CR_DR) === "cr" && x.Cr_Amount > 0);
+        const cashList = (reportData?.Cash || []).filter(
+            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+        );
+        const bankList = (reportData?.Bank || []).filter(
+            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+        );
+        const ledgerGrpList = (reportData?.LedgerGrp || []).filter(
+            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+        );
+        const dexList = (reportData?.DEX || []).filter(
+            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+        );
+        const idexList = (reportData?.IDEX || []).filter(
+            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+        );
 
-        // Compute opening total
-        const opening = filtered.reduce((sum, x) => {
-            const val = Number(String(x.OB_Amount || "").replace(/[^\d\.]/g, "")) || 0;
-            return sum + val;
-        }, 0);
 
-        // Compute closing total
-        const closing = filtered.reduce((sum, x) => {
-            return sum + Math.abs(x.Bal_Amount || 0);
-        }, 0);
+        const masterMap = {
+            Cash: cashList,
+            Bank: bankList,
+            LedgerGrp: ledgerGrpList,
+            DEX: dexList,
+            IDEX: idexList,
+        };
+
+        const opening = obList.length > 0 ? Number(obList[0].OB_Amount) || 0 : 0;
+
+        const getGroupData = (config: GroupConfig) => {
+            const masters = masterMap[config.masterKey];
+            const masterIds = new Set(masters.map((m) => m.Acc_Id));
+
+            const matchedTransactions = transactions.filter((tx) => {
+                if (config.side === "debit") {
+                    return tx.Debit_Ac_Id && masterIds.has(tx.Debit_Ac_Id);
+                } else {
+                    return tx.Credit_Ac_Id && masterIds.has(tx.Credit_Ac_Id);
+                }
+            });
+
+            const subLedgerMap: Record<string, { accId: string; name: string; amount: number }> = {};
+            matchedTransactions.forEach((tx) => {
+                const accId = config.side === "debit" ? tx.Debit_Ac_Id : tx.Credit_Ac_Id;
+                const amount = config.side === "debit" ? tx.Dr_Amount : tx.Cr_Amount;
+
+                if (!subLedgerMap[accId]) {
+                    const masterAcc = masters.find((m) => m.Acc_Id === accId);
+                    subLedgerMap[accId] = {
+                        accId,
+                        name: masterAcc ? masterAcc.Account_name : `Account (${accId})`,
+                        amount: 0,
+                    };
+                }
+                subLedgerMap[accId].amount += amount;
+            });
+
+            const subLedgers = Object.values(subLedgerMap)
+                .filter((sub) => sub.amount !== 0)
+                .sort((a, b) => b.amount - a.amount);
+
+            const total = subLedgers.reduce((sum, sub) => sum + sub.amount, 0);
+
+            return { subLedgers, total };
+        };
+
+        const debitGroups = DEBIT_GROUPS.map((grp) => ({
+            ...grp,
+            ...getGroupData(grp),
+        }));
+
+        const creditGroups = CREDIT_GROUPS.map((grp) => ({
+            ...grp,
+            ...getGroupData(grp),
+        }));
+
+        const totalDebits = debitGroups.reduce((sum, g) => sum + g.total, 0);
+        const totalCredits = creditGroups.reduce((sum, g) => sum + g.total, 0);
+        const closing = opening + totalCredits - totalDebits;
 
         return {
-            debitList,
-            creditList,
+            debitGroups,
+            creditGroups,
             opening,
             closing,
         };
-    }, [items, selectedCashBox]);
+    }, [reportData]);
+
+    // Handle opening detail modal
+    const handleLedgerClick = (accId: string, side: "debit" | "credit") => {
+        const allLists = [
+            ...(reportData?.Cash || []),
+            ...(reportData?.Bank || []),
+            ...(reportData?.LedgerGrp || []),
+            ...(reportData?.DEX || []),
+            ...(reportData?.IDEX || []),
+        ];
+        const acc = allLists.find((x) => x.Acc_Id === accId);
+        const name = acc ? acc.Account_name : `Account (${accId})`;
+
+        setSelectedLedger({ accId, name, side });
+        setDetailModalOpen(true);
+    };
+
+    // Filter transactions for clicked sub-ledger inside modal
+    const modalTransactions = useMemo(() => {
+        if (!selectedLedger || !reportData?.Data1) return [];
+        const { accId, side } = selectedLedger;
+        return reportData.Data1.filter((tx) => {
+            if (side === "debit") {
+                return tx.Debit_Ac_Id === accId;
+            } else {
+                return tx.Credit_Ac_Id === accId;
+            }
+        });
+    }, [selectedLedger, reportData]);
+
+    // Find opposing ledger name
+    const getOpposingLedgerName = (tx: CashBoxTransaction) => {
+        if (!selectedLedger) return "";
+        const opposingId = selectedLedger.side === "debit" ? tx.Credit_Ac_Id : tx.Debit_Ac_Id;
+        if (!opposingId) return "-";
+
+        const allLists = [
+            ...(reportData?.Cash || []),
+            ...(reportData?.Bank || []),
+            ...(reportData?.LedgerGrp || []),
+            ...(reportData?.DEX || []),
+            ...(reportData?.IDEX || []),
+        ];
+        const acc = allLists.find((x) => x.Acc_Id === opposingId);
+        return acc ? acc.Account_name : `Account (${opposingId})`;
+    };
+
+    // Sum total inside modal
+    const modalTotal = useMemo(() => {
+        if (!selectedLedger) return 0;
+        return modalTransactions.reduce((sum, tx) => {
+            return sum + (selectedLedger.side === "debit" ? tx.Dr_Amount : tx.Cr_Amount);
+        }, 0);
+    }, [modalTransactions, selectedLedger]);
 
     // Excel Export
     const handleExportExcel = () => {
@@ -119,53 +330,55 @@ const CashBoxReport: React.FC = () => {
                     : `${dayjs(filters.Date.from).format("DD-MM-YYYY")} TO ${dayjs(filters.Date.to).format("DD-MM-YYYY")}`;
 
             excelData.push([`CASH BOX TRANSACTION - ${dateStr}`]);
-            excelData.push([`Group Filter: ${selectedCashBox}`]);
             excelData.push([]);
 
             // Headers
             excelData.push([
-                "S.No (Debit)",
                 "Particulars (Debit)",
-                "Debit Amount",
-                "",
-                "S.No (Credit)",
+                "Debit Amt",
                 "Particulars (Credit)",
-                "Credit Amount",
+                "Credit amt",
             ]);
 
-            // Debit Rows
-            const debitRows = parsedData.debitList.map((x, idx) => [
-                idx + 1,
-                x.Account_name,
-                x.Dr_Amount,
-            ]);
+            // Opening row
+            excelData.push(["", "", "Opening Balance", parsedData.opening]);
 
-            // Credit Rows (with OPENING and CLOSING)
-            const creditRows: any[][] = [];
-            creditRows.push(["", "OPENING", parsedData.opening]);
-            parsedData.creditList.forEach((x, idx) => {
-                creditRows.push([idx + 1, x.Account_name, x.Cr_Amount]);
-            });
-            creditRows.push(["", "CLOSING", parsedData.closing]);
+            // Parallel Groups and Sub-ledgers
+            for (let idx = 0; idx < 5; idx++) {
+                const leftGroup = parsedData.debitGroups[idx];
+                const rightGroup = parsedData.creditGroups[idx];
 
-            // Combine both sides parallel
-            const maxLen = Math.max(debitRows.length, creditRows.length);
-            for (let i = 0; i < maxLen; i++) {
-                const dr = debitRows[i] || ["", "", ""];
-                const cr = creditRows[i] || ["", "", ""];
-                excelData.push([dr[0], dr[1], dr[2], "", cr[0], cr[1], cr[2]]);
+                excelData.push([
+                    leftGroup.label,
+                    leftGroup.total || "",
+                    rightGroup.label,
+                    rightGroup.total || "",
+                ]);
+
+                const maxSubRows = Math.max(leftGroup.subLedgers.length, rightGroup.subLedgers.length);
+                for (let i = 0; i < maxSubRows; i++) {
+                    const leftSub = leftGroup.subLedgers[i];
+                    const rightSub = rightGroup.subLedgers[i];
+
+                    excelData.push([
+                        leftSub ? `  ${leftSub.name}` : "",
+                        leftSub ? leftSub.amount : "",
+                        rightSub ? `  ${rightSub.name}` : "",
+                        rightSub ? rightSub.amount : "",
+                    ]);
+                }
             }
+
+            // Closing row
+            excelData.push(["", "", "Closing Balance", parsedData.closing]);
 
             const ws = XLSX.utils.aoa_to_sheet(excelData);
             const wb = XLSX.utils.book_new();
 
             ws["!cols"] = [
-                { wch: 12 },
-                { wch: 25 },
+                { wch: 35 },
                 { wch: 15 },
-                { wch: 5 },
-                { wch: 12 },
-                { wch: 25 },
+                { wch: 35 },
                 { wch: 15 },
             ];
 
@@ -191,42 +404,40 @@ const CashBoxReport: React.FC = () => {
             doc.setFont("helvetica", "bold");
             doc.text(`CASH BOX TRANSACTION - ${dateStr}`, 148, 12, { align: "center" });
 
-            doc.setFontSize(10);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Group Filter: ${selectedCashBox}`, 14, 18);
+            const pdfBody: any[][] = [];
+            pdfBody.push(["", "", "Opening Balance", formatNum(parsedData.opening)]);
 
-            const debitPdfRows = parsedData.debitList.map((x, idx) => [
-                idx + 1,
-                x.Account_name,
-                formatINR(x.Dr_Amount),
-            ]);
+            for (let idx = 0; idx < 5; idx++) {
+                const leftGroup = parsedData.debitGroups[idx];
+                const rightGroup = parsedData.creditGroups[idx];
 
-            const creditPdfRows: any[][] = [];
-            creditPdfRows.push(["", "OPENING", formatINR(parsedData.opening)]);
-            parsedData.creditList.forEach((x, idx) => {
-                creditPdfRows.push([idx + 1, x.Account_name, formatINR(x.Cr_Amount)]);
-            });
-            creditPdfRows.push(["", "CLOSING", formatINR(parsedData.closing)]);
+                pdfBody.push([
+                    leftGroup.label,
+                    leftGroup.total ? formatNum(leftGroup.total) : "-",
+                    rightGroup.label,
+                    rightGroup.total ? formatNum(rightGroup.total) : "-",
+                ]);
 
-            const tableStartY = 24;
+                const maxSubRows = Math.max(leftGroup.subLedgers.length, rightGroup.subLedgers.length);
+                for (let i = 0; i < maxSubRows; i++) {
+                    const leftSub = leftGroup.subLedgers[i];
+                    const rightSub = rightGroup.subLedgers[i];
+
+                    pdfBody.push([
+                        leftSub ? `  ${leftSub.name}` : "",
+                        leftSub ? formatNum(leftSub.amount) : "",
+                        rightSub ? `  ${rightSub.name}` : "",
+                        rightSub ? formatNum(rightSub.amount) : "",
+                    ]);
+                }
+            }
+
+            pdfBody.push(["", "", "Closing Balance", formatNum(parsedData.closing)]);
 
             autoTable(doc, {
-                startY: tableStartY,
-                margin: { left: 14, right: 152 },
-                tableWidth: 130,
-                head: [["S.No", "Particulars (Debit)", "Debit Amount"]],
-                body: debitPdfRows,
-                styles: { fontSize: 8, cellPadding: 1.5 },
-                headStyles: { fillColor: [30, 58, 138], textColor: [255, 255, 255] },
-                theme: "grid",
-            });
-
-            autoTable(doc, {
-                startY: tableStartY,
-                margin: { left: 152, right: 14 },
-                tableWidth: 130,
-                head: [["S.No", "Particulars (Credit)", "Credit Amount"]],
-                body: creditPdfRows,
+                startY: 20,
+                head: [["Particulars (Debit)", "Debit Amt", "Particulars (Credit)", "Credit amt"]],
+                body: pdfBody,
                 styles: { fontSize: 8, cellPadding: 1.5 },
                 headStyles: { fillColor: [30, 58, 138], textColor: [255, 255, 255] },
                 theme: "grid",
@@ -241,7 +452,7 @@ const CashBoxReport: React.FC = () => {
     };
 
     return (
-        <Box sx={{ width: "100%", overflowX: "hidden" }}>
+        <Box sx={{ width: "100%", overflowX: "hidden", minHeight: "100vh", bgcolor: "#f1f5f9" }}>
             <PageHeader
                 onExportExcel={handleExportExcel}
                 onExportPDF={handleExportPDF}
@@ -260,35 +471,40 @@ const CashBoxReport: React.FC = () => {
                 onApply={() => setFilters({ Date: { from: fromDate, to: toDate } })}
             />
 
-            {/* Pill selector buttons for Cash List */}
-            <Box px={2} pt={1} pb={2} display="flex" flexWrap="wrap" gap={1}>
-                {["All", ...cashBoxes].map((name) => (
-                    <Button
-                        key={name}
-                        variant={selectedCashBox === name ? "contained" : "outlined"}
-                        onClick={() => setSelectedCashBox(name)}
-                        sx={{
-                            borderRadius: "20px",
-                            textTransform: "none",
-                            px: 3,
-                            py: 0.5,
-                            fontSize: "0.8rem",
-                            borderColor: selectedCashBox === name ? "#1E3A8A" : "#cbd5e1",
-                            color: selectedCashBox === name ? "#fff" : "#475569",
-                            backgroundColor: selectedCashBox === name ? "#1E3A8A" : "transparent",
-                            "&:hover": {
-                                backgroundColor: selectedCashBox === name ? "#1e40af" : "#f1f5f9",
-                                borderColor: selectedCashBox === name ? "#1e40af" : "#94a3b8",
-                            },
-                        }}
-                    >
-                        {name}
-                    </Button>
-                ))}
-            </Box>
+            <Box px={2} pb={4} pt={2}>
+                {/* Chip Filters for Groups */}
+                {/* {!loading && reportData && (
+                    <Box mb={2} display="flex" flexWrap="wrap" gap={1}>
+                        {["All", ...allGroupNames].map((name) => {
+                            const isSelected = selectedGroups.includes(name);
+                            return (
+                                <Button
+                                    key={name}
+                                    variant={isSelected ? "contained" : "outlined"}
+                                    onClick={() => handleGroupChipClick(name)}
+                                    sx={{
+                                        borderRadius: "20px",
+                                        textTransform: "none",
+                                        px: 2.5,
+                                        py: 0.5,
+                                        fontSize: "0.8rem",
+                                        fontWeight: 600,
+                                        borderColor: isSelected ? "#1E3A8A" : "#cbd5e1",
+                                        color: isSelected ? "#fff" : "#475569",
+                                        backgroundColor: isSelected ? "#1E3A8A" : "#fff",
+                                        "&:hover": {
+                                            backgroundColor: isSelected ? "#1e40af" : "#f1f5f9",
+                                            borderColor: isSelected ? "#1e40af" : "#94a3b8",
+                                        },
+                                    }}
+                                >
+                                    {name}
+                                </Button>
+                            );
+                        })}
+                    </Box>
+                )} */}
 
-            {/* Main transaction display */}
-            <Box px={2} pb={4}>
                 {loading ? (
                     <Box display="flex" justifyContent="center" py={10}>
                         <CircularProgress size={40} sx={{ color: "#1E3A8A" }} />
@@ -303,7 +519,8 @@ const CashBoxReport: React.FC = () => {
                                 py: 1.2,
                                 textAlign: "center",
                                 mb: 3,
-                                background: "#f8fafc",
+                                background: "#fff",
+                                boxShadow: 1,
                             }}
                         >
                             <Typography variant="body1" fontWeight={700} sx={{ letterSpacing: 0.5, color: "#1e293b" }}>
@@ -314,129 +531,256 @@ const CashBoxReport: React.FC = () => {
                             </Typography>
                         </Box>
 
-                        {/* Side-by-side Tables */}
-                        <Grid container spacing={3}>
-                            {/* Left Side: Debit Table */}
-                            <Grid item xs={12} md={6}>
-                                <TableContainer component={Paper} elevation={1} sx={{ borderRadius: 2, border: "1px solid #e2e8f0", maxHeight: "calc(100vh - 180px)", overflowY: "auto" }}>
-                                    <Table size="small" sx={{ tableLayout: "fixed" }} stickyHeader>
-                                        <TableHead sx={{ backgroundColor: "#1E3A8A" }}>
-                                            <TableRow>
-                                                <TableCell align="center" sx={{ color: "#fff", fontWeight: 700, width: 60, minWidth: 60, py: 1, backgroundColor: "#1E3A8A" }}>
-                                                    S.NO
-                                                </TableCell>
-                                                <TableCell sx={{ color: "#fff", fontWeight: 700, py: 1, backgroundColor: "#1E3A8A" }}>
-                                                    Particulars
-                                                </TableCell>
-                                                <TableCell align="right" sx={{ color: "#fff", fontWeight: 700, width: 150, minWidth: 150, py: 1, backgroundColor: "#1E3A8A" }}>
-                                                    Debit
-                                                </TableCell>
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {parsedData.debitList.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={3} align="center" sx={{ py: 4, color: "#94a3b8" }}>
-                                                        No Debit Transactions
+                        {/* Parallel Grid Table */}
+                        <TableContainer component={Paper} elevation={2} sx={{ borderRadius: 2, border: "1px solid #cbd5e1", overflowX: "auto" }}>
+                            <Table size="small" sx={{ minWidth: 800 }}>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell align="left" sx={{ backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 700, py: 1.5, fontSize: "0.9rem", border: "1px solid #cbd5e1" }}>
+                                            Particulars
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 700, py: 1.5, width: 180, fontSize: "0.9rem", border: "1px solid #cbd5e1" }}>
+                                            Debit Amt
+                                        </TableCell>
+                                        <TableCell align="left" sx={{ backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 700, py: 1.5, fontSize: "0.9rem", border: "1px solid #cbd5e1" }}>
+                                            Particulars
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 700, py: 1.5, width: 180, fontSize: "0.9rem", border: "1px solid #cbd5e1" }}>
+                                            Credit amt
+                                        </TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {/* OPENING ROW */}
+                                    <TableRow>
+                                        <TableCell sx={{ border: "1px solid #cbd5e1" }} />
+                                        <TableCell sx={{ border: "1px solid #cbd5e1" }} />
+                                        <TableCell sx={{ py: 1, backgroundColor: "#FFE2C6", fontWeight: 700, border: "1px solid #cbd5e1" }}>
+                                            Opening Balance
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ py: 1, backgroundColor: "#FFE2C6", fontWeight: 700, border: "1px solid #cbd5e1", color: "#b45309" }}>
+                                            {formatNum(parsedData.opening)}
+                                        </TableCell>
+                                    </TableRow>
+
+                                    {/* Main Parallel Group Rows */}
+                                    {[0, 1, 2, 3, 4].map((idx) => {
+                                        const leftGroup = parsedData.debitGroups[idx];
+                                        const rightGroup = parsedData.creditGroups[idx];
+
+                                        const isLeftExpanded = expanded[leftGroup.key] && leftGroup.subLedgers.length > 0;
+                                        const isRightExpanded = expanded[rightGroup.key] && rightGroup.subLedgers.length > 0;
+                                        const maxSubRows = Math.max(
+                                            isLeftExpanded ? leftGroup.subLedgers.length : 0,
+                                            isRightExpanded ? rightGroup.subLedgers.length : 0
+                                        );
+
+                                        return (
+                                            <React.Fragment key={`group-pair-${idx}`}>
+                                                {/* Parent Group Row */}
+                                                <TableRow sx={{ "&:hover": { bgcolor: "#f8fafc" } }}>
+                                                    {/* Left Group Header */}
+                                                    <TableCell
+                                                        onClick={() => toggleGroup(leftGroup.key)}
+                                                        sx={{
+                                                            cursor: "pointer",
+                                                            fontWeight: 700,
+                                                            border: "1px solid #cbd5e1",
+                                                            userSelect: "none",
+                                                            py: 1.2,
+                                                            "&:hover": { backgroundColor: "#f1f5f9" }
+                                                        }}
+                                                    >
+                                                        <Box display="flex" alignItems="center" gap={1}>
+                                                            <span style={{ fontSize: "1.1rem", fontWeight: "bold", width: 14, display: "inline-block" }}>
+                                                                {expanded[leftGroup.key] ? "−" : "+"}
+                                                            </span>
+                                                            {leftGroup.label}
+                                                        </Box>
+                                                    </TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, border: "1px solid #cbd5e1" }}>
+                                                        {formatNum(leftGroup.total)}
+                                                    </TableCell>
+
+                                                    {/* Right Group Header */}
+                                                    <TableCell
+                                                        onClick={() => toggleGroup(rightGroup.key)}
+                                                        sx={{
+                                                            cursor: "pointer",
+                                                            fontWeight: 700,
+                                                            border: "1px solid #cbd5e1",
+                                                            userSelect: "none",
+                                                            py: 1.2,
+                                                            "&:hover": { backgroundColor: "#f1f5f9" }
+                                                        }}
+                                                    >
+                                                        <Box display="flex" alignItems="center" gap={1}>
+                                                            <span style={{ fontSize: "1.1rem", fontWeight: "bold", width: 14, display: "inline-block" }}>
+                                                                {expanded[rightGroup.key] ? "−" : "+"}
+                                                            </span>
+                                                            {rightGroup.label}
+                                                        </Box>
+                                                    </TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, border: "1px solid #cbd5e1" }}>
+                                                        {formatNum(rightGroup.total)}
                                                     </TableCell>
                                                 </TableRow>
-                                            ) : (
-                                                parsedData.debitList.map((x, idx) => (
-                                                    <TableRow key={`${x.Acc_Id}-${idx}`} hover sx={{ backgroundColor: "#f8fafc" }}>
-                                                        <TableCell align="center" sx={{ fontWeight: 600, py: 1, width: 60, minWidth: 60 }}>
-                                                            {idx + 1}
-                                                        </TableCell>
-                                                        <TableCell sx={{ py: 1, pl: 3 }}>
-                                                            <Typography variant="body2" fontWeight={600} color="#1e293b">
-                                                                {x.Account_name}
-                                                            </Typography>
-                                                        </TableCell>
-                                                        <TableCell align="right" sx={{ fontWeight: 700, color: "#0f766e", py: 1, width: 150, minWidth: 150 }}>
-                                                            {formatINR(x.Dr_Amount)}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
-                            </Grid>
 
-                            {/* Right Side: Credit Table */}
-                            <Grid item xs={12} md={6}>
-                                <TableContainer component={Paper} elevation={1} sx={{ borderRadius: 2, border: "1px solid #e2e8f0", maxHeight: "calc(100vh - 180px)", overflowY: "auto" }}>
-                                    <Table size="small" sx={{ tableLayout: "fixed" }} stickyHeader>
-                                        <TableHead sx={{ backgroundColor: "#1E3A8A" }}>
-                                            <TableRow>
-                                                <TableCell align="center" sx={{ color: "#fff", fontWeight: 700, width: 60, minWidth: 60, py: 1, backgroundColor: "#1E3A8A" }}>
-                                                    S.NO
-                                                </TableCell>
-                                                <TableCell sx={{ color: "#fff", fontWeight: 700, py: 1, backgroundColor: "#1E3A8A" }}>
-                                                    Particulars
-                                                </TableCell>
-                                                <TableCell align="right" sx={{ color: "#fff", fontWeight: 700, width: 150, minWidth: 150, py: 1, backgroundColor: "#1E3A8A" }}>
-                                                    Credit
-                                                </TableCell>
-                                            </TableRow>
-                                        </TableHead>
-                                        <TableBody>
-                                            {/* OPENING ROW */}
-                                            <TableRow sx={{ backgroundColor: "#fef8ec" }}>
-                                                <TableCell sx={{ width: 60, minWidth: 60 }} />
-                                                <TableCell sx={{ py: 1 }}>
-                                                    <Typography variant="body2" fontWeight={700} color="#b45309" sx={{ pl: 3.2 }}>
-                                                        OPENING
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell align="right" sx={{ fontWeight: 700, color: "#b45309", py: 1, width: 150, minWidth: 150 }}>
-                                                    {formatINR(parsedData.opening)}
-                                                </TableCell>
-                                            </TableRow>
+                                                {/* Sub-ledgers Parallel Rows */}
+                                                {maxSubRows > 0 &&
+                                                    Array.from({ length: maxSubRows }).map((_, i) => {
+                                                        const leftSub = isLeftExpanded ? leftGroup.subLedgers[i] : null;
+                                                        const rightSub = isRightExpanded ? rightGroup.subLedgers[i] : null;
 
-                                            {parsedData.creditList.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={3} align="center" sx={{ py: 4, color: "#94a3b8" }}>
-                                                        No Credit Transactions
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                parsedData.creditList.map((x, idx) => (
-                                                    <TableRow key={`${x.Acc_Id}-${idx}`} hover sx={{ backgroundColor: "#f8fafc" }}>
-                                                        <TableCell align="center" sx={{ fontWeight: 600, py: 1, width: 60, minWidth: 60 }}>
-                                                            {idx + 1}
-                                                        </TableCell>
-                                                        <TableCell sx={{ py: 1, pl: 3 }}>
-                                                            <Typography variant="body2" fontWeight={600} color="#1e293b">
-                                                                {x.Account_name}
-                                                            </Typography>
-                                                        </TableCell>
-                                                        <TableCell align="right" sx={{ fontWeight: 700, color: "#be123c", py: 1, width: 150, minWidth: 150 }}>
-                                                            {formatINR(x.Cr_Amount)}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
-                                            )}
+                                                        return (
+                                                            <TableRow key={`sub-${leftGroup.key}-${rightGroup.key}-${i}`} sx={{ bgcolor: "#fafafa" }}>
+                                                                {/* Left Subledger */}
+                                                                {leftSub ? (
+                                                                    <>
+                                                                        <TableCell
+                                                                            onClick={() => handleLedgerClick(leftSub.accId, "debit")}
+                                                                            sx={{
+                                                                                pl: 5,
+                                                                                border: "1px solid #cbd5e1",
+                                                                                cursor: "pointer",
+                                                                                color: "#1E3A8A",
+                                                                                fontWeight: 600,
+                                                                                textDecoration: "underline",
+                                                                                "&:hover": { color: "#2563eb" }
+                                                                            }}
+                                                                        >
+                                                                            {leftSub.name}
+                                                                        </TableCell>
+                                                                        <TableCell align="right" sx={{ border: "1px solid #cbd5e1", fontWeight: 600 }}>
+                                                                            {formatNum(leftSub.amount)}
+                                                                        </TableCell>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <TableCell sx={{ border: "1px solid #cbd5e1" }} />
+                                                                        <TableCell sx={{ border: "1px solid #cbd5e1" }} />
+                                                                    </>
+                                                                )}
 
-                                            {/* CLOSING ROW */}
-                                            <TableRow sx={{ backgroundColor: "#f0fdf4" }}>
-                                                <TableCell sx={{ width: 60, minWidth: 60 }} />
-                                                <TableCell sx={{ py: 1 }}>
-                                                    <Typography variant="body2" fontWeight={700} color="#15803d" sx={{ pl: 3.2 }}>
-                                                        CLOSING
-                                                    </Typography>
-                                                </TableCell>
-                                                <TableCell align="right" sx={{ fontWeight: 700, color: "#15803d", py: 1, width: 150, minWidth: 150 }}>
-                                                    {formatINR(parsedData.closing)}
-                                                </TableCell>
-                                            </TableRow>
-                                        </TableBody>
-                                    </Table>
-                                </TableContainer>
-                            </Grid>
-                        </Grid>
+                                                                {/* Right Subledger */}
+                                                                {rightSub ? (
+                                                                    <>
+                                                                        <TableCell
+                                                                            onClick={() => handleLedgerClick(rightSub.accId, "credit")}
+                                                                            sx={{
+                                                                                pl: 5,
+                                                                                border: "1px solid #cbd5e1",
+                                                                                cursor: "pointer",
+                                                                                color: "#1E3A8A",
+                                                                                fontWeight: 600,
+                                                                                textDecoration: "underline",
+                                                                                "&:hover": { color: "#2563eb" }
+                                                                            }}
+                                                                        >
+                                                                            {rightSub.name}
+                                                                        </TableCell>
+                                                                        <TableCell align="right" sx={{ border: "1px solid #cbd5e1", fontWeight: 600 }}>
+                                                                            {formatNum(rightSub.amount)}
+                                                                        </TableCell>
+                                                                    </>
+                                                                ) : (
+                                                                    <>
+                                                                        <TableCell sx={{ border: "1px solid #cbd5e1" }} />
+                                                                        <TableCell sx={{ border: "1px solid #cbd5e1" }} />
+                                                                    </>
+                                                                )}
+                                                            </TableRow>
+                                                        );
+                                                    })}
+                                            </React.Fragment>
+                                        );
+                                    })}
+
+                                    {/* CLOSING ROW */}
+                                    <TableRow>
+                                        <TableCell sx={{ border: "1px solid #cbd5e1" }} />
+                                        <TableCell sx={{ border: "1px solid #cbd5e1" }} />
+                                        <TableCell sx={{ py: 1, backgroundColor: "#FFE2C6", fontWeight: 700, border: "1px solid #cbd5e1" }}>
+                                            Closing Balance
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ py: 1, backgroundColor: "#FFE2C6", fontWeight: 700, border: "1px solid #cbd5e1", color: "#15803d" }}>
+                                            {formatNum(parsedData.closing)}
+                                        </TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
                     </>
                 )}
             </Box>
+
+            {/* Details Popup Modal */}
+            <Dialog
+                open={detailModalOpen}
+                onClose={() => setDetailModalOpen(false)}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle sx={{ backgroundColor: "#1E3A8A", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Typography variant="h6" fontWeight={700}>
+                        Transaction Details: {selectedLedger?.name} ({selectedLedger?.side === "debit" ? "Debit" : "Credit"} Account)
+                    </Typography>
+                </DialogTitle>
+                <DialogContent dividers sx={{ p: 0 }}>
+                    <TableContainer sx={{ maxHeight: 400, overflowY: "auto" }}>
+                        <Table size="small" stickyHeader>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Date</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Time</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Voucher Type</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Voucher No</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Ledgers</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", pr: 2 }}>Amount</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Narration</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {modalTransactions.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} align="center" sx={{ py: 4, color: "#94a3b8" }}>
+                                            No transactions found.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    modalTransactions.map((tx, idx) => (
+                                        <TableRow key={`${tx.Trans_Id}-${idx}`} hover>
+                                            <TableCell>{dayjs(tx.Ledger_Date).format("DD-MM-YYYY")}</TableCell>
+                                            <TableCell>{formatTime(tx.Ledger_Date)}</TableCell>
+                                            <TableCell>{tx.voucher_name}</TableCell>
+                                            <TableCell>{tx.invoice_no}</TableCell>
+                                            <TableCell>{getOpposingLedgerName(tx)}</TableCell>
+                                            <TableCell align="right" sx={{ fontWeight: 600, pr: 2 }}>
+                                                {formatNum(selectedLedger?.side === "debit" ? tx.Dr_Amount : tx.Cr_Amount)}
+                                            </TableCell>
+                                            <TableCell>{tx.Narration || tx.Line_Naration || "-"}</TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                                {modalTransactions.length > 0 && (
+                                    <TableRow sx={{ backgroundColor: "#f8fafc" }}>
+                                        <TableCell colSpan={5} sx={{ fontWeight: 700 }} align="right">Total</TableCell>
+                                        <TableCell align="right" sx={{ fontWeight: 700, color: selectedLedger?.side === "debit" ? "#0f766e" : "#be123c", pr: 2 }}>
+                                            {formatNum(modalTotal)}
+                                        </TableCell>
+                                        <TableCell />
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </DialogContent>
+                <DialogActions sx={{ p: 2 }}>
+                    <Button onClick={() => setDetailModalOpen(false)} variant="contained" sx={{ backgroundColor: "#1E3A8A", "&:hover": { backgroundColor: "#162E6E" } }}>
+                        Close
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 };

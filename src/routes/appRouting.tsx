@@ -35,6 +35,7 @@ import StaffBasedCountReport from "../reports/StaffBased/staffBasedCountReport";
 import DayAbstractReport from "../reports/Abstract/DayAbstractReport";
 import StockAbstractReport from "../reports/Abstract/StockAbstractReport";
 import CashBoxReport from "../reports/Abstract/CashBoxReport";
+import PendingSaleOrder from "../reports/Sales/PendingSaleOrderReport";
 
 
 interface AppRoutingProps {
@@ -256,6 +257,19 @@ const AppRouting: React.FC<AppRoutingProps> = ({
                 fullWidth
               >
                 <SalesOrderReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/pendingsaleorder"
+          element={
+            <RequireAuth>
+              <AppLayout
+                fullWidth
+              >
+                <PendingSaleOrder />
               </AppLayout>
             </RequireAuth>
           }
