@@ -831,30 +831,40 @@ const CashBoxReport: React.FC = () => {
                                     <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Voucher No</TableCell>
                                     <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Ledgers</TableCell>
                                     <TableCell align="right" sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", pr: 2 }}>Amount</TableCell>
-                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Narration</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
                                 {modalTransactions.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} align="center" sx={{ py: 4, color: "#94a3b8" }}>
+                                        <TableCell colSpan={6} align="center" sx={{ py: 4, color: "#94a3b8" }}>
                                             No transactions found.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    modalTransactions.map((tx, idx) => (
-                                        <TableRow key={`${tx.Trans_Id}-${idx}`} hover>
-                                            <TableCell>{dayjs(tx.Ledger_Date).format("DD-MM-YYYY")}</TableCell>
-                                            <TableCell>{formatTime(tx.Ledger_Date)}</TableCell>
-                                            <TableCell>{tx.voucher_name}</TableCell>
-                                            <TableCell>{tx.invoice_no}</TableCell>
-                                            <TableCell>{getOpposingLedgerName(tx)}</TableCell>
-                                            <TableCell align="right" sx={{ fontWeight: 600, pr: 2 }}>
-                                                {formatNum(selectedLedger?.side === "debit" ? tx.Dr_Amount : tx.Cr_Amount)}
-                                            </TableCell>
-                                            <TableCell>{tx.Narration || tx.Line_Naration || "-"}</TableCell>
-                                        </TableRow>
-                                    ))
+                                    modalTransactions.map((tx, idx) => {
+                                        const narration = (tx.Narration || tx.Line_Naration || "").trim();
+                                        return (
+                                            <React.Fragment key={`${tx.Trans_Id}-${idx}`}>
+                                                <TableRow hover>
+                                                    <TableCell>{dayjs(tx.Ledger_Date).format("DD-MM-YYYY")}</TableCell>
+                                                    <TableCell>{formatTime(tx.Ledger_Date)}</TableCell>
+                                                    <TableCell>{tx.voucher_name}</TableCell>
+                                                    <TableCell>{tx.invoice_no}</TableCell>
+                                                    <TableCell>{getOpposingLedgerName(tx)}</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 600, pr: 2 }}>
+                                                        {formatNum(selectedLedger?.side === "debit" ? tx.Dr_Amount : tx.Cr_Amount)}
+                                                    </TableCell>
+                                                </TableRow>
+                                                {narration && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={6} sx={{ py: 0.5, borderTop: "none", color: "#4f46e5", fontWeight: 600, fontStyle: "italic", fontSize: "0.8rem", pl: 4 }}>
+                                                            * {narration}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </React.Fragment>
+                                        );
+                                    })
                                 )}
                                 {modalTransactions.length > 0 && (
                                     <TableRow sx={{ backgroundColor: "#f8fafc" }}>
@@ -862,7 +872,6 @@ const CashBoxReport: React.FC = () => {
                                         <TableCell align="right" sx={{ fontWeight: 700, color: selectedLedger?.side === "debit" ? "#0f766e" : "#be123c", pr: 2 }}>
                                             {formatNum(modalTotal)}
                                         </TableCell>
-                                        <TableCell />
                                     </TableRow>
                                 )}
                             </TableBody>
