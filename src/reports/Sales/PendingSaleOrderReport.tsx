@@ -281,6 +281,15 @@ const PendingSaleOrder: React.FC = () => {
 
                 const apiRows = apiRowsRaw.map(normalizeRow);
 
+                // Sort apiRows by Ledger_Date descending (Recent first)
+                apiRows.sort((a, b) => {
+                    const dateA = dayjs(a.Ledger_Date);
+                    const dateB = dayjs(b.Ledger_Date);
+                    if (!dateA.isValid()) return 1;
+                    if (!dateB.isValid()) return -1;
+                    return dateB.valueOf() - dateA.valueOf();
+                });
+
                 const cols = buildColumnsFromApi(apiRows, toggleMode);
 
                 if (toggleMode === "Expanded") {
@@ -301,6 +310,15 @@ const PendingSaleOrder: React.FC = () => {
                 } else {
 
                     const abstractData = buildAbstractData(apiRows);
+
+                    // Sort abstractData by Ledger_Date descending (Recent first)
+                    abstractData.sort((a, b) => {
+                        const dateA = dayjs(a.Ledger_Date);
+                        const dateB = dayjs(b.Ledger_Date);
+                        if (!dateA.isValid()) return 1;
+                        if (!dateB.isValid()) return -1;
+                        return dateB.valueOf() - dateA.valueOf();
+                    });
 
                     setAbstractRows(abstractData);
 

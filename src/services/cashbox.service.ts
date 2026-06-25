@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getBaseURL } from "../config/portalBaseURL";
 
 export interface CashBoxOB {
     OB_Amount: number | string;
@@ -51,7 +52,8 @@ export const cashboxService = {
             success: boolean;
             data: CashBoxReportResponse;
         }>(
-            `http://192.168.1.5:9001/api/reports/externalAPI/cashbox`,
+            // `http://192.168.1.5:9001/api/reports/externalAPI/cashbox`,
+            `${getBaseURL()}api/reports/externalAPI/cashbox`,
             { params }
         );
         return res.data.data;

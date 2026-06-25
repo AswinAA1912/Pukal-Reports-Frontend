@@ -9,13 +9,14 @@ import {
     TableHead,
     TableRow,
     Typography,
-    Button,
     CircularProgress,
     Dialog,
     DialogTitle,
     DialogContent,
-    DialogActions,
+    Button,
+    IconButton,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import dayjs from "dayjs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -33,19 +34,19 @@ interface GroupConfig {
 }
 
 const DEBIT_GROUPS: GroupConfig[] = [
-    { key: "cash_paid", label: "Cash Trf (Paid)", side: "debit", masterKey: "Cash" },
-    { key: "bank_dep", label: "Bank Dep (Contra)", side: "debit", masterKey: "Bank" },
+    { key: "cash_paid", label: "Cash Transfer (Paid)", side: "debit", masterKey: "Cash" },
+    { key: "bank_dep", label: "Bank Deposit (Contra)", side: "debit", masterKey: "Bank" },
     { key: "ledger_pay", label: "Ledger Groups (Payment)", side: "debit", masterKey: "LedgerGrp" },
-    { key: "dex_deb", label: "Direct Exp (debit)", side: "debit", masterKey: "DEX" },
-    { key: "idex_deb", label: "In-Direct Exp (debit)", side: "debit", masterKey: "IDEX" }
+    { key: "dex_deb", label: "Direct Expenses", side: "debit", masterKey: "DEX" },
+    { key: "idex_deb", label: "In-Direct Expenses", side: "debit", masterKey: "IDEX" }
 ];
 
 const CREDIT_GROUPS: GroupConfig[] = [
-    { key: "cash_rec", label: "Cash Trf (Received)", side: "credit", masterKey: "Cash" },
-    { key: "bank_rec", label: "Bank Rece (Contra)", side: "credit", masterKey: "Bank" },
+    { key: "cash_rec", label: "Cash Transfer (Received)", side: "credit", masterKey: "Cash" },
+    { key: "bank_rec", label: "Bank Received (Contra)", side: "credit", masterKey: "Bank" },
     { key: "ledger_rec", label: "Ledger Groups (Receipts)", side: "credit", masterKey: "LedgerGrp" },
-    { key: "dex_cred", label: "Direct Exp Income (Credit)", side: "credit", masterKey: "DEX" },
-    { key: "idex_cred", label: "InDirect Exp Income (Credit)", side: "credit", masterKey: "IDEX" }
+    { key: "dex_cred", label: "Direct Expenses- Income", side: "credit", masterKey: "DEX" },
+    { key: "idex_cred", label: "InDirect Expenses- Income", side: "credit", masterKey: "IDEX" }
 ];
 
 const CashBoxReport: React.FC = () => {
@@ -62,20 +63,13 @@ const CashBoxReport: React.FC = () => {
     const [reportData, setReportData] = useState<CashBoxReportResponse | null>(null);
 
     // Selected groups for multi-select filter
-    const [selectedGroups] = useState<string[]>(["All"]);
+    const [selectedGroups, setSelectedGroups] = useState<string[]>(["All"]);
 
-    // Extract all unique Group Names from datasets (commented out as chips UI is currently commented out)
-    /*
+    // Extract all unique Group Names from Cash dataset only
     const allGroupNames = useMemo(() => {
         if (!reportData) return [];
         const names = new Set<string>();
-        [
-            ...(reportData.Cash || []),
-            ...(reportData.Bank || []),
-            ...(reportData.LedgerGrp || []),
-            ...(reportData.DEX || []),
-            ...(reportData.IDEX || [])
-        ].forEach((acc) => {
+        (reportData.Cash || []).forEach((acc) => {
             if (acc.Group_Name) {
                 names.add(acc.Group_Name.trim());
             }
@@ -99,7 +93,6 @@ const CashBoxReport: React.FC = () => {
             }
         });
     };
-    */
 
     // Expansion state for each group key
     const [expanded, setExpanded] = useState<Record<string, boolean>>({
@@ -151,7 +144,7 @@ const CashBoxReport: React.FC = () => {
     // Format helpers
     const formatNum = (v: number) => {
         if (v === 0) return "-";
-        return new Intl.NumberFormat("en-IN", {
+        return "₹" + new Intl.NumberFormat("en-IN", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
         }).format(v);
@@ -172,30 +165,93 @@ const CashBoxReport: React.FC = () => {
         }));
     };
 
+    // Get selected Cash Account IDs
+    const selectedCashAccIds = useMemo(() => {
+        const isFiltered = !selectedGroups.includes("All") && selectedGroups.length > 0;
+        return new Set(
+            (reportData?.Cash || [])
+                .filter((acc) => !isFiltered || (acc.Group_Name && selectedGroups.includes(acc.Group_Name.trim())))
+                .map((acc) => acc.Acc_Id)
+        );
+    }, [reportData, selectedGroups]);
+
+    // Get selected Cash Group IDs
+    const selectedGroupIds = useMemo(() => {
+        const isFiltered = !selectedGroups.includes("All") && selectedGroups.length > 0;
+        return new Set(
+            (reportData?.Cash || [])
+                .filter((acc) => !isFiltered || (acc.Group_Name && selectedGroups.includes(acc.Group_Name.trim())))
+                .map((acc) => acc.Group_Id)
+        );
+    }, [reportData, selectedGroups]);
+
+    // Filter transactions: keep only those involving the selected Cash Group_Ids, and exclude any transaction with ID 0
+    const filteredTransactions = useMemo(() => {
+        const allTx = reportData?.Data1 || [];
+        
+        // Filter out any transaction where Credit_Ac_Id or Debit_Ac_Id is "0" or 0
+        const cleanTx = allTx.filter((tx) => {
+            const hasZeroCredit = !tx.Credit_Ac_Id || tx.Credit_Ac_Id === "0" || Number(tx.Credit_Ac_Id) === 0;
+            const hasZeroDebit = !tx.Debit_Ac_Id || tx.Debit_Ac_Id === "0" || Number(tx.Debit_Ac_Id) === 0;
+            return !hasZeroCredit && !hasZeroDebit;
+        });
+
+        const isFiltered = !selectedGroups.includes("All") && selectedGroups.length > 0;
+        if (!isFiltered) return cleanTx;
+
+        // Map Cash Acc_Id to Group_Id
+        const cashAccIdToGroupId = new Map(
+            (reportData?.Cash || []).map((acc) => [acc.Acc_Id, acc.Group_Id])
+        );
+
+        return cleanTx.filter((tx) => {
+            const creditGroupId = tx.Credit_Ac_Id ? cashAccIdToGroupId.get(tx.Credit_Ac_Id) : null;
+            const debitGroupId = tx.Debit_Ac_Id ? cashAccIdToGroupId.get(tx.Debit_Ac_Id) : null;
+            return (
+                (creditGroupId && selectedGroupIds.has(creditGroupId)) ||
+                (debitGroupId && selectedGroupIds.has(debitGroupId))
+            );
+        });
+    }, [reportData, selectedGroupIds, selectedGroups]);
+
+    // Compute matching opposing account IDs from transactions involving the selected Cash accounts
+    const matchingOpposingAccIds = useMemo(() => {
+        const opposing = new Set<string>();
+        filteredTransactions.forEach((tx) => {
+            const isDebitCash = tx.Debit_Ac_Id && selectedCashAccIds.has(tx.Debit_Ac_Id);
+            const isCreditCash = tx.Credit_Ac_Id && selectedCashAccIds.has(tx.Credit_Ac_Id);
+
+            if (isDebitCash && tx.Credit_Ac_Id) {
+                opposing.add(tx.Credit_Ac_Id);
+            }
+            if (isCreditCash && tx.Debit_Ac_Id) {
+                opposing.add(tx.Debit_Ac_Id);
+            }
+        });
+        return opposing;
+    }, [filteredTransactions, selectedCashAccIds]);
+
     // Calculate groups and balances
     const parsedData = useMemo(() => {
         const obList = reportData?.OB || [];
-        const transactions = reportData?.Data1 || [];
 
-        // Check if filtering is active
         const isFiltered = !selectedGroups.includes("All") && selectedGroups.length > 0;
 
         const cashList = (reportData?.Cash || []).filter(
-            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+            (acc) => selectedCashAccIds.has(acc.Acc_Id) || matchingOpposingAccIds.has(acc.Acc_Id)
         );
         const bankList = (reportData?.Bank || []).filter(
-            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+            (acc) => matchingOpposingAccIds.has(acc.Acc_Id)
         );
         const ledgerGrpList = (reportData?.LedgerGrp || []).filter(
-            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+            (acc) => matchingOpposingAccIds.has(acc.Acc_Id)
         );
         const dexList = (reportData?.DEX || []).filter(
-            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+            (acc) => matchingOpposingAccIds.has(acc.Acc_Id)
         );
         const idexList = (reportData?.IDEX || []).filter(
-            (acc) => !isFiltered || selectedGroups.includes(acc.Group_Name?.trim())
+            (acc) => matchingOpposingAccIds.has(acc.Acc_Id)
         );
-
 
         const masterMap = {
             Cash: cashList,
@@ -205,13 +261,43 @@ const CashBoxReport: React.FC = () => {
             IDEX: idexList,
         };
 
-        const opening = obList.length > 0 ? Number(obList[0].OB_Amount) || 0 : 0;
+        // Sum OB_Amount robustly
+        let opening = 0;
+        if (obList.length > 0) {
+            if (isFiltered) {
+                let hasFilteredOB = false;
+                let sum = 0;
+                obList.forEach((obItem: any) => {
+                    const accId = obItem.Acc_Id;
+                    const groupId = obItem.Group_Id;
+                    if (accId) {
+                        if (selectedCashAccIds.has(accId)) {
+                            sum += Number(obItem.OB_Amount) || 0;
+                            hasFilteredOB = true;
+                        }
+                    } else if (groupId) {
+                        if (selectedGroupIds.has(groupId)) {
+                            sum += Number(obItem.OB_Amount) || 0;
+                            hasFilteredOB = true;
+                        }
+                    }
+                });
+
+                if (hasFilteredOB) {
+                    opening = sum;
+                } else {
+                    opening = Number(obList[0].OB_Amount) || 0;
+                }
+            } else {
+                opening = obList.reduce((sum, obItem) => sum + (Number(obItem.OB_Amount) || 0), 0);
+            }
+        }
 
         const getGroupData = (config: GroupConfig) => {
             const masters = masterMap[config.masterKey];
             const masterIds = new Set(masters.map((m) => m.Acc_Id));
 
-            const matchedTransactions = transactions.filter((tx) => {
+            const matchedTransactions = filteredTransactions.filter((tx) => {
                 if (config.side === "debit") {
                     return tx.Debit_Ac_Id && masterIds.has(tx.Debit_Ac_Id);
                 } else {
@@ -264,7 +350,7 @@ const CashBoxReport: React.FC = () => {
             opening,
             closing,
         };
-    }, [reportData]);
+    }, [reportData, selectedCashAccIds, selectedGroupIds, filteredTransactions, matchingOpposingAccIds, selectedGroups]);
 
     // Handle opening detail modal
     const handleLedgerClick = (accId: string, side: "debit" | "credit") => {
@@ -284,16 +370,16 @@ const CashBoxReport: React.FC = () => {
 
     // Filter transactions for clicked sub-ledger inside modal
     const modalTransactions = useMemo(() => {
-        if (!selectedLedger || !reportData?.Data1) return [];
+        if (!selectedLedger || !filteredTransactions) return [];
         const { accId, side } = selectedLedger;
-        return reportData.Data1.filter((tx) => {
+        return filteredTransactions.filter((tx) => {
             if (side === "debit") {
                 return tx.Debit_Ac_Id === accId;
             } else {
                 return tx.Credit_Ac_Id === accId;
             }
         });
-    }, [selectedLedger, reportData]);
+    }, [selectedLedger, filteredTransactions]);
 
     // Find opposing ledger name
     const getOpposingLedgerName = (tx: CashBoxTransaction) => {
@@ -361,9 +447,9 @@ const CashBoxReport: React.FC = () => {
                     const rightSub = rightGroup.subLedgers[i];
 
                     excelData.push([
-                        leftSub ? `  ${leftSub.name}` : "",
+                        leftSub ? `  ${i + 1}. ${leftSub.name}` : "",
                         leftSub ? leftSub.amount : "",
-                        rightSub ? `  ${rightSub.name}` : "",
+                        rightSub ? `  ${i + 1}. ${rightSub.name}` : "",
                         rightSub ? rightSub.amount : "",
                     ]);
                 }
@@ -424,9 +510,9 @@ const CashBoxReport: React.FC = () => {
                     const rightSub = rightGroup.subLedgers[i];
 
                     pdfBody.push([
-                        leftSub ? `  ${leftSub.name}` : "",
+                        leftSub ? `  ${i + 1}. ${leftSub.name}` : "",
                         leftSub ? formatNum(leftSub.amount) : "",
-                        rightSub ? `  ${rightSub.name}` : "",
+                        rightSub ? `  ${i + 1}. ${rightSub.name}` : "",
                         rightSub ? formatNum(rightSub.amount) : "",
                     ]);
                 }
@@ -473,7 +559,7 @@ const CashBoxReport: React.FC = () => {
 
             <Box px={2} pb={4} pt={2}>
                 {/* Chip Filters for Groups */}
-                {/* {!loading && reportData && (
+                {!loading && reportData && (
                     <Box mb={2} display="flex" flexWrap="wrap" gap={1}>
                         {["All", ...allGroupNames].map((name) => {
                             const isSelected = selectedGroups.includes(name);
@@ -503,7 +589,7 @@ const CashBoxReport: React.FC = () => {
                             );
                         })}
                     </Box>
-                )} */}
+                )}
 
                 {loading ? (
                     <Box display="flex" justifyContent="center" py={10}>
@@ -524,10 +610,10 @@ const CashBoxReport: React.FC = () => {
                             }}
                         >
                             <Typography variant="body1" fontWeight={700} sx={{ letterSpacing: 0.5, color: "#1e293b" }}>
-                                CASH BOX TRANSACTION -{" "}
+                                CASH BOX TRANSACTION  {" "}
                                 {filters.Date.from === filters.Date.to
                                     ? dayjs(filters.Date.from).format("DD-MM-YYYY")
-                                    : `${dayjs(filters.Date.from).format("DD-MM-YYYY")} TO ${dayjs(filters.Date.to).format("DD-MM-YYYY")}`}
+                                    : `${dayjs(filters.Date.from).format("DD-MM-YYYY")} - ${dayjs(filters.Date.to).format("DD-MM-YYYY")}`}
                             </Typography>
                         </Box>
 
@@ -555,10 +641,10 @@ const CashBoxReport: React.FC = () => {
                                     <TableRow>
                                         <TableCell sx={{ border: "1px solid #cbd5e1" }} />
                                         <TableCell sx={{ border: "1px solid #cbd5e1" }} />
-                                        <TableCell sx={{ py: 1, backgroundColor: "#FFE2C6", fontWeight: 700, border: "1px solid #cbd5e1" }}>
+                                        <TableCell sx={{ py: 1, backgroundColor: "#eeeeeeff", fontWeight: 700, border: "1px solid #cbd5e1" }}>
                                             Opening Balance
                                         </TableCell>
-                                        <TableCell align="right" sx={{ py: 1, backgroundColor: "#FFE2C6", fontWeight: 700, border: "1px solid #cbd5e1", color: "#b45309" }}>
+                                        <TableCell align="right" sx={{ py: 1, backgroundColor: "#eeeeeeff", fontWeight: 700, border: "1px solid #cbd5e1", color: "#b45309" }}>
                                             {formatNum(parsedData.opening)}
                                         </TableCell>
                                     </TableRow>
@@ -592,9 +678,6 @@ const CashBoxReport: React.FC = () => {
                                                         }}
                                                     >
                                                         <Box display="flex" alignItems="center" gap={1}>
-                                                            <span style={{ fontSize: "1.1rem", fontWeight: "bold", width: 14, display: "inline-block" }}>
-                                                                {expanded[leftGroup.key] ? "−" : "+"}
-                                                            </span>
                                                             {leftGroup.label}
                                                         </Box>
                                                     </TableCell>
@@ -615,9 +698,7 @@ const CashBoxReport: React.FC = () => {
                                                         }}
                                                     >
                                                         <Box display="flex" alignItems="center" gap={1}>
-                                                            <span style={{ fontSize: "1.1rem", fontWeight: "bold", width: 14, display: "inline-block" }}>
-                                                                {expanded[rightGroup.key] ? "−" : "+"}
-                                                            </span>
+
                                                             {rightGroup.label}
                                                         </Box>
                                                     </TableCell>
@@ -643,13 +724,12 @@ const CashBoxReport: React.FC = () => {
                                                                                 pl: 5,
                                                                                 border: "1px solid #cbd5e1",
                                                                                 cursor: "pointer",
-                                                                                color: "#1E3A8A",
+                                                                                color: "#000000",
                                                                                 fontWeight: 600,
-                                                                                textDecoration: "underline",
-                                                                                "&:hover": { color: "#2563eb" }
+                                                                                "&:hover": { color: "#000000" }
                                                                             }}
                                                                         >
-                                                                            {leftSub.name}
+                                                                            {i + 1}. {leftSub.name}
                                                                         </TableCell>
                                                                         <TableCell align="right" sx={{ border: "1px solid #cbd5e1", fontWeight: 600 }}>
                                                                             {formatNum(leftSub.amount)}
@@ -671,13 +751,12 @@ const CashBoxReport: React.FC = () => {
                                                                                 pl: 5,
                                                                                 border: "1px solid #cbd5e1",
                                                                                 cursor: "pointer",
-                                                                                color: "#1E3A8A",
+                                                                                color: "#000000",
                                                                                 fontWeight: 600,
-                                                                                textDecoration: "underline",
-                                                                                "&:hover": { color: "#2563eb" }
+                                                                                "&:hover": { color: "#000000" }
                                                                             }}
                                                                         >
-                                                                            {rightSub.name}
+                                                                            {i + 1}. {rightSub.name}
                                                                         </TableCell>
                                                                         <TableCell align="right" sx={{ border: "1px solid #cbd5e1", fontWeight: 600 }}>
                                                                             {formatNum(rightSub.amount)}
@@ -700,10 +779,10 @@ const CashBoxReport: React.FC = () => {
                                     <TableRow>
                                         <TableCell sx={{ border: "1px solid #cbd5e1" }} />
                                         <TableCell sx={{ border: "1px solid #cbd5e1" }} />
-                                        <TableCell sx={{ py: 1, backgroundColor: "#FFE2C6", fontWeight: 700, border: "1px solid #cbd5e1" }}>
+                                        <TableCell sx={{ py: 1, backgroundColor: "#eeeeeeff", fontWeight: 700, border: "1px solid #cbd5e1" }}>
                                             Closing Balance
                                         </TableCell>
-                                        <TableCell align="right" sx={{ py: 1, backgroundColor: "#FFE2C6", fontWeight: 700, border: "1px solid #cbd5e1", color: "#15803d" }}>
+                                        <TableCell align="right" sx={{ py: 1, backgroundColor: "#eeeeeeff", fontWeight: 700, border: "1px solid #cbd5e1", color: "#15803d" }}>
                                             {formatNum(parsedData.closing)}
                                         </TableCell>
                                     </TableRow>
@@ -725,6 +804,21 @@ const CashBoxReport: React.FC = () => {
                     <Typography variant="h6" fontWeight={700}>
                         Transaction Details: {selectedLedger?.name} ({selectedLedger?.side === "debit" ? "Debit" : "Credit"} Account)
                     </Typography>
+                    <IconButton
+                        onClick={() => setDetailModalOpen(false)}
+                        sx={{
+                            color: "#fff",
+                            borderRadius: "4px",
+                            border: "1px solid #fff",
+                            padding: "4px",
+                            "&:hover": {
+                                backgroundColor: "#ef4444",
+                                color: "#fff",
+                            }
+                        }}
+                    >
+                        <CloseIcon fontSize="small" />
+                    </IconButton>
                 </DialogTitle>
                 <DialogContent dividers sx={{ p: 0 }}>
                     <TableContainer sx={{ maxHeight: 400, overflowY: "auto" }}>
@@ -775,11 +869,7 @@ const CashBoxReport: React.FC = () => {
                         </Table>
                     </TableContainer>
                 </DialogContent>
-                <DialogActions sx={{ p: 2 }}>
-                    <Button onClick={() => setDetailModalOpen(false)} variant="contained" sx={{ backgroundColor: "#1E3A8A", "&:hover": { backgroundColor: "#162E6E" } }}>
-                        Close
-                    </Button>
-                </DialogActions>
+
             </Dialog>
         </Box>
     );
