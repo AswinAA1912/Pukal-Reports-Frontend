@@ -9,17 +9,14 @@ import {
     TableHead,
     TableRow,
     Typography,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    IconButton,
     TextField,
     Chip,
     InputAdornment,
     Button
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
 import SearchIcon from "@mui/icons-material/Search";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import dayjs from "dayjs";
 import PageHeader from "../../Layout/PageHeader";
 import * as XLSX from "xlsx";
@@ -184,7 +181,7 @@ const getStockDataForGodown = (godownName: string): StockItem[] => {
         const others2 = Math.round(item.stockOutSplits.others2 * mult);
         const others3 = Math.round(item.stockOutSplits.others3 * mult);
         const scaledStockIn = Math.round(item.stockIn * mult);
-        
+
         // Dynamic stockIn splits (Trips)
         const trip1 = Math.round(scaledStockIn * 0.5);
         const trip2 = Math.round(scaledStockIn * 0.3);
@@ -215,9 +212,7 @@ const InStockReport: React.FC = () => {
     const [inwardMode, setInwardMode] = useState(false);
     const [outwardMode, setOutwardMode] = useState(false);
 
-    // Modal details for Stock Out splits
-    const [modalOpen, setModalOpen] = useState(false);
-    const [activeItem, setActiveItem] = useState<StockItem | null>(null);
+
 
     // Reset page to 1 when filters change
     useEffect(() => {
@@ -276,10 +271,7 @@ const InStockReport: React.FC = () => {
         return foundSNo !== undefined ? GROUP_HEADERS[foundSNo] : null;
     };
 
-    const handleStockOutClick = (item: StockItem) => {
-        setActiveItem(item);
-        setModalOpen(true);
-    };
+
 
     // Calculate aggregated overall summary of godowns
     const godownSummaryData = useMemo(() => {
@@ -299,16 +291,16 @@ const InStockReport: React.FC = () => {
                 totalReturns += item.returns;
             });
 
-            const totalClosing = totalOpening + totalStockIn - totalStockOut - totalDelivery + totalReturns;
+            const calculatedStockIn = totalStockIn + totalReturns;
+            const calculatedStockOut = totalStockOut + totalDelivery;
+            const totalClosing = totalOpening + calculatedStockIn - calculatedStockOut;
 
             return {
                 sNo: idx + 1,
                 name,
                 openingStock: totalOpening,
-                stockIn: totalStockIn,
-                stockOut: totalStockOut,
-                delivery: totalDelivery,
-                returns: totalReturns,
+                stockIn: calculatedStockIn,
+                stockOut: calculatedStockOut,
                 closingStock: totalClosing
             };
         });
@@ -319,20 +311,16 @@ const InStockReport: React.FC = () => {
         let opening = 0;
         let stockIn = 0;
         let stockOut = 0;
-        let delivery = 0;
-        let returns = 0;
         let closing = 0;
 
         godownSummaryData.forEach(g => {
             opening += g.openingStock;
             stockIn += g.stockIn;
             stockOut += g.stockOut;
-            delivery += g.delivery;
-            returns += g.returns;
             closing += g.closingStock;
         });
 
-        return { opening, stockIn, stockOut, delivery, returns, closing };
+        return { opening, stockIn, stockOut, closing };
     }, [godownSummaryData]);
 
     // Calculate totals for the selected godown's filtered data
@@ -430,8 +418,8 @@ const InStockReport: React.FC = () => {
                             item.brand,
                             item.productName,
                             item.openingStock,
-                            item.stockIn,
-                            getStockOutTotal(item),
+                            item.stockIn + item.returns,
+                            getStockOutTotal(item) + item.delivery,
                             getClosingStock(item)
                         ]);
                     });
@@ -439,7 +427,7 @@ const InStockReport: React.FC = () => {
             } else {
                 excelData.push([`GODOWNS OVERALL SUMMARY`]);
                 excelData.push([]);
-                excelData.push(["S.No", "Godown Name", "Opening Stock", "Stock In", "Stock Out", "Delivery", "Return", "Closing Stock"]);
+                excelData.push(["S.No", "Godown Name", "Opening Stock", "Stock In", "Stock Out", "Closing Stock"]);
 
                 godownSummaryData.forEach((item) => {
                     excelData.push([
@@ -448,11 +436,19 @@ const InStockReport: React.FC = () => {
                         item.openingStock,
                         item.stockIn,
                         item.stockOut,
-                        item.delivery,
-                        item.returns,
                         item.closingStock
                     ]);
                 });
+
+                // Add grand total row
+                excelData.push([
+                    "Total",
+                    "",
+                    grandTotals.opening,
+                    grandTotals.stockIn,
+                    grandTotals.stockOut,
+                    grandTotals.closing
+                ]);
             }
 
             const ws = XLSX.utils.aoa_to_sheet(excelData);
@@ -518,14 +514,14 @@ const InStockReport: React.FC = () => {
                             item.brand,
                             item.productName,
                             item.openingStock,
-                            item.stockIn,
-                            getStockOutTotal(item),
+                            item.stockIn + item.returns,
+                            getStockOutTotal(item) + item.delivery,
                             getClosingStock(item)
                         ]);
                     });
                 }
             } else {
-                headers = [["S.No", "Godown Name", "Opening", "In", "Out", "Del", "Ret", "Closing"]];
+                headers = [["S.No", "Godown Name", "Opening Stock", "Stock In", "Stock Out", "Closing Stock"]];
                 godownSummaryData.forEach((item) => {
                     body.push([
                         item.sNo,
@@ -533,11 +529,19 @@ const InStockReport: React.FC = () => {
                         item.openingStock,
                         item.stockIn,
                         item.stockOut,
-                        item.delivery,
-                        item.returns,
                         item.closingStock
                     ]);
                 });
+
+                // Add grand total row
+                body.push([
+                    "",
+                    "GRAND TOTAL",
+                    grandTotals.opening,
+                    grandTotals.stockIn,
+                    grandTotals.stockOut,
+                    grandTotals.closing
+                ]);
             }
 
             autoTable(doc, {
@@ -580,7 +584,7 @@ const InStockReport: React.FC = () => {
                         </Paper>
                         <Paper elevation={1} sx={{ flex: 1, minWidth: 200, p: 2.5, borderRadius: 2, borderLeft: "4px solid #ef4444", bgcolor: "#fff" }}>
                             <Typography variant="caption" fontWeight={600} color="textSecondary" sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>Total Outward (Out + Del)</Typography>
-                            <Typography variant="h4" fontWeight={700} sx={{ mt: 1, color: "#1e293b" }}>{(grandTotals.stockOut + grandTotals.delivery).toLocaleString()}</Typography>
+                            <Typography variant="h4" fontWeight={700} sx={{ mt: 1, color: "#1e293b" }}>{grandTotals.stockOut.toLocaleString()}</Typography>
                         </Paper>
                     </Box>
 
@@ -615,13 +619,11 @@ const InStockReport: React.FC = () => {
                             <TableHead>
                                 <TableRow>
                                     <TableCell align="center" sx={{ width: "8%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>S.NO</TableCell>
-                                    <TableCell sx={{ width: "32%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>GODOWN NAME</TableCell>
-                                    <TableCell align="right" sx={{ width: "12%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OPENING STOCK</TableCell>
-                                    <TableCell align="right" sx={{ width: "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK IN</TableCell>
-                                    <TableCell align="right" sx={{ width: "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK OUT</TableCell>
-                                    <TableCell align="right" sx={{ width: "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>DELIVERY</TableCell>
-                                    <TableCell align="right" sx={{ width: "8%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>RETURN</TableCell>
-                                    <TableCell align="right" sx={{ width: "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5 }}>CLOSING STOCK</TableCell>
+                                    <TableCell sx={{ width: "38%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>GODOWN NAME</TableCell>
+                                    <TableCell align="right" sx={{ width: "14%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OPENING STOCK</TableCell>
+                                    <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK IN</TableCell>
+                                    <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK OUT</TableCell>
+                                    <TableCell align="right" sx={{ width: "14%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5 }}>CLOSING STOCK</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
@@ -637,7 +639,7 @@ const InStockReport: React.FC = () => {
                                                 fontWeight: 700,
                                                 color: "#2563eb",
                                                 cursor: "pointer",
-                                                textDecoration: "underline",
+                                                textDecoration: "none",
                                                 "&:hover": { color: "#1d4ed8" }
                                             }}
                                         >
@@ -651,12 +653,6 @@ const InStockReport: React.FC = () => {
                                         </TableCell>
                                         <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#ef4444" }}>
                                             {item.stockOut.toLocaleString()}
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                            {item.delivery.toLocaleString()}
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                            {item.returns.toLocaleString()}
                                         </TableCell>
                                         <TableCell align="right" sx={{ fontWeight: 700, pr: 2, backgroundColor: "#dcfce7", color: "#15803d" }}>
                                             {item.closingStock.toLocaleString()}
@@ -675,12 +671,6 @@ const InStockReport: React.FC = () => {
                                     </TableCell>
                                     <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
                                         {grandTotals.stockOut.toLocaleString()}
-                                    </TableCell>
-                                    <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                        {grandTotals.delivery.toLocaleString()}
-                                    </TableCell>
-                                    <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                        {grandTotals.returns.toLocaleString()}
                                     </TableCell>
                                     <TableCell align="right" sx={{ fontWeight: 800, pr: 2, color: "#15803d" }}>
                                         {grandTotals.closing.toLocaleString()}
@@ -782,7 +772,7 @@ const InStockReport: React.FC = () => {
                                     <TableCell sx={{ width: (inwardMode || outwardMode) ? "8%" : "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>NAME</TableCell>
                                     <TableCell sx={{ width: (inwardMode || outwardMode) ? "25%" : "32%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>PRODUCT NAME</TableCell>
                                     <TableCell align="right" sx={{ width: (inwardMode || outwardMode) ? "10%" : "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OPENING STOCK</TableCell>
-                                    
+
                                     {/* Stock In Header - Clicking toggles inwardMode. Shown only in Normal Mode */}
                                     {!inwardMode && !outwardMode && (
                                         <TableCell
@@ -799,14 +789,16 @@ const InStockReport: React.FC = () => {
                                                 borderRight: "1px solid #cbd5e1",
                                                 cursor: "pointer",
                                                 userSelect: "none",
-                                                textDecoration: "underline",
+                                                textDecoration: "none",
                                                 transition: "background-color 0.2s",
                                                 "&:hover": {
                                                     backgroundColor: "#1e40af"
                                                 }
                                             }}
                                         >
-                                            STOCK IN ▼
+                                            <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
+                                                STOCK IN <KeyboardArrowDownIcon fontSize="small" />
+                                            </Box>
                                         </TableCell>
                                     )}
 
@@ -828,13 +820,15 @@ const InStockReport: React.FC = () => {
                                                     py: 1.5,
                                                     cursor: "pointer",
                                                     userSelect: "none",
-                                                    textDecoration: "underline",
+                                                    textDecoration: "none",
                                                     "&:hover": {
                                                         backgroundColor: "#1f2937"
                                                     }
                                                 }}
                                             >
-                                                TOTAL INWARD ▲
+                                                <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
+                                                    TOTAL INWARD <KeyboardArrowUpIcon fontSize="small" />
+                                                </Box>
                                             </TableCell>
                                         </>
                                     )}
@@ -855,14 +849,16 @@ const InStockReport: React.FC = () => {
                                                 borderRight: "1px solid #cbd5e1",
                                                 cursor: "pointer",
                                                 userSelect: "none",
-                                                textDecoration: "underline",
+                                                textDecoration: "none",
                                                 transition: "background-color 0.2s",
                                                 "&:hover": {
                                                     backgroundColor: "#1e40af"
                                                 }
                                             }}
                                         >
-                                            STOCK OUTWARDS ▼
+                                            <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
+                                                STOCK OUTWARDS <KeyboardArrowDownIcon fontSize="small" />
+                                            </Box>
                                         </TableCell>
                                     )}
 
@@ -884,13 +880,15 @@ const InStockReport: React.FC = () => {
                                                     py: 1.5,
                                                     cursor: "pointer",
                                                     userSelect: "none",
-                                                    textDecoration: "underline",
+                                                    textDecoration: "none",
                                                     "&:hover": {
                                                         backgroundColor: "#1f2937"
                                                     }
                                                 }}
                                             >
-                                                TOTAL OUTWARD ▲
+                                                <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
+                                                    TOTAL OUTWARD <KeyboardArrowUpIcon fontSize="small" />
+                                                </Box>
                                             </TableCell>
                                         </>
                                     )}
@@ -956,8 +954,8 @@ const InStockReport: React.FC = () => {
 
                                                     {/* Inward Mode or Normal Mode: Render Stock In */}
                                                     {!inwardMode && !outwardMode && (
-                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: item.stockIn > 0 ? "#2563eb" : "#475569" }}>
-                                                            {item.stockIn || "-"}
+                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: (item.stockIn + item.returns) > 0 ? "#2563eb" : "#475569" }}>
+                                                            {(item.stockIn + item.returns) || "-"}
                                                         </TableCell>
                                                     )}
 
@@ -986,20 +984,14 @@ const InStockReport: React.FC = () => {
                                                     {!inwardMode && !outwardMode && (
                                                         <TableCell
                                                             align="right"
-                                                            onClick={() => stockOut > 0 && handleStockOutClick(item)}
                                                             sx={{
                                                                 borderRight: "1px solid #e2e8f0",
-                                                                fontWeight: 700,
+                                                                fontWeight: 600,
                                                                 pr: 2,
-                                                                color: stockOut > 0 ? "#ef4444" : "#475569",
-                                                                cursor: stockOut > 0 ? "pointer" : "default",
-                                                                textDecoration: stockOut > 0 ? "underline" : "none",
-                                                                "&:hover": {
-                                                                    color: stockOut > 0 ? "#dc2626" : "#475569"
-                                                                }
+                                                                color: (stockOut + item.delivery) > 0 ? "#ef4444" : "#475569"
                                                             }}
                                                         >
-                                                            {stockOut || "-"}
+                                                            {(stockOut + item.delivery) || "-"}
                                                         </TableCell>
                                                     )}
 
@@ -1056,7 +1048,7 @@ const InStockReport: React.FC = () => {
                                         {/* Normal Mode: Stock In */}
                                         {!inwardMode && !outwardMode && (
                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                                {detailedTotals.stockIn.toLocaleString()}
+                                                {detailedTotals.totalInward.toLocaleString()}
                                             </TableCell>
                                         )}
 
@@ -1084,7 +1076,7 @@ const InStockReport: React.FC = () => {
                                         {/* Normal Mode: Stock Outwards */}
                                         {!inwardMode && !outwardMode && (
                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                                {detailedTotals.stockOutTotal.toLocaleString()}
+                                                {detailedTotals.totalOutward.toLocaleString()}
                                             </TableCell>
                                         )}
 
@@ -1131,72 +1123,6 @@ const InStockReport: React.FC = () => {
                 </>
             )}
 
-            {/* Split Details Dialog */}
-            <Dialog
-                open={modalOpen}
-                onClose={() => setModalOpen(false)}
-                maxWidth="xs"
-                fullWidth
-                PaperProps={{
-                    sx: { borderRadius: 3 }
-                }}
-            >
-                <DialogTitle sx={{ backgroundColor: "#1E3A8A", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", py: 2 }}>
-                    <Typography variant="h6" fontWeight={700} sx={{ fontSize: "1rem" }}>
-                        Stock Out Splits: {activeItem?.productName}
-                    </Typography>
-                    <IconButton
-                        onClick={() => setModalOpen(false)}
-                        sx={{
-                            color: "#fff",
-                            p: 0.5,
-                            "&:hover": { backgroundColor: "rgba(255,255,255,0.1)" }
-                        }}
-                    >
-                        <CloseIcon fontSize="small" />
-                    </IconButton>
-                </DialogTitle>
-                <DialogContent sx={{ p: 2, bgcolor: "#f8fafc" }}>
-                    {activeItem && (
-                        <TableContainer component={Paper} elevation={1} sx={{ borderRadius: 1.5, border: "1px solid #cbd5e1" }}>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Stage</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", pr: 2 }}>Quantity</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    <TableRow hover>
-                                        <TableCell sx={{ fontWeight: 600 }}>Others 1</TableCell>
-                                        <TableCell align="right" sx={{ pr: 2, fontWeight: 700 }}>
-                                            {activeItem.stockOutSplits.others1 || "-"}
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow hover>
-                                        <TableCell sx={{ fontWeight: 600 }}>Others 2</TableCell>
-                                        <TableCell align="right" sx={{ pr: 2, fontWeight: 700 }}>
-                                            {activeItem.stockOutSplits.others2 || "-"}
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow hover>
-                                        <TableCell sx={{ fontWeight: 600 }}>Others 3</TableCell>
-                                        <TableCell align="right" sx={{ pr: 2, fontWeight: 700 }}>
-                                            {activeItem.stockOutSplits.others3 || "-"}
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow sx={{ backgroundColor: "#f1f5f9" }}>
-                                        <TableCell sx={{ fontWeight: 800 }}>Total Stock Out</TableCell>
-                                        <TableCell align="right" sx={{ pr: 2, fontWeight: 800, color: "#ef4444" }}>
-                                            {getStockOutTotal(activeItem)}
-                                        </TableCell>
-                                    </TableRow>
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    )}
-                </DialogContent>
-            </Dialog>
         </Box>
     );
 };

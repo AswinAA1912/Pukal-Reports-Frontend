@@ -11,8 +11,8 @@ import {
     Paper,
     CircularProgress
 } from "@mui/material";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import dayjs from "dayjs";
 import AppLayout, { useToggleMode } from "../../Layout/appLayout";
 import PageHeader from "../../Layout/PageHeader";
@@ -722,7 +722,7 @@ const StockInHandReport: React.FC = () => {
                                     cursor: "pointer",
                                     color: "#1D4ED8",
                                     fontWeight: 600,
-                                    "&:hover": { textDecoration: "underline" }
+                                    "&:hover": { textDecoration: "none" }
                                 }}
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -771,7 +771,7 @@ const StockInHandReport: React.FC = () => {
                                     setExpanded((p) => ({ ...p, [id]: !p[id] }))
                                 }
                             >
-                                {open ? <ExpandMoreIcon /> : <ChevronRightIcon />}
+                                {open ? <KeyboardArrowDownIcon /> : <KeyboardArrowRightIcon />}
                             </IconButton>
                         </TableCell>
 
