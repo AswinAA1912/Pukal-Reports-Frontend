@@ -65,20 +65,13 @@ const CashBoxReport: React.FC = () => {
     // Selected groups for multi-select filter
     const [selectedGroups, setSelectedGroups] = useState<string[]>(["All"]);
 
-    // Extract all unique Group Names from Cash dataset only, excluding non-cash accounts
+    // Extract all unique Group Names from Cash dataset only
     const allGroupNames = useMemo(() => {
         if (!reportData) return [];
 
-        const nonCashAccIds = new Set([
-            ...(reportData?.Bank || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.LedgerGrp || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.DEX || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.IDEX || []).map((acc) => acc.Acc_Id),
-        ]);
-
         const names = new Set<string>();
         (reportData.Cash || []).forEach((acc) => {
-            if (acc.Group_Name && !nonCashAccIds.has(acc.Acc_Id)) {
+            if (acc.Group_Name) {
                 names.add(acc.Group_Name.trim());
             }
         });
@@ -176,34 +169,20 @@ const CashBoxReport: React.FC = () => {
     // Get selected Cash Account IDs
     const selectedCashAccIds = useMemo(() => {
         const isFiltered = !selectedGroups.includes("All") && selectedGroups.length > 0;
-        const nonCashAccIds = new Set([
-            ...(reportData?.Bank || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.LedgerGrp || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.DEX || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.IDEX || []).map((acc) => acc.Acc_Id),
-        ]);
         return new Set(
             (reportData?.Cash || [])
-                .filter((acc) => !nonCashAccIds.has(acc.Acc_Id))
                 .filter((acc) => !isFiltered || (acc.Group_Name && selectedGroups.includes(acc.Group_Name.trim())))
-                .map((acc) => acc.Acc_Id)
+                .map((acc) => String(acc.Acc_Id))
         );
     }, [reportData, selectedGroups]);
 
     // Get selected Cash Group IDs
     const selectedGroupIds = useMemo(() => {
         const isFiltered = !selectedGroups.includes("All") && selectedGroups.length > 0;
-        const nonCashAccIds = new Set([
-            ...(reportData?.Bank || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.LedgerGrp || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.DEX || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.IDEX || []).map((acc) => acc.Acc_Id),
-        ]);
         return new Set(
             (reportData?.Cash || [])
-                .filter((acc) => !nonCashAccIds.has(acc.Acc_Id))
                 .filter((acc) => !isFiltered || (acc.Group_Name && selectedGroups.includes(acc.Group_Name.trim())))
-                .map((acc) => acc.Group_Id)
+                .map((acc) => String(acc.Group_Id))
         );
     }, [reportData, selectedGroups]);
 
@@ -211,28 +190,19 @@ const CashBoxReport: React.FC = () => {
     const filteredTransactions = useMemo(() => {
         const allTx = reportData?.Data1 || [];
 
-        const nonCashAccIds = new Set([
-            ...(reportData?.Bank || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.LedgerGrp || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.DEX || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.IDEX || []).map((acc) => acc.Acc_Id),
-        ]);
-
-        // Map all Cash Acc_Ids to a Set for O(1) lookup, excluding any that are in the other datasets
+        // Map all Cash Acc_Ids to a Set for O(1) lookup
         const cashAccIds = new Set(
-            (reportData?.Cash || [])
-                .filter((acc) => !nonCashAccIds.has(acc.Acc_Id))
-                .map((acc) => acc.Acc_Id)
+            (reportData?.Cash || []).map((acc) => String(acc.Acc_Id))
         );
 
         // Filter out any transaction where Credit_Ac_Id or Debit_Ac_Id is "0" or 0,
         // unless the opposing side is a valid Cash account, and ensure at least one side is a Cash account
         const cleanTx = allTx.filter((tx) => {
-            const hasZeroCredit = !tx.Credit_Ac_Id || tx.Credit_Ac_Id === "0" || Number(tx.Credit_Ac_Id) === 0;
-            const hasZeroDebit = !tx.Debit_Ac_Id || tx.Debit_Ac_Id === "0" || Number(tx.Debit_Ac_Id) === 0;
+            const hasZeroCredit = !tx.Credit_Ac_Id || String(tx.Credit_Ac_Id) === "0";
+            const hasZeroDebit = !tx.Debit_Ac_Id || String(tx.Debit_Ac_Id) === "0";
 
-            const isCreditCash = tx.Credit_Ac_Id && cashAccIds.has(tx.Credit_Ac_Id);
-            const isDebitCash = tx.Debit_Ac_Id && cashAccIds.has(tx.Debit_Ac_Id);
+            const isCreditCash = tx.Credit_Ac_Id && cashAccIds.has(String(tx.Credit_Ac_Id));
+            const isDebitCash = tx.Debit_Ac_Id && cashAccIds.has(String(tx.Debit_Ac_Id));
 
             // Allow if Credit_ID is 0 but Debit_Id is a valid Cash account ID
             if (hasZeroCredit && !hasZeroDebit && isDebitCash) {
@@ -254,12 +224,12 @@ const CashBoxReport: React.FC = () => {
 
         // Map Cash Acc_Id to Group_Id
         const cashAccIdToGroupId = new Map(
-            (reportData?.Cash || []).map((acc) => [acc.Acc_Id, acc.Group_Id])
+            (reportData?.Cash || []).map((acc) => [String(acc.Acc_Id), String(acc.Group_Id)])
         );
 
         return cleanTx.filter((tx) => {
-            const creditGroupId = tx.Credit_Ac_Id ? cashAccIdToGroupId.get(tx.Credit_Ac_Id) : null;
-            const debitGroupId = tx.Debit_Ac_Id ? cashAccIdToGroupId.get(tx.Debit_Ac_Id) : null;
+            const creditGroupId = tx.Credit_Ac_Id ? cashAccIdToGroupId.get(String(tx.Credit_Ac_Id)) : null;
+            const debitGroupId = tx.Debit_Ac_Id ? cashAccIdToGroupId.get(String(tx.Debit_Ac_Id)) : null;
             return (
                 (creditGroupId && selectedGroupIds.has(creditGroupId)) ||
                 (debitGroupId && selectedGroupIds.has(debitGroupId))
@@ -271,14 +241,14 @@ const CashBoxReport: React.FC = () => {
     const matchingOpposingAccIds = useMemo(() => {
         const opposing = new Set<string>();
         filteredTransactions.forEach((tx) => {
-            const isDebitCash = tx.Debit_Ac_Id && selectedCashAccIds.has(tx.Debit_Ac_Id);
-            const isCreditCash = tx.Credit_Ac_Id && selectedCashAccIds.has(tx.Credit_Ac_Id);
+            const isDebitCash = tx.Debit_Ac_Id && selectedCashAccIds.has(String(tx.Debit_Ac_Id));
+            const isCreditCash = tx.Credit_Ac_Id && selectedCashAccIds.has(String(tx.Credit_Ac_Id));
 
             if (isDebitCash && tx.Credit_Ac_Id) {
-                opposing.add(tx.Credit_Ac_Id);
+                opposing.add(String(tx.Credit_Ac_Id));
             }
             if (isCreditCash && tx.Debit_Ac_Id) {
-                opposing.add(tx.Debit_Ac_Id);
+                opposing.add(String(tx.Debit_Ac_Id));
             }
         });
         return opposing;
@@ -290,33 +260,24 @@ const CashBoxReport: React.FC = () => {
 
         const isFiltered = !selectedGroups.includes("All") && selectedGroups.length > 0;
 
-        const nonCashAccIds = new Set([
-            ...(reportData?.Bank || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.LedgerGrp || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.DEX || []).map((acc) => acc.Acc_Id),
-            ...(reportData?.IDEX || []).map((acc) => acc.Acc_Id),
-        ]);
-
         const allCashAccIds = new Set(
-            (reportData?.Cash || [])
-                .filter((acc) => !nonCashAccIds.has(acc.Acc_Id))
-                .map((acc) => acc.Acc_Id)
+            (reportData?.Cash || []).map((acc) => String(acc.Acc_Id))
         );
 
         const cashList = (reportData?.Cash || []).filter(
-            (acc) => (selectedCashAccIds.has(acc.Acc_Id) || matchingOpposingAccIds.has(acc.Acc_Id)) && !nonCashAccIds.has(acc.Acc_Id)
+            (acc) => selectedCashAccIds.has(String(acc.Acc_Id)) || matchingOpposingAccIds.has(String(acc.Acc_Id))
         );
         const bankList = (reportData?.Bank || []).filter(
-            (acc) => matchingOpposingAccIds.has(acc.Acc_Id)
+            (acc) => matchingOpposingAccIds.has(String(acc.Acc_Id)) && !allCashAccIds.has(String(acc.Acc_Id))
         );
         const ledgerGrpList = (reportData?.LedgerGrp || []).filter(
-            (acc) => matchingOpposingAccIds.has(acc.Acc_Id)
+            (acc) => matchingOpposingAccIds.has(String(acc.Acc_Id)) && !allCashAccIds.has(String(acc.Acc_Id))
         );
         const dexList = (reportData?.DEX || []).filter(
-            (acc) => matchingOpposingAccIds.has(acc.Acc_Id)
+            (acc) => matchingOpposingAccIds.has(String(acc.Acc_Id)) && !allCashAccIds.has(String(acc.Acc_Id))
         );
         const idexList = (reportData?.IDEX || []).filter(
-            (acc) => matchingOpposingAccIds.has(acc.Acc_Id)
+            (acc) => matchingOpposingAccIds.has(String(acc.Acc_Id)) && !allCashAccIds.has(String(acc.Acc_Id))
         );
 
         const masterMap = {
@@ -337,12 +298,12 @@ const CashBoxReport: React.FC = () => {
                     const accId = obItem.Acc_Id;
                     const groupId = obItem.Group_Id;
                     if (accId) {
-                        if (selectedCashAccIds.has(accId)) {
+                        if (selectedCashAccIds.has(String(accId))) {
                             sum += Number(obItem.OB_Amount) || 0;
                             hasFilteredOB = true;
                         }
                     } else if (groupId) {
-                        if (selectedGroupIds.has(groupId)) {
+                        if (selectedGroupIds.has(String(groupId))) {
                             sum += Number(obItem.OB_Amount) || 0;
                             hasFilteredOB = true;
                         }
@@ -361,54 +322,57 @@ const CashBoxReport: React.FC = () => {
 
         const getGroupData = (config: GroupConfig) => {
             const masters = masterMap[config.masterKey];
-            const masterIds = new Set(masters.map((m) => m.Acc_Id));
+            const masterIds = new Set(masters.map((m) => String(m.Acc_Id)));
 
             const matchedTransactions = filteredTransactions.filter((tx) => {
+                const txCreditAcIdStr = tx.Credit_Ac_Id ? String(tx.Credit_Ac_Id) : "";
+                const txDebitAcIdStr = tx.Debit_Ac_Id ? String(tx.Debit_Ac_Id) : "";
+
                 // If it is the Cash group, BOTH sides of the transaction must be cash accounts,
                 // unless it is a one-sided transaction where Credit or Debit is 0.
                 if (config.masterKey === "Cash") {
-                    const isZeroCredit = !tx.Credit_Ac_Id || tx.Credit_Ac_Id === "0" || Number(tx.Credit_Ac_Id) === 0;
-                    const isZeroDebit = !tx.Debit_Ac_Id || tx.Debit_Ac_Id === "0" || Number(tx.Debit_Ac_Id) === 0;
+                    const isZeroCredit = !tx.Credit_Ac_Id || txCreditAcIdStr === "0";
+                    const isZeroDebit = !tx.Debit_Ac_Id || txDebitAcIdStr === "0";
 
-                    if (isZeroCredit && !isZeroDebit && tx.Debit_Ac_Id && allCashAccIds.has(tx.Debit_Ac_Id)) {
-                        return config.side === "debit" && selectedCashAccIds.has(tx.Debit_Ac_Id);
+                    if (isZeroCredit && !isZeroDebit && tx.Debit_Ac_Id && allCashAccIds.has(txDebitAcIdStr)) {
+                        return config.side === "debit" && selectedCashAccIds.has(txDebitAcIdStr);
                     }
-                    if (isZeroDebit && !isZeroCredit && tx.Credit_Ac_Id && allCashAccIds.has(tx.Credit_Ac_Id)) {
-                        return config.side === "credit" && selectedCashAccIds.has(tx.Credit_Ac_Id);
+                    if (isZeroDebit && !isZeroCredit && tx.Credit_Ac_Id && allCashAccIds.has(txCreditAcIdStr)) {
+                        return config.side === "credit" && selectedCashAccIds.has(txCreditAcIdStr);
                     }
 
-                    const bothAreCash = tx.Debit_Ac_Id && allCashAccIds.has(tx.Debit_Ac_Id) &&
-                        tx.Credit_Ac_Id && allCashAccIds.has(tx.Credit_Ac_Id);
+                    const bothAreCash = tx.Debit_Ac_Id && allCashAccIds.has(txDebitAcIdStr) &&
+                        tx.Credit_Ac_Id && allCashAccIds.has(txCreditAcIdStr);
                     if (!bothAreCash) return false;
 
                     // If it is a payment (config.side === "debit"), the selected account must be the Payer (Credit_Ac_Id)
                     if (config.side === "debit") {
-                        return tx.Credit_Ac_Id && selectedCashAccIds.has(tx.Credit_Ac_Id) &&
-                            tx.Debit_Ac_Id && masterIds.has(tx.Debit_Ac_Id);
+                        return tx.Credit_Ac_Id && selectedCashAccIds.has(txCreditAcIdStr) &&
+                            tx.Debit_Ac_Id && masterIds.has(txDebitAcIdStr);
                     } else {
                         // If it is a receipt (config.side === "credit"), the selected account must be the Receiver (Debit_Ac_Id)
-                        return tx.Debit_Ac_Id && selectedCashAccIds.has(tx.Debit_Ac_Id) &&
-                            tx.Credit_Ac_Id && masterIds.has(tx.Credit_Ac_Id);
+                        return tx.Debit_Ac_Id && selectedCashAccIds.has(txDebitAcIdStr) &&
+                            tx.Credit_Ac_Id && masterIds.has(txCreditAcIdStr);
                     }
                 }
 
                 if (config.side === "debit") {
-                    return tx.Debit_Ac_Id && masterIds.has(tx.Debit_Ac_Id);
+                    return tx.Debit_Ac_Id && masterIds.has(txDebitAcIdStr);
                 } else {
-                    return tx.Credit_Ac_Id && masterIds.has(tx.Credit_Ac_Id);
+                    return tx.Credit_Ac_Id && masterIds.has(txCreditAcIdStr);
                 }
             });
 
             const subLedgerMap: Record<string, { accId: string; name: string; amount: number }> = {};
             matchedTransactions.forEach((tx) => {
-                const accId = config.side === "debit" ? tx.Debit_Ac_Id : tx.Credit_Ac_Id;
+                const accId = config.side === "debit" ? String(tx.Debit_Ac_Id) : String(tx.Credit_Ac_Id);
                 const amount = config.side === "debit" ? tx.Dr_Amount : tx.Cr_Amount;
 
                 if (!subLedgerMap[accId]) {
-                    const masterAcc = masters.find((m) => m.Acc_Id === accId);
+                    const masterAcc = masters.find((m) => String(m.Acc_Id) === accId);
                     subLedgerMap[accId] = {
                         accId,
-                        name: masterAcc ? masterAcc.Account_name : `Account (${accId})`,
+                        name: masterAcc ? masterAcc.Account_name : (tx.Particulars || `Account (${accId})`),
                         amount: 0,
                     };
                 }
@@ -447,17 +411,7 @@ const CashBoxReport: React.FC = () => {
     }, [reportData, selectedCashAccIds, selectedGroupIds, filteredTransactions, matchingOpposingAccIds, selectedGroups]);
 
     // Handle opening detail modal
-    const handleLedgerClick = (accId: string, side: "debit" | "credit") => {
-        const allLists = [
-            ...(reportData?.Cash || []),
-            ...(reportData?.Bank || []),
-            ...(reportData?.LedgerGrp || []),
-            ...(reportData?.DEX || []),
-            ...(reportData?.IDEX || []),
-        ];
-        const acc = allLists.find((x) => x.Acc_Id === accId);
-        const name = acc ? acc.Account_name : `Account (${accId})`;
-
+    const handleLedgerClick = (accId: string, name: string, side: "debit" | "credit") => {
         setSelectedLedger({ accId, name, side });
         setDetailModalOpen(true);
     };
@@ -468,9 +422,9 @@ const CashBoxReport: React.FC = () => {
         const { accId, side } = selectedLedger;
         return filteredTransactions.filter((tx) => {
             if (side === "debit") {
-                return tx.Debit_Ac_Id === accId;
+                return String(tx.Debit_Ac_Id) === String(accId);
             } else {
-                return tx.Credit_Ac_Id === accId;
+                return String(tx.Credit_Ac_Id) === String(accId);
             }
         });
     }, [selectedLedger, filteredTransactions]);
@@ -479,7 +433,7 @@ const CashBoxReport: React.FC = () => {
     const getOpposingLedgerName = (tx: CashBoxTransaction) => {
         if (!selectedLedger) return "";
         const opposingId = selectedLedger.side === "debit" ? tx.Credit_Ac_Id : tx.Debit_Ac_Id;
-        if (!opposingId || opposingId === "0") return "-";
+        if (!opposingId || String(opposingId) === "0") return "-";
 
         const allLists = [
             ...(reportData?.Cash || []),
@@ -488,8 +442,8 @@ const CashBoxReport: React.FC = () => {
             ...(reportData?.DEX || []),
             ...(reportData?.IDEX || []),
         ];
-        const acc = allLists.find((x) => x.Acc_Id === opposingId);
-        return acc ? acc.Account_name : `Account (${opposingId})`;
+        const acc = allLists.find((x) => String(x.Acc_Id) === String(opposingId));
+        return acc ? acc.Account_name : (tx.Particulars || `Account (${opposingId})`);
     };
 
     // Sum total inside modal
@@ -813,7 +767,7 @@ const CashBoxReport: React.FC = () => {
                                                                 {leftSub ? (
                                                                     <>
                                                                         <TableCell
-                                                                            onClick={() => handleLedgerClick(leftSub.accId, "debit")}
+                                                                            onClick={() => handleLedgerClick(leftSub.accId, leftSub.name, "debit")}
                                                                             sx={{
                                                                                 pl: 5,
                                                                                 border: "1px solid #cbd5e1",
@@ -840,7 +794,7 @@ const CashBoxReport: React.FC = () => {
                                                                 {rightSub ? (
                                                                     <>
                                                                         <TableCell
-                                                                            onClick={() => handleLedgerClick(rightSub.accId, "credit")}
+                                                                            onClick={() => handleLedgerClick(rightSub.accId, rightSub.name, "credit")}
                                                                             sx={{
                                                                                 pl: 5,
                                                                                 border: "1px solid #cbd5e1",
