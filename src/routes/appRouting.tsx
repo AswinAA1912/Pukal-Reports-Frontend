@@ -36,6 +36,7 @@ import DayAbstractReport from "../reports/Abstract/DayAbstractReport";
 import StockAbstractReport from "../reports/Abstract/StockAbstractReport";
 import CashBoxReport from "../reports/Abstract/CashBoxReport";
 import PendingSaleOrder from "../reports/Sales/PendingSaleOrderReport";
+import InStockReport from "../reports/Stock/InStockReport";
 
 
 interface AppRoutingProps {
@@ -473,6 +474,17 @@ const AppRouting: React.FC<AppRoutingProps> = ({
             <RequireAuth>
               <AppLayout fullWidth>
                 <CashBoxReport />
+              </AppLayout>
+            </RequireAuth>
+          }
+        />
+
+        <Route
+          path="/instock"
+          element={
+            <RequireAuth>
+              <AppLayout fullWidth>
+                <InStockReport />
               </AppLayout>
             </RequireAuth>
           }
