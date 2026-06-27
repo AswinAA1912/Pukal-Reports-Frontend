@@ -236,7 +236,24 @@ const StockAbstractReport: React.FC = () => {
     // Unit mode selection: "All", "Chippam", "Kg"
     const [unitMode, setUnitMode] = useState<"All" | "Chippam" | "Kg">("All");
 
-    const reportData = toggleMode === "Abstract" ? liveData : savedData;
+    const rawReportData = toggleMode === "Abstract" ? liveData : savedData;
+
+    const reportData = React.useMemo(() => {
+        if (!rawReportData) return null;
+        return {
+            ...rawReportData,
+            Data4: (rawReportData.Data4 || []).filter(row => 
+                Number(row.OB_Qty || 0) !== 0 ||
+                Number(row.IN_Qty || 0) !== 0 ||
+                Number(row.ACt_OB_Qty || 0) !== 0 ||
+                Number(row.ACt_In_Qty || 0) !== 0 ||
+                Number(row.ACt_Out_Qty || 0) !== 0 ||
+                Number(row.Out_Qty || 0) !== 0 ||
+                Number(row.CL_ACt_QTY || 0) !== 0 ||
+                Number(row.CL_QTY || 0) !== 0
+            )
+        };
+    }, [rawReportData]);
 
     /* ================= LOAD REPORT ================= */
     const loadReport = async () => {

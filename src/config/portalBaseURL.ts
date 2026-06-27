@@ -6,12 +6,11 @@
 // };
 
 export const getHostAPI = (): string => {
+  // return `http://localhost:9001/api/`;
   return `https://erpsmt.in/api/`;
   // return `http://test.erpsmt.in/api/`;
-  // return `http://localhost:9001/api/`;
   // return `http://192.168.1.5:9001/api/`
   // return `http://192.168.1.91:9001/api/`;
-
 };
 
 export const getCompanyAPI = (): string => {
@@ -29,6 +28,9 @@ export const getCompanyAPI = (): string => {
  * - Before login → HOST API
  */
 export const getBaseURL = (): string => {
+  // return `http://localhost:9001/`;
+  // return `http://192.168.1.5:9001/`;
+
   const companyAPI = getCompanyAPI();
   return companyAPI || getHostAPI();
 };
