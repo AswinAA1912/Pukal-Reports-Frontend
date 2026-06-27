@@ -126,7 +126,22 @@ const CashBoxReport: React.FC = () => {
                 Todate: filters.Date.to,
             });
             if (res && !Array.isArray(res)) {
-                setReportData(res);
+                const filterGroup = (arr: any[]) =>
+                    (arr || []).filter(
+                        (acc) =>
+                            !acc.Group_Name ||
+                            acc.Group_Name.trim().toLowerCase() !== "cash parties"
+                    );
+
+                const filteredRes = {
+                    ...res,
+                    Cash: filterGroup(res.Cash),
+                    Bank: filterGroup(res.Bank),
+                    LedgerGrp: filterGroup(res.LedgerGrp),
+                    DEX: filterGroup(res.DEX),
+                    IDEX: filterGroup(res.IDEX),
+                };
+                setReportData(filteredRes);
             } else {
                 setReportData(null);
             }
