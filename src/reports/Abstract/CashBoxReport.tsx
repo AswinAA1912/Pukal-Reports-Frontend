@@ -201,7 +201,7 @@ const CashBoxReport: React.FC = () => {
         );
     }, [reportData, selectedGroups]);
 
-    // Filter transactions: keep only those involving the selected Cash Group_Ids, and exclude any transaction with ID 0
+    // Filter transactions: group by invoice key and keep all entries for cash-involved invoices
     const filteredTransactions = useMemo(() => {
         const allTx = reportData?.Data1 || [];
 
@@ -245,14 +245,25 @@ const CashBoxReport: React.FC = () => {
             });
         }
 
-        // Filter out any transaction where Credit_Ac_Id or Debit_Ac_Id is "0" or 0,
-        // unless the opposing side is a valid Cash account or in one of the non-cash master groups
-        const cleanTx = allTx.filter((tx) => {
-            const hasZeroCredit = !tx.Credit_Ac_Id || String(tx.Credit_Ac_Id) === "0";
-            const hasZeroDebit = !tx.Debit_Ac_Id || String(tx.Debit_Ac_Id) === "0";
+        const getInvoiceKey = (tx: any) => tx.invoice_no || tx.Trans_Id || "";
 
+        // Find all invoice keys that have at least one transaction touching any active cash account
+        const cashInvoiceKeys = new Set<string>();
+        allTx.forEach((tx) => {
             const isCreditCash = tx.Credit_Ac_Id && cashAccIds.has(String(tx.Credit_Ac_Id));
             const isDebitCash = tx.Debit_Ac_Id && cashAccIds.has(String(tx.Debit_Ac_Id));
+            if (isCreditCash || isDebitCash) {
+                const key = getInvoiceKey(tx);
+                if (key) cashInvoiceKeys.add(key);
+            }
+        });
+
+        // Clean transactions: must have an invoice key in cashInvoiceKeys
+        const cleanTx = allTx.filter((tx) => {
+            const key = getInvoiceKey(tx);
+            if (!key || !cashInvoiceKeys.has(key)) {
+                return false;
+            }
 
             const debitIdStr = tx.Debit_Ac_Id ? String(tx.Debit_Ac_Id) : "";
             const creditIdStr = tx.Credit_Ac_Id ? String(tx.Credit_Ac_Id) : "";
@@ -264,38 +275,28 @@ const CashBoxReport: React.FC = () => {
                 return false;
             }
 
-            // Allow if Credit_ID is 0 but Debit_Id is a valid Cash account ID or a non-cash account ID
-            if (hasZeroCredit && !hasZeroDebit && (isDebitCash || nonCashAccIds.has(debitIdStr))) {
-                return true;
-            }
-
-            // Allow if Debit_Id is 0 but Credit_Id is a valid Cash account ID or a non-cash account ID
-            if (hasZeroDebit && !hasZeroCredit && (isCreditCash || nonCashAccIds.has(creditIdStr))) {
-                return true;
-            }
-
-            if (hasZeroCredit || hasZeroDebit) return false;
-
-            return isCreditCash || isDebitCash;
+            return true;
         });
 
         const isFiltered = !selectedGroups.includes("All") && selectedGroups.length > 0;
         if (!isFiltered) return cleanTx;
 
-        // Map Cash Acc_Id to Group_Id
-        const cashAccIdToGroupId = new Map(
-            (reportData?.Cash || []).map((acc) => [String(acc.Acc_Id), String(acc.Group_Id)])
-        );
+        // If filtered, find all invoice keys that have at least one transaction touching the selected Cash accounts
+        const selectedCashInvoiceKeys = new Set<string>();
+        cleanTx.forEach((tx) => {
+            const isCreditCashSelected = tx.Credit_Ac_Id && selectedCashAccIds.has(String(tx.Credit_Ac_Id));
+            const isDebitCashSelected = tx.Debit_Ac_Id && selectedCashAccIds.has(String(tx.Debit_Ac_Id));
+            if (isCreditCashSelected || isDebitCashSelected) {
+                const key = getInvoiceKey(tx);
+                if (key) selectedCashInvoiceKeys.add(key);
+            }
+        });
 
         return cleanTx.filter((tx) => {
-            const creditGroupId = tx.Credit_Ac_Id ? cashAccIdToGroupId.get(String(tx.Credit_Ac_Id)) : null;
-            const debitGroupId = tx.Debit_Ac_Id ? cashAccIdToGroupId.get(String(tx.Debit_Ac_Id)) : null;
-            return (
-                (creditGroupId && selectedGroupIds.has(creditGroupId)) ||
-                (debitGroupId && selectedGroupIds.has(debitGroupId))
-            );
+            const key = getInvoiceKey(tx);
+            return key && selectedCashInvoiceKeys.has(key);
         });
-    }, [reportData, selectedGroupIds, selectedGroups]);
+    }, [reportData, selectedCashAccIds, selectedGroups]);
 
     // Compute matching opposing account IDs from transactions involving the selected Cash accounts
     const matchingOpposingAccIds = useMemo(() => {
@@ -365,7 +366,7 @@ const CashBoxReport: React.FC = () => {
         );
 
         const cashList = (reportData?.Cash || []).filter(
-            (acc) => selectedCashAccIds.has(String(acc.Acc_Id)) || matchingOpposingAccIds.has(String(acc.Acc_Id))
+            (acc) => selectedCashAccIds.has(String(acc.Acc_Id))
         );
         const bankList = (reportData?.Bank || []).filter(
             (acc) => matchingOpposingAccIds.has(String(acc.Acc_Id)) && !allCashAccIds.has(String(acc.Acc_Id))
@@ -448,11 +449,11 @@ const CashBoxReport: React.FC = () => {
                     // If it is a payment (config.side === "debit"), the selected account must be the Payer (Credit_Ac_Id)
                     if (config.side === "debit") {
                         return tx.Credit_Ac_Id && selectedCashAccIds.has(txCreditAcIdStr) &&
-                            tx.Debit_Ac_Id && masterIds.has(txDebitAcIdStr);
+                            tx.Debit_Ac_Id && allCashAccIds.has(txDebitAcIdStr);
                     } else {
                         // If it is a receipt (config.side === "credit"), the selected account must be the Receiver (Debit_Ac_Id)
                         return tx.Debit_Ac_Id && selectedCashAccIds.has(txDebitAcIdStr) &&
-                            tx.Credit_Ac_Id && masterIds.has(txCreditAcIdStr);
+                            tx.Credit_Ac_Id && allCashAccIds.has(txCreditAcIdStr);
                     }
                 }
 
@@ -469,7 +470,14 @@ const CashBoxReport: React.FC = () => {
                 const amount = config.side === "debit" ? tx.Dr_Amount : tx.Cr_Amount;
 
                 if (!subLedgerMap[accId]) {
-                    const masterAcc = masters.find((m) => String(m.Acc_Id) === accId);
+                    const allLists = [
+                        ...(reportData?.Cash || []),
+                        ...(reportData?.Bank || []),
+                        ...(reportData?.LedgerGrp || []),
+                        ...(reportData?.DEX || []),
+                        ...(reportData?.IDEX || []),
+                    ];
+                    const masterAcc = allLists.find((m) => String(m.Acc_Id) === accId);
                     subLedgerMap[accId] = {
                         accId,
                         name: masterAcc ? masterAcc.Account_name : (tx.Particulars || `Account (${accId})`),
