@@ -134,7 +134,7 @@ const CashBoxReport: React.FC = () => {
                     (arr || []).filter(
                         (acc) =>
                             !acc.Group_Name ||
-                            acc.Group_Name.trim().toLowerCase() !== "cash parties"
+                            acc.Group_Name.trim().toLowerCase() 
                     );
 
                 const filteredRes = {
