@@ -168,7 +168,7 @@ const styleWorksheet = (ws: XLSX.WorkSheet) => {
             }
 
             const firstCellOfRow = ws[XLSX.utils.encode_cell({ r: R, c: range.s.c })];
-            const isRowTotal = firstCellOfRow && String(firstCellOfRow.v || "").trim() === "TOTAL";
+            const isRowTotal = firstCellOfRow && String(firstCellOfRow.v || "").trim().toUpperCase() === "TOTAL";
 
             if (isRowTotal) {
                 cell.s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "000000" } };
@@ -180,22 +180,27 @@ const styleWorksheet = (ws: XLSX.WorkSheet) => {
                 continue;
             }
 
-            // Check if it is a group/parent row (non-empty first/second cell, other columns empty)
+            // Check if it is a group/parent row (non-empty first cell which is not a number and not a total/header)
             let isGroupRow = false;
-            if (val && !isRowTotal) {
-                let hasOtherValues = false;
-                for (let col = range.s.c; col <= range.e.c; ++col) {
-                    const addr = XLSX.utils.encode_cell({ r: R, c: col });
-                    const cellInCol = ws[addr];
-                    if (cellInCol && cellInCol.v !== undefined && cellInCol.v !== null && String(cellInCol.v).trim() !== "") {
-                        const cellColVal = String(cellInCol.v).trim();
-                        if (cellColVal !== val && cellColVal !== "") {
-                            hasOtherValues = true;
-                            break;
-                        }
-                    }
-                }
-                if (!hasOtherValues) {
+            if (firstCellOfRow && firstCellOfRow.v !== undefined && firstCellOfRow.v !== null) {
+                const firstVal = String(firstCellOfRow.v).trim();
+                const firstValUpper = firstVal.toUpperCase();
+                const isNumber = !isNaN(Number(firstVal));
+                const isSpecial = isRowTotal || 
+                    firstValUpper === "S.NO" || 
+                    firstValUpper === "S NO" || 
+                    firstValUpper === "S.NO." || 
+                    firstValUpper === "S NO." || 
+                    firstValUpper.startsWith("STOCK ABSTRACT REPORT") || 
+                    firstValUpper === "SALES VOUCHER" || 
+                    firstValUpper === "PURCHASE VOUCHER" || 
+                    firstValUpper === "STOCK SUMMARY" || 
+                    firstValUpper === "GODOWN TABLE" || 
+                    firstValUpper === "STOCK JOURNAL" || 
+                    firstValUpper.startsWith("OUTWARD SUMMARY") || 
+                    firstValUpper.startsWith("INWARD SUMMARY") || 
+                    firstValUpper.startsWith("DATA ");
+                if (!isNumber && !isSpecial && firstVal !== "") {
                     isGroupRow = true;
                 }
             }
@@ -204,6 +209,11 @@ const styleWorksheet = (ws: XLSX.WorkSheet) => {
                 cell.s.font = { name: "Arial", sz: 10, bold: true, color: { rgb: "1E3A8A" } };
                 cell.s.fill = { fgColor: { rgb: "F1F5F9" } };
                 cell.s.border = borderStyle;
+                if (typeof cell.v === "number") {
+                    cell.s.alignment = { horizontal: "right", vertical: "center" };
+                } else {
+                    cell.s.alignment = { horizontal: "left", vertical: "center" };
+                }
                 continue;
             }
 
@@ -538,7 +548,37 @@ const StockAbstractReport: React.FC = () => {
         godownRows.push(godownTotalRow);
 
         Object.entries(godownGroups).forEach(([parentName, items]: [string, any]) => {
-            godownRows.push([parentName, "", "", "", "", "", "", "", "", ""]);
+            // Calculate Group Totals
+            const groupOB = items.reduce((sum: number, r: any) => sum + Number(r.OB_Qty || 0), 0);
+            const groupIn = items.reduce((sum: number, r: any) => sum + Number(r.IN_Qty || 0), 0);
+            const groupActOB = items.reduce((sum: number, r: any) => sum + Number(r.ACt_OB_Qty || 0), 0);
+            const groupActIn = items.reduce((sum: number, r: any) => sum + Number(r.ACt_In_Qty || 0), 0);
+            const groupOut = items.reduce((sum: number, r: any) => sum + Number(r.Out_Qty || 0), 0);
+            const groupActOut = items.reduce((sum: number, r: any) => sum + Number(r.ACt_Out_Qty || 0), 0);
+            const groupCL = items.reduce((sum: number, r: any) => sum + Number(r.CL_QTY || 0), 0);
+            const groupActCL = items.reduce((sum: number, r: any) => sum + Number(r.CL_ACt_QTY || 0), 0);
+
+            const groupHeaderRow: any[] = [parentName, ""];
+            if (unitMode === "All" || unitMode === "Chippam") {
+                groupHeaderRow.push(groupActOB, groupActIn);
+            }
+            if (unitMode === "All" || unitMode === "Kg") {
+                groupHeaderRow.push(groupOB, groupIn);
+            }
+            if (unitMode === "All" || unitMode === "Chippam") {
+                groupHeaderRow.push(groupActOut);
+            }
+            if (unitMode === "All" || unitMode === "Kg") {
+                groupHeaderRow.push(groupOut);
+            }
+            if (unitMode === "All" || unitMode === "Chippam") {
+                groupHeaderRow.push(groupActCL);
+            }
+            if (unitMode === "All" || unitMode === "Kg") {
+                groupHeaderRow.push(groupCL);
+            }
+            godownRows.push(groupHeaderRow);
+
             items.forEach((rowItem: any) => {
                 const line = [gSno++, rowItem.godown_name];
                 if (unitMode === "All" || unitMode === "Chippam") {
@@ -1030,7 +1070,37 @@ const StockAbstractReport: React.FC = () => {
         godownBody.push(godownTotalLine);
 
         Object.entries(godownGroups2).forEach(([parentName, items]: [string, any]) => {
-            godownBody.push([parentName, "", "", "", "", "", "", "", "", ""]);
+            // Calculate Group Totals
+            const groupOB = items.reduce((sum: number, r: any) => sum + Number(r.OB_Qty || 0), 0);
+            const groupIn = items.reduce((sum: number, r: any) => sum + Number(r.IN_Qty || 0), 0);
+            const groupActOB = items.reduce((sum: number, r: any) => sum + Number(r.ACt_OB_Qty || 0), 0);
+            const groupActIn = items.reduce((sum: number, r: any) => sum + Number(r.ACt_In_Qty || 0), 0);
+            const groupOut = items.reduce((sum: number, r: any) => sum + Number(r.Out_Qty || 0), 0);
+            const groupActOut = items.reduce((sum: number, r: any) => sum + Number(r.ACt_Out_Qty || 0), 0);
+            const groupCL = items.reduce((sum: number, r: any) => sum + Number(r.CL_QTY || 0), 0);
+            const groupActCL = items.reduce((sum: number, r: any) => sum + Number(r.CL_ACt_QTY || 0), 0);
+
+            const groupHeaderRow: any[] = [parentName, ""];
+            if (unitMode === "All" || unitMode === "Chippam") {
+                groupHeaderRow.push(groupActOB, groupActIn);
+            }
+            if (unitMode === "All" || unitMode === "Kg") {
+                groupHeaderRow.push(groupOB, groupIn);
+            }
+            if (unitMode === "All" || unitMode === "Chippam") {
+                groupHeaderRow.push(groupActOut);
+            }
+            if (unitMode === "All" || unitMode === "Kg") {
+                groupHeaderRow.push(groupOut);
+            }
+            if (unitMode === "All" || unitMode === "Chippam") {
+                groupHeaderRow.push(groupActCL);
+            }
+            if (unitMode === "All" || unitMode === "Kg") {
+                groupHeaderRow.push(groupCL);
+            }
+            godownBody.push(groupHeaderRow);
+
             items.forEach((rowItem: any) => {
                 const line = [gSno2++, rowItem.godown_name];
                 if (unitMode === "All" || unitMode === "Chippam") {
@@ -1722,48 +1792,83 @@ const StockAbstractReport: React.FC = () => {
                                 )}
                             </TableRow>
 
-                            {/* GROUPED ROWS */}
-                            {Object.entries(groups).map(([parentName, items]: [string, any]) => (
-                                <React.Fragment key={parentName}>
-                                    {/* Parent Godown Header Row */}
-                                    <TableRow sx={{ backgroundColor: "#e2e8f0" }}>
-                                        <TableCell colSpan={unitMode === "All" ? 10 : 6} sx={{ fontWeight: 700, color: "#1E3A8A" }}>
-                                            {parentName}
-                                        </TableCell>
-                                    </TableRow>
-                                    {/* Godown Rows */}
-                                    {items.map((row: any, idx: number) => (
-                                        <TableRow key={idx} sx={{ "&:hover": { backgroundColor: "#f8fafc" } }}>
-                                            <TableCell>{sno++}</TableCell>
-                                            <TableCell>{row.godown_name}</TableCell>
-                                             {(unitMode === "All" || unitMode === "Kg") && (
+                            {Object.entries(groups).map(([parentName, items]: [string, any]) => {
+                                const groupOB = items.reduce((sum: number, r: any) => sum + Number(r.OB_Qty || 0), 0);
+                                const groupIn = items.reduce((sum: number, r: any) => sum + Number(r.IN_Qty || 0), 0);
+                                const groupActOB = items.reduce((sum: number, r: any) => sum + Number(r.ACt_OB_Qty || 0), 0);
+                                const groupActIn = items.reduce((sum: number, r: any) => sum + Number(r.ACt_In_Qty || 0), 0);
+                                const groupOut = items.reduce((sum: number, r: any) => sum + Number(r.Out_Qty || 0), 0);
+                                const groupActOut = items.reduce((sum: number, r: any) => sum + Number(r.ACt_Out_Qty || 0), 0);
+                                const groupCL = items.reduce((sum: number, r: any) => sum + Number(r.CL_QTY || 0), 0);
+                                const groupActCL = items.reduce((sum: number, r: any) => sum + Number(r.CL_ACt_QTY || 0), 0);
+
+                                return (
+                                    <React.Fragment key={parentName}>
+                                        {/* Parent Godown Header Row with Group Totals */}
+                                        <TableRow sx={{ backgroundColor: "#e2e8f0" }}>
+                                            <TableCell />
+                                            <TableCell sx={{ fontWeight: 700, color: "#1E3A8A" }}>
+                                                {parentName}
+                                            </TableCell>
+                                            {(unitMode === "All" || unitMode === "Kg") && (
                                                 <>
-                                                    <TableCell align="right">{formatQty(row.OB_Qty)}</TableCell>
-                                                    <TableCell align="right">{formatQty(row.IN_Qty)}</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A" }}>{formatQty(groupOB)}</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A" }}>{formatQty(groupIn)}</TableCell>
                                                 </>
                                             )}
                                             {(unitMode === "All" || unitMode === "Chippam") && (
                                                 <>
-                                                    <TableCell align="right">{formatQty(row.ACt_OB_Qty)}</TableCell>
-                                                    <TableCell align="right">{formatQty(row.ACt_In_Qty)}</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A" }}>{formatQty(groupActOB)}</TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A" }}>{formatQty(groupActIn)}</TableCell>
                                                 </>
                                             )}
                                             {(unitMode === "All" || unitMode === "Chippam") && (
-                                                <TableCell align="right">{formatQty(row.ACt_Out_Qty)}</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A" }}>{formatQty(groupActOut)}</TableCell>
                                             )}
                                             {(unitMode === "All" || unitMode === "Kg") && (
-                                                <TableCell align="right">{formatQty(row.Out_Qty)}</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A" }}>{formatQty(groupOut)}</TableCell>
                                             )}
                                             {(unitMode === "All" || unitMode === "Chippam") && (
-                                                <TableCell align="right">{formatQty(row.CL_ACt_QTY)}</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A" }}>{formatQty(groupActCL)}</TableCell>
                                             )}
                                             {(unitMode === "All" || unitMode === "Kg") && (
-                                                <TableCell align="right">{formatQty(row.CL_QTY)}</TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A" }}>{formatQty(groupCL)}</TableCell>
                                             )}
                                         </TableRow>
-                                    ))}
-                                </React.Fragment>
-                            ))}
+                                        {/* Godown Rows */}
+                                        {items.map((row: any, idx: number) => (
+                                            <TableRow key={idx} sx={{ "&:hover": { backgroundColor: "#f8fafc" } }}>
+                                                <TableCell>{sno++}</TableCell>
+                                                <TableCell>{row.godown_name}</TableCell>
+                                                 {(unitMode === "All" || unitMode === "Kg") && (
+                                                    <>
+                                                        <TableCell align="right">{formatQty(row.OB_Qty)}</TableCell>
+                                                        <TableCell align="right">{formatQty(row.IN_Qty)}</TableCell>
+                                                    </>
+                                                )}
+                                                {(unitMode === "All" || unitMode === "Chippam") && (
+                                                    <>
+                                                        <TableCell align="right">{formatQty(row.ACt_OB_Qty)}</TableCell>
+                                                        <TableCell align="right">{formatQty(row.ACt_In_Qty)}</TableCell>
+                                                    </>
+                                                )}
+                                                {(unitMode === "All" || unitMode === "Chippam") && (
+                                                    <TableCell align="right">{formatQty(row.ACt_Out_Qty)}</TableCell>
+                                                )}
+                                                {(unitMode === "All" || unitMode === "Kg") && (
+                                                    <TableCell align="right">{formatQty(row.Out_Qty)}</TableCell>
+                                                )}
+                                                {(unitMode === "All" || unitMode === "Chippam") && (
+                                                    <TableCell align="right">{formatQty(row.CL_ACt_QTY)}</TableCell>
+                                                )}
+                                                {(unitMode === "All" || unitMode === "Kg") && (
+                                                    <TableCell align="right">{formatQty(row.CL_QTY)}</TableCell>
+                                                )}
+                                            </TableRow>
+                                        ))}
+                                    </React.Fragment>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 </TableContainer>

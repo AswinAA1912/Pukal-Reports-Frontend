@@ -1143,14 +1143,22 @@ const CashBoxReport: React.FC = () => {
                     <TableContainer sx={{ maxHeight: 400, overflowY: "auto" }}>
                         <Table size="small" stickyHeader>
                             <TableHead>
-                                <TableRow>
-                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Date</TableCell>
-                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Time</TableCell>
-                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Voucher Type</TableCell>
-                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Voucher No</TableCell>
-                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9" }}>Ledgers</TableCell>
-                                    <TableCell align="right" sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", pr: 2 }}>Amount</TableCell>
+                                <TableRow sx={{ height: "33px" }}>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", height: "33px", py: 0 }}>Date</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", height: "33px", py: 0 }}>Time</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", height: "33px", py: 0 }}>Voucher Type</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", height: "33px", py: 0 }}>Voucher No</TableCell>
+                                    <TableCell sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", height: "33px", py: 0 }}>Ledgers</TableCell>
+                                    <TableCell align="right" sx={{ fontWeight: 700, backgroundColor: "#f1f5f9", pr: 2, height: "33px", py: 0 }}>Amount</TableCell>
                                 </TableRow>
+                                {modalTransactions.length > 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={5} sx={{ position: "sticky", top: "33px", zIndex: 2, fontWeight: 700, backgroundColor: "#f8fafc" }} align="right">Total</TableCell>
+                                        <TableCell align="right" sx={{ position: "sticky", top: "33px", zIndex: 2, fontWeight: 700, color: selectedLedger?.side === "debit" ? "#0f766e" : "#be123c", backgroundColor: "#f8fafc", pr: 2 }}>
+                                            {formatNum(modalTotal)}
+                                        </TableCell>
+                                    </TableRow>
+                                )}
                             </TableHead>
                             <TableBody>
                                 {modalTransactions.length === 0 ? (
@@ -1188,14 +1196,6 @@ const CashBoxReport: React.FC = () => {
                                             </React.Fragment>
                                         );
                                     })
-                                )}
-                                {modalTransactions.length > 0 && (
-                                    <TableRow sx={{ backgroundColor: "#f8fafc" }}>
-                                        <TableCell colSpan={5} sx={{ fontWeight: 700 }} align="right">Total</TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, color: selectedLedger?.side === "debit" ? "#0f766e" : "#be123c", pr: 2 }}>
-                                            {formatNum(modalTotal)}
-                                        </TableCell>
-                                    </TableRow>
                                 )}
                             </TableBody>
                         </Table>

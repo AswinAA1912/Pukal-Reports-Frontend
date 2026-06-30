@@ -41,6 +41,11 @@ interface StockItem {
         others2: number;
         others3: number;
     };
+    processSplits?: {
+        process1: number;
+        process2: number;
+        process3: number;
+    };
     delivery: number;
     returns: number;
 }
@@ -187,12 +192,18 @@ const getStockDataForGodown = (godownName: string): StockItem[] => {
         const trip2 = Math.round(scaledStockIn * 0.3);
         const trip3 = Math.max(0, scaledStockIn - trip1 - trip2);
 
+        // Dynamic process splits (Process 1, 2, 3)
+        const process1 = Math.round(scaledStockIn * 0.25);
+        const process2 = Math.round(scaledStockIn * 0.15);
+        const process3 = Math.max(0, Math.round(scaledStockIn * 0.4) - process1 - process2);
+
         return {
             ...item,
             openingStock: Math.round(item.openingStock * mult),
             stockIn: scaledStockIn,
             stockInSplits: { trip1, trip2, trip3 },
             stockOutSplits: { others1, others2, others3 },
+            processSplits: { process1, process2, process3 },
             delivery: Math.round(item.delivery * mult),
             returns: Math.round(item.returns * mult)
         };
@@ -211,8 +222,31 @@ const InStockReport: React.FC = () => {
     // Dynamic header split-up modes
     const [inwardMode, setInwardMode] = useState(false);
     const [outwardMode, setOutwardMode] = useState(false);
+    const [processMode, setProcessMode] = useState(false);
 
+    const handleSetInwardMode = (val: boolean) => {
+        setInwardMode(val);
+        if (val) {
+            setOutwardMode(false);
+            setProcessMode(false);
+        }
+    };
 
+    const handleSetOutwardMode = (val: boolean) => {
+        setOutwardMode(val);
+        if (val) {
+            setInwardMode(false);
+            setProcessMode(false);
+        }
+    };
+
+    const handleSetProcessMode = (val: boolean) => {
+        setProcessMode(val);
+        if (val) {
+            setInwardMode(false);
+            setOutwardMode(false);
+        }
+    };
 
     // Reset page to 1 when filters change
     useEffect(() => {
@@ -223,6 +257,7 @@ const InStockReport: React.FC = () => {
     useEffect(() => {
         setInwardMode(false);
         setOutwardMode(false);
+        setProcessMode(false);
     }, [selectedGodown]);
 
     // List of unique brands for filtering
@@ -258,6 +293,11 @@ const InStockReport: React.FC = () => {
         return item.stockOutSplits.others1 + item.stockOutSplits.others2 + item.stockOutSplits.others3;
     };
 
+    const getProcessTotal = (item: StockItem) => {
+        if (!item.processSplits) return 0;
+        return item.processSplits.process1 + item.processSplits.process2 + item.processSplits.process3;
+    };
+
     const getClosingStock = (item: StockItem) => {
         const out = getStockOutTotal(item);
         return item.openingStock + item.stockIn - out - item.delivery + item.returns;
@@ -279,6 +319,7 @@ const InStockReport: React.FC = () => {
             const data = getStockDataForGodown(name);
             let totalOpening = 0;
             let totalStockIn = 0;
+            let totalProcess = 0;
             let totalStockOut = 0;
             let totalDelivery = 0;
             let totalReturns = 0;
@@ -286,6 +327,7 @@ const InStockReport: React.FC = () => {
             data.forEach(item => {
                 totalOpening += item.openingStock;
                 totalStockIn += item.stockIn;
+                totalProcess += (item.processSplits?.process1 || 0) + (item.processSplits?.process2 || 0) + (item.processSplits?.process3 || 0);
                 totalStockOut += item.stockOutSplits.others1 + item.stockOutSplits.others2 + item.stockOutSplits.others3;
                 totalDelivery += item.delivery;
                 totalReturns += item.returns;
@@ -300,6 +342,7 @@ const InStockReport: React.FC = () => {
                 name,
                 openingStock: totalOpening,
                 stockIn: calculatedStockIn,
+                process: totalProcess,
                 stockOut: calculatedStockOut,
                 closingStock: totalClosing
             };
@@ -310,17 +353,19 @@ const InStockReport: React.FC = () => {
     const grandTotals = useMemo(() => {
         let opening = 0;
         let stockIn = 0;
+        let process = 0;
         let stockOut = 0;
         let closing = 0;
 
         godownSummaryData.forEach(g => {
             opening += g.openingStock;
             stockIn += g.stockIn;
+            process += g.process;
             stockOut += g.stockOut;
             closing += g.closingStock;
         });
 
-        return { opening, stockIn, stockOut, closing };
+        return { opening, stockIn, process, stockOut, closing };
     }, [godownSummaryData]);
 
     // Calculate totals for the selected godown's filtered data
@@ -331,12 +376,16 @@ const InStockReport: React.FC = () => {
         let trip1 = 0;
         let trip2 = 0;
         let trip3 = 0;
+        let process1 = 0;
+        let process2 = 0;
+        let process3 = 0;
         let others1 = 0;
         let others2 = 0;
         let others3 = 0;
         let delivery = 0;
         let stockOutTotal = 0;
         let closing = 0;
+        let processTotal = 0;
 
         filteredData.forEach(item => {
             opening += item.openingStock;
@@ -346,6 +395,12 @@ const InStockReport: React.FC = () => {
                 trip1 += item.stockInSplits.trip1;
                 trip2 += item.stockInSplits.trip2;
                 trip3 += item.stockInSplits.trip3;
+            }
+            if (item.processSplits) {
+                process1 += item.processSplits.process1;
+                process2 += item.processSplits.process2;
+                process3 += item.processSplits.process3;
+                processTotal += (item.processSplits.process1 + item.processSplits.process2 + item.processSplits.process3);
             }
             others1 += item.stockOutSplits.others1;
             others2 += item.stockOutSplits.others2;
@@ -362,12 +417,16 @@ const InStockReport: React.FC = () => {
             trip1,
             trip2,
             trip3,
+            process1,
+            process2,
+            process3,
             others1,
             others2,
             others3,
             delivery,
             stockOutTotal,
             closing,
+            processTotal,
             totalInward: stockIn + returns,
             totalOutward: stockOutTotal + delivery
         };
@@ -410,8 +469,22 @@ const InStockReport: React.FC = () => {
                             getStockOutTotal(item) + item.delivery
                         ]);
                     });
+                } else if (processMode) {
+                    excelData.push(["S.No", "Brand", "Product Name", "Opening Stock", "Process 1", "Process 2", "Process 3", "Total Process"]);
+                    filteredData.forEach((item) => {
+                        excelData.push([
+                            item.sNo,
+                            item.brand,
+                            item.productName,
+                            item.openingStock,
+                            item.processSplits?.process1 || 0,
+                            item.processSplits?.process2 || 0,
+                            item.processSplits?.process3 || 0,
+                            getProcessTotal(item)
+                        ]);
+                    });
                 } else {
-                    excelData.push(["S.No", "Brand", "Product Name", "Opening Stock", "Stock In", "Stock Outwards", "Closing Stock"]);
+                    excelData.push(["S.No", "Brand", "Product Name", "Opening Stock", "Stock In", "Process", "Stock Outwards", "Closing Stock"]);
                     filteredData.forEach((item) => {
                         excelData.push([
                             item.sNo,
@@ -419,6 +492,7 @@ const InStockReport: React.FC = () => {
                             item.productName,
                             item.openingStock,
                             item.stockIn + item.returns,
+                            getProcessTotal(item),
                             getStockOutTotal(item) + item.delivery,
                             getClosingStock(item)
                         ]);
@@ -427,7 +501,7 @@ const InStockReport: React.FC = () => {
             } else {
                 excelData.push([`GODOWNS OVERALL SUMMARY`]);
                 excelData.push([]);
-                excelData.push(["S.No", "Godown Name", "Opening Stock", "Stock In", "Stock Out", "Closing Stock"]);
+                excelData.push(["S.No", "Godown Name", "Opening Stock", "Stock In", "Process", "Stock Out", "Closing Stock"]);
 
                 godownSummaryData.forEach((item) => {
                     excelData.push([
@@ -435,6 +509,7 @@ const InStockReport: React.FC = () => {
                         item.name,
                         item.openingStock,
                         item.stockIn,
+                        item.process,
                         item.stockOut,
                         item.closingStock
                     ]);
@@ -446,6 +521,7 @@ const InStockReport: React.FC = () => {
                     "",
                     grandTotals.opening,
                     grandTotals.stockIn,
+                    grandTotals.process,
                     grandTotals.stockOut,
                     grandTotals.closing
                 ]);
@@ -506,8 +582,22 @@ const InStockReport: React.FC = () => {
                             getStockOutTotal(item) + item.delivery
                         ]);
                     });
+                } else if (processMode) {
+                    headers = [["S.No", "Brand", "Product Name", "Opening", "Process 1", "Process 2", "Process 3", "Total Process"]];
+                    filteredData.forEach((item) => {
+                        body.push([
+                            item.sNo,
+                            item.brand,
+                            item.productName,
+                            item.openingStock,
+                            item.processSplits?.process1 || 0,
+                            item.processSplits?.process2 || 0,
+                            item.processSplits?.process3 || 0,
+                            getProcessTotal(item)
+                        ]);
+                    });
                 } else {
-                    headers = [["S.No", "Brand", "Product Name", "Opening", "Stock In", "Stock Out", "Closing"]];
+                    headers = [["S.No", "Brand", "Product Name", "Opening", "Stock In", "Process", "Stock Out", "Closing"]];
                     filteredData.forEach((item) => {
                         body.push([
                             item.sNo,
@@ -515,19 +605,21 @@ const InStockReport: React.FC = () => {
                             item.productName,
                             item.openingStock,
                             item.stockIn + item.returns,
+                            getProcessTotal(item),
                             getStockOutTotal(item) + item.delivery,
                             getClosingStock(item)
                         ]);
                     });
                 }
             } else {
-                headers = [["S.No", "Godown Name", "Opening Stock", "Stock In", "Stock Out", "Closing Stock"]];
+                headers = [["S.No", "Godown Name", "Opening Stock", "Stock In", "Process", "Stock Out", "Closing Stock"]];
                 godownSummaryData.forEach((item) => {
                     body.push([
                         item.sNo,
                         item.name,
                         item.openingStock,
                         item.stockIn,
+                        item.process,
                         item.stockOut,
                         item.closingStock
                     ]);
@@ -539,6 +631,7 @@ const InStockReport: React.FC = () => {
                     "GRAND TOTAL",
                     grandTotals.opening,
                     grandTotals.stockIn,
+                    grandTotals.process,
                     grandTotals.stockOut,
                     grandTotals.closing
                 ]);
@@ -619,11 +712,12 @@ const InStockReport: React.FC = () => {
                             <TableHead>
                                 <TableRow>
                                     <TableCell align="center" sx={{ width: "8%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>S.NO</TableCell>
-                                    <TableCell sx={{ width: "38%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>GODOWN NAME</TableCell>
-                                    <TableCell align="right" sx={{ width: "14%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OPENING STOCK</TableCell>
-                                    <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK IN</TableCell>
-                                    <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK OUT</TableCell>
-                                    <TableCell align="right" sx={{ width: "14%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5 }}>CLOSING STOCK</TableCell>
+                                    <TableCell sx={{ width: "30%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>GODOWN NAME</TableCell>
+                                    <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OPENING STOCK</TableCell>
+                                    <TableCell align="right" sx={{ width: "12%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK IN</TableCell>
+                                    <TableCell align="right" sx={{ width: "12%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>PROCESS</TableCell>
+                                    <TableCell align="right" sx={{ width: "12%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK OUT</TableCell>
+                                    <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5 }}>CLOSING STOCK</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
@@ -651,6 +745,9 @@ const InStockReport: React.FC = () => {
                                         <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#2563eb" }}>
                                             {item.stockIn.toLocaleString()}
                                         </TableCell>
+                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
+                                            {item.process.toLocaleString()}
+                                        </TableCell>
                                         <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#ef4444" }}>
                                             {item.stockOut.toLocaleString()}
                                         </TableCell>
@@ -668,6 +765,9 @@ const InStockReport: React.FC = () => {
                                     </TableCell>
                                     <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
                                         {grandTotals.stockIn.toLocaleString()}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
+                                        {grandTotals.process.toLocaleString()}
                                     </TableCell>
                                     <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
                                         {grandTotals.stockOut.toLocaleString()}
@@ -768,20 +868,20 @@ const InStockReport: React.FC = () => {
                         >
                             <TableHead>
                                 <TableRow>
-                                    <TableCell align="center" sx={{ width: (inwardMode || outwardMode) ? "5%" : "6%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>S.NO</TableCell>
-                                    <TableCell sx={{ width: (inwardMode || outwardMode) ? "8%" : "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>NAME</TableCell>
-                                    <TableCell sx={{ width: (inwardMode || outwardMode) ? "25%" : "32%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>PRODUCT NAME</TableCell>
-                                    <TableCell align="right" sx={{ width: (inwardMode || outwardMode) ? "10%" : "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OPENING STOCK</TableCell>
+                                    <TableCell align="center" sx={{ width: (inwardMode || outwardMode || processMode) ? "5%" : "6%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>S.NO</TableCell>
+                                    <TableCell sx={{ width: (inwardMode || outwardMode || processMode) ? "8%" : "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>NAME</TableCell>
+                                    <TableCell sx={{ width: (inwardMode || outwardMode || processMode) ? "25%" : "32%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>PRODUCT NAME</TableCell>
+                                    <TableCell align="right" sx={{ width: (inwardMode || outwardMode || processMode) ? "10%" : "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OPENING STOCK</TableCell>
 
                                     {/* Stock In Header - Clicking toggles inwardMode. Shown only in Normal Mode */}
-                                    {!inwardMode && !outwardMode && (
+                                    {!inwardMode && !outwardMode && !processMode && (
                                         <TableCell
                                             align="right"
                                             onClick={() => {
-                                                setInwardMode(true);
+                                                handleSetInwardMode(true);
                                             }}
                                             sx={{
-                                                width: "13%",
+                                                width: "12%",
                                                 backgroundColor: "#1E3A8A",
                                                 color: "#fff",
                                                 fontWeight: 600,
@@ -811,7 +911,7 @@ const InStockReport: React.FC = () => {
                                             <TableCell align="right" sx={{ width: "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>RETURN</TableCell>
                                             <TableCell
                                                 align="right"
-                                                onClick={() => setInwardMode(false)}
+                                                onClick={() => handleSetInwardMode(false)}
                                                 sx={{
                                                     width: "12%",
                                                     backgroundColor: "#111827",
@@ -833,15 +933,72 @@ const InStockReport: React.FC = () => {
                                         </>
                                     )}
 
+                                    {/* PROCESS Header - Clicking toggles processMode. Shown only in Normal Mode */}
+                                    {!inwardMode && !outwardMode && !processMode && (
+                                        <TableCell
+                                            align="right"
+                                            onClick={() => handleSetProcessMode(true)}
+                                            sx={{
+                                                width: "12%",
+                                                backgroundColor: "#1E3A8A",
+                                                color: "#fff",
+                                                fontWeight: 600,
+                                                py: 1.5,
+                                                borderRight: "1px solid #cbd5e1",
+                                                cursor: "pointer",
+                                                userSelect: "none",
+                                                textDecoration: "none",
+                                                transition: "background-color 0.2s",
+                                                "&:hover": {
+                                                    backgroundColor: "#1e40af"
+                                                }
+                                            }}
+                                        >
+                                            <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
+                                                PROCESS <KeyboardArrowDownIcon fontSize="small" />
+                                            </Box>
+                                        </TableCell>
+                                    )}
+
+                                    {/* Show PROCESS 1, PROCESS 2, PROCESS 3, and TOTAL PROCESS columns when processMode is active */}
+                                    {processMode && (
+                                        <>
+                                            <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>PROCESS 1</TableCell>
+                                            <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>PROCESS 2</TableCell>
+                                            <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>PROCESS 3</TableCell>
+                                            <TableCell
+                                                align="right"
+                                                onClick={() => handleSetProcessMode(false)}
+                                                sx={{
+                                                    width: "13%",
+                                                    backgroundColor: "#111827",
+                                                    color: "#fff",
+                                                    fontWeight: 700,
+                                                    py: 1.5,
+                                                    cursor: "pointer",
+                                                    userSelect: "none",
+                                                    textDecoration: "none",
+                                                    "&:hover": {
+                                                        backgroundColor: "#1f2937"
+                                                    }
+                                                }}
+                                            >
+                                                <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
+                                                    TOTAL PROCESS <KeyboardArrowUpIcon fontSize="small" />
+                                                </Box>
+                                            </TableCell>
+                                        </>
+                                    )}
+
                                     {/* Stock Outwards Header - Clicking toggles outwardMode. Shown only in Normal Mode */}
-                                    {!inwardMode && !outwardMode && (
+                                    {!inwardMode && !outwardMode && !processMode && (
                                         <TableCell
                                             align="right"
                                             onClick={() => {
-                                                setOutwardMode(true);
+                                                handleSetOutwardMode(true);
                                             }}
                                             sx={{
-                                                width: "13%",
+                                                width: "12%",
                                                 backgroundColor: "#1E3A8A",
                                                 color: "#fff",
                                                 fontWeight: 600,
@@ -871,7 +1028,7 @@ const InStockReport: React.FC = () => {
                                             <TableCell align="right" sx={{ width: "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>DELIVERY</TableCell>
                                             <TableCell
                                                 align="right"
-                                                onClick={() => setOutwardMode(false)}
+                                                onClick={() => handleSetOutwardMode(false)}
                                                 sx={{
                                                     width: "12%",
                                                     backgroundColor: "#111827",
@@ -894,8 +1051,8 @@ const InStockReport: React.FC = () => {
                                     )}
 
                                     {/* Closing Stock is shown in Normal Mode */}
-                                    {!inwardMode && !outwardMode && (
-                                        <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5 }}>
+                                    {!inwardMode && !outwardMode && !processMode && (
+                                        <TableCell align="right" sx={{ width: "12%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5 }}>
                                             CLOSING STOCK
                                         </TableCell>
                                     )}
@@ -904,7 +1061,7 @@ const InStockReport: React.FC = () => {
                             <TableBody>
                                 {paginatedData.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={(inwardMode || outwardMode) ? 9 : 7} align="center" sx={{ py: 6, color: "#94a3b8" }}>
+                                        <TableCell colSpan={(inwardMode || outwardMode) ? 9 : 8} align="center" sx={{ py: 6, color: "#94a3b8" }}>
                                             No stock items match your search/filter filters.
                                         </TableCell>
                                     </TableRow>
@@ -921,7 +1078,7 @@ const InStockReport: React.FC = () => {
                                                 {showHeader && groupHeader && (
                                                     <TableRow>
                                                         <TableCell
-                                                            colSpan={(inwardMode || outwardMode) ? 9 : 7}
+                                                            colSpan={(inwardMode || outwardMode) ? 9 : 8}
                                                             sx={{
                                                                 backgroundColor: groupHeader.bgColor,
                                                                 color: groupHeader.textColor,
@@ -953,7 +1110,7 @@ const InStockReport: React.FC = () => {
                                                     </TableCell>
 
                                                     {/* Inward Mode or Normal Mode: Render Stock In */}
-                                                    {!inwardMode && !outwardMode && (
+                                                    {!inwardMode && !outwardMode && !processMode && (
                                                         <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: (item.stockIn + item.returns) > 0 ? "#2563eb" : "#475569" }}>
                                                             {(item.stockIn + item.returns) || "-"}
                                                         </TableCell>
@@ -980,8 +1137,33 @@ const InStockReport: React.FC = () => {
                                                         </>
                                                     )}
 
+                                                    {/* Normal Mode: Render Process */}
+                                                    {!inwardMode && !outwardMode && !processMode && (
+                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: getProcessTotal(item) > 0 ? "#2563eb" : "#475569" }}>
+                                                            {getProcessTotal(item) || "-"}
+                                                        </TableCell>
+                                                    )}
+
+                                                    {/* Process Mode: Render PROCESS 1, PROCESS 2, PROCESS 3, and TOTAL PROCESS */}
+                                                    {processMode && (
+                                                        <>
+                                                            <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
+                                                                {item.processSplits?.process1 || "-"}
+                                                            </TableCell>
+                                                            <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
+                                                                {item.processSplits?.process2 || "-"}
+                                                            </TableCell>
+                                                            <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
+                                                                {item.processSplits?.process3 || "-"}
+                                                            </TableCell>
+                                                            <TableCell align="right" sx={{ fontWeight: 700, pr: 2, backgroundColor: "#eff6ff", color: "#1e40af" }}>
+                                                                {getProcessTotal(item) || "-"}
+                                                            </TableCell>
+                                                        </>
+                                                    )}
+
                                                     {/* Normal Mode: Render STOCK OUTWARDS */}
-                                                    {!inwardMode && !outwardMode && (
+                                                    {!inwardMode && !outwardMode && !processMode && (
                                                         <TableCell
                                                             align="right"
                                                             sx={{
@@ -1017,7 +1199,7 @@ const InStockReport: React.FC = () => {
                                                     )}
 
                                                     {/* Normal Mode: Render CLOSING STOCK */}
-                                                    {!inwardMode && !outwardMode && (
+                                                    {!inwardMode && !outwardMode && !processMode && (
                                                         <TableCell
                                                             align="right"
                                                             sx={{
@@ -1046,7 +1228,7 @@ const InStockReport: React.FC = () => {
                                         </TableCell>
 
                                         {/* Normal Mode: Stock In */}
-                                        {!inwardMode && !outwardMode && (
+                                        {!inwardMode && !outwardMode && !processMode && (
                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
                                                 {detailedTotals.totalInward.toLocaleString()}
                                             </TableCell>
@@ -1073,8 +1255,33 @@ const InStockReport: React.FC = () => {
                                             </>
                                         )}
 
+                                        {/* Normal Mode: Process */}
+                                        {!inwardMode && !outwardMode && !processMode && (
+                                            <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
+                                                {detailedTotals.processTotal.toLocaleString()}
+                                            </TableCell>
+                                        )}
+
+                                        {/* Process Mode: Process 1, Process 2, Process 3, Total Process */}
+                                        {processMode && (
+                                            <>
+                                                <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
+                                                    {detailedTotals.process1.toLocaleString()}
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
+                                                    {detailedTotals.process2.toLocaleString()}
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
+                                                    {detailedTotals.process3.toLocaleString()}
+                                                </TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 800, pr: 2, color: "#1e40af" }}>
+                                                    {detailedTotals.processTotal.toLocaleString()}
+                                                </TableCell>
+                                            </>
+                                        )}
+
                                         {/* Normal Mode: Stock Outwards */}
-                                        {!inwardMode && !outwardMode && (
+                                        {!inwardMode && !outwardMode && !processMode && (
                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
                                                 {detailedTotals.totalOutward.toLocaleString()}
                                             </TableCell>
@@ -1102,7 +1309,7 @@ const InStockReport: React.FC = () => {
                                         )}
 
                                         {/* Normal Mode: Closing */}
-                                        {!inwardMode && !outwardMode && (
+                                        {!inwardMode && !outwardMode && !processMode && (
                                             <TableCell align="right" sx={{ fontWeight: 800, pr: 2, color: "#15803d" }}>
                                                 {detailedTotals.closing.toLocaleString()}
                                             </TableCell>
