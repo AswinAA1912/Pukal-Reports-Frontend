@@ -229,9 +229,6 @@ const StockInHandReport: React.FC = () => {
                 setRawData(res.data?.data || []);
             }
 
-            /* =========================
-               EXPANDED MODE
-            ========================= */
             else {
                 const godownFilter = (filterLevels[1] || []).find(
                     (f: any) =>
@@ -239,11 +236,19 @@ const StockInHandReport: React.FC = () => {
                         f.columnName === "Godown_Name"
                 );
 
-                const godownId =
+                const rawGodownId =
                     selectedFilters["Godown_Id"] ||
                     selectedFilters["Godown_Name"] ||
-                    selectedFilters[godownFilter?.columnName];
+                    (godownFilter ? selectedFilters[godownFilter.columnName] : undefined);
 
+                if (!rawGodownId) {
+                    setRawData([]);
+                    setExpanded({});
+                    setPage(1);
+                    return;
+                }
+
+                const godownId = Array.isArray(rawGodownId) ? rawGodownId[0] : rawGodownId;
                 if (!godownId) {
                     setRawData([]);
                     setExpanded({});
@@ -252,6 +257,29 @@ const StockInHandReport: React.FC = () => {
                 }
 
                 payload.Godown_Id = godownId;
+
+                const sortedL1Filters = [...(filterLevels[1] || [])]
+                    .filter((f: any) => f.columnName !== "Godown_Id" && f.columnName !== "Godown_Name")
+                    .sort((a, b) => Number(a.filterType || 0) - Number(b.filterType || 0));
+
+                const getFilterValuesString = (filter: any) => {
+                    if (!filter) return undefined;
+                    const values = selectedFilters[filter.columnName];
+                    if (!values) return undefined;
+
+                    const valArray = Array.isArray(values) ? values : [values];
+                    if (valArray.length === 0) return undefined;
+
+                    const labels = valArray.map(val => {
+                        const opt = filter.options?.find((o: any) => String(o.value) === String(val));
+                        return opt ? opt.label : String(val);
+                    });
+                    return labels.filter(Boolean).join(",");
+                };
+
+                payload.filter1 = getFilterValuesString(sortedL1Filters[0]);
+                payload.filter2 = getFilterValuesString(sortedL1Filters[1]);
+                payload.filter3 = getFilterValuesString(sortedL1Filters[2]);
 
                 const res =
                     await godownwisestockreportservice.getGodownwiseReports(
@@ -311,19 +339,32 @@ const StockInHandReport: React.FC = () => {
         // ✅ DYNAMIC FILTERS
         Object.keys(selectedFilters).forEach((col) => {
             const value = selectedFilters[col];
+            if (col === "Godown_Id" || col === "Godown_Name") return;
 
             const filter = Object.values(filterLevels)
                 .flat()
                 .find((f: any) => f.columnName === col);
 
-            const label = filter?.options?.find(
-                (opt: any) => String(opt.value) === String(value)
-            )?.label;
+            if (Array.isArray(value)) {
+                if (value.length > 0) {
+                    const labels = value.map(val => {
+                        const opt = filter?.options?.find((o: any) => String(o.value) === String(val));
+                        return opt ? opt.label : String(val);
+                    });
+                    filtered = filtered.filter(
+                        (r) => labels.some(lbl => String(r[col] || "").trim().toLowerCase() === String(lbl).trim().toLowerCase())
+                    );
+                }
+            } else {
+                const label = filter?.options?.find(
+                    (opt: any) => String(opt.value) === String(value)
+                )?.label;
 
-            if (label) {
-                filtered = filtered.filter(
-                    (r) => String(r[col]) === String(label)
-                );
+                if (label) {
+                    filtered = filtered.filter(
+                        (r) => String(r[col] || "").trim().toLowerCase() === String(label).trim().toLowerCase()
+                    );
+                }
             }
         });
 

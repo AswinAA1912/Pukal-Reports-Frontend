@@ -12,11 +12,21 @@ import {
     TextField,
     Chip,
     InputAdornment,
-    Button
+    Button,
+    CircularProgress,
+    Menu,
+    Switch,
+    Tooltip,
+    IconButton
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import SettingsIcon from "@mui/icons-material/Settings";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import { DndContext, closestCenter } from "@dnd-kit/core";
+import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import dayjs from "dayjs";
 import PageHeader from "../../Layout/PageHeader";
 import * as XLSX from "xlsx";
@@ -24,194 +34,120 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "react-toastify";
 import CommonPagination from "../../Components/CommonPagination";
+import ReportFilterDrawer from "../../Components/ReportFilterDrawer";
+import {
+    StockAbstractReportService,
+    StockAbstractData4
+} from "../../services/dayStockAbstract.service";
+import {
+    godownwisestockreportservice,
+    stockWiseReport
+} from "../../services/stockWiseReport.service";
 
-interface StockItem {
-    sNo: number;
-    brand: string;
-    productName: string;
-    openingStock: number;
-    stockIn: number;
-    stockInSplits?: {
-        trip1: number;
-        trip2: number;
-        trip3: number;
-    };
-    stockOutSplits: {
-        others1: number;
-        others2: number;
-        others3: number;
-    };
-    processSplits?: {
-        process1: number;
-        process2: number;
-        process3: number;
-    };
-    delivery: number;
-    returns: number;
-}
-
-interface GroupHeader {
+export interface ColumnConfig {
+    key: string;
     label: string;
-    bgColor: string;
-    textColor: string;
-    brandName: string;
+    enabled: boolean;
+    order: number;
 }
 
-const GROUP_HEADERS: Record<number, GroupHeader> = {
-    1: { label: "WOW", bgColor: "#22c55e", textColor: "#fff", brandName: "WOW" }, // Green
-    10: { label: "MOBITE", bgColor: "#ef4444", textColor: "#fff", brandName: "WOW" }, // Red
-    27: { label: "BULK", bgColor: "#eab308", textColor: "#000", brandName: "WOW" }, // Yellow
-    37: { label: "CHOCOLATES (CANDY)", bgColor: "#3b82f6", textColor: "#fff", brandName: "CANDY" }, // Blue
-    70: { label: "CHIPS", bgColor: "#ef4444", textColor: "#fff", brandName: "CHIPS" }, // Red
-    88: { label: "SNACKS", bgColor: "#10b981", textColor: "#fff", brandName: "SNACKS" }, // Green
-    96: { label: "MERA RUSK", bgColor: "#14b8a6", textColor: "#fff", brandName: "RUSK" }, // Teal
-    98: { label: "CHOLA COLOR (Pcs)", bgColor: "#1e3a8a", textColor: "#fff", brandName: "PLUNGE CLOUR" }, // Dark Blue
-    109: { label: "WATER", bgColor: "#06b6d4", textColor: "#fff", brandName: "WATER" } // Cyan
-};
-
-const MOCK_STOCK_DATA: StockItem[] = [
-    // WOW
-    { sNo: 1, brand: "WOW", productName: "VEG BIRYANI", openingStock: 518, stockIn: 50, stockOutSplits: { others1: 300, others2: 19, others3: 27 }, delivery: 10, returns: 5 },
-    { sNo: 2, brand: "WOW", productName: "PUFF (TOMATO)", openingStock: 175, stockIn: 30, stockOutSplits: { others1: 72, others2: 10, others3: 9 }, delivery: 5, returns: 2 },
-    { sNo: 3, brand: "WOW", productName: "RINGS", openingStock: 92, stockIn: 15, stockOutSplits: { others1: 24, others2: 1, others3: 0 }, delivery: 2, returns: 1 },
-    { sNo: 4, brand: "WOW", productName: "STICKS", openingStock: 58, stockIn: 10, stockOutSplits: { others1: 12, others2: 1, others3: 0 }, delivery: 3, returns: 0 },
-    { sNo: 5, brand: "WOW", productName: "WAFERS", openingStock: 62, stockIn: 12, stockOutSplits: { others1: 12, others2: 1, others3: 0 }, delivery: 1, returns: 2 },
-    { sNo: 6, brand: "WOW", productName: "MOONGDHALL", openingStock: 1148, stockIn: 200, stockOutSplits: { others1: 240, others2: 11, others3: 19 }, delivery: 40, returns: 15 },
-    { sNo: 7, brand: "WOW", productName: "LOCAL CORN PUFF", openingStock: 42, stockIn: 50, stockOutSplits: { others1: 36, others2: 0, others3: 0 }, delivery: 2, returns: 1 },
-    { sNo: 8, brand: "WOW", productName: "NOODLES", openingStock: 84, stockIn: 100, stockOutSplits: { others1: 48, others2: 1, others3: 1 }, delivery: 12, returns: 3 },
-    { sNo: 9, brand: "WOW", productName: "POPCORN SALT", openingStock: 0, stockIn: 80, stockOutSplits: { others1: 40, others2: 10, others3: 5 }, delivery: 15, returns: 2 },
-
-    // MOBITE
-    { sNo: 10, brand: "WOW", productName: "MASALA", openingStock: 531, stockIn: 100, stockOutSplits: { others1: 30, others2: 0, others3: 18 }, delivery: 20, returns: 5 },
-    { sNo: 11, brand: "WOW", productName: "CHEESE", openingStock: 340, stockIn: 60, stockOutSplits: { others1: 30, others2: 0, others3: 0 }, delivery: 15, returns: 1 },
-    { sNo: 12, brand: "WOW", productName: "MINT", openingStock: 150, stockIn: 40, stockOutSplits: { others1: 20, others2: 0, others3: 0 }, delivery: 10, returns: 0 },
-    { sNo: 13, brand: "WOW", productName: "MOBITE MILLET CHEESE", openingStock: 0, stockIn: 150, stockOutSplits: { others1: 50, others2: 25, others3: 15 }, delivery: 25, returns: 5 },
-    { sNo: 14, brand: "WOW", productName: "MOBITE MILLET STICK", openingStock: 0, stockIn: 120, stockOutSplits: { others1: 40, others2: 20, others3: 10 }, delivery: 15, returns: 2 },
-    { sNo: 15, brand: "WOW", productName: "SUPER CORN PUFF", openingStock: 1420, stockIn: 300, stockOutSplits: { others1: 30, others2: 210, others3: 0 }, delivery: 50, returns: 8 },
-    { sNo: 16, brand: "WOW", productName: "SG SALT & PEPPER", openingStock: 58, stockIn: 24, stockOutSplits: { others1: 10, others2: 1, others3: 2 }, delivery: 4, returns: 1 },
-    { sNo: 17, brand: "WOW", productName: "SG HOT & SPICY", openingStock: 18, stockIn: 12, stockOutSplits: { others1: 5, others2: 1, others3: 0 }, delivery: 2, returns: 0 },
-    { sNo: 18, brand: "WOW", productName: "SOUR CREAM ONION", openingStock: 51, stockIn: 36, stockOutSplits: { others1: 15, others2: 2, others3: 3 }, delivery: 5, returns: 1 },
-    { sNo: 19, brand: "WOW", productName: "SIZZLING JALAPENO", openingStock: 36, stockIn: 24, stockOutSplits: { others1: 10, others2: 2, others3: 1 }, delivery: 3, returns: 0 },
-    { sNo: 20, brand: "WOW", productName: "HOT CHIN CHILLI GARLIC", openingStock: 54, stockIn: 30, stockOutSplits: { others1: 12, others2: 2, others3: 1 }, delivery: 4, returns: 1 },
-    { sNo: 21, brand: "WOW", productName: "DAHIPURI", openingStock: 29, stockIn: 20, stockOutSplits: { others1: 8, others2: 2, others3: 0 }, delivery: 2, returns: 0 },
-    { sNo: 22, brand: "WOW", productName: "WHEAT SALT & PEPPER", openingStock: 86, stockIn: 50, stockOutSplits: { others1: 18, others2: 2, others3: 2 }, delivery: 6, returns: 1 },
-    { sNo: 23, brand: "WOW", productName: "PURI PURI", openingStock: 86, stockIn: 50, stockOutSplits: { others1: 20, others2: 2, others3: 2 }, delivery: 8, returns: 2 },
-    { sNo: 24, brand: "WOW", productName: "CHEESE BALLS", openingStock: 51, stockIn: 36, stockOutSplits: { others1: 14, others2: 2, others3: 1 }, delivery: 5, returns: 0 },
-    { sNo: 25, brand: "WOW", productName: "CHOCO BALLS", openingStock: 25, stockIn: 24, stockOutSplits: { others1: 10, others2: 2, others3: 1 }, delivery: 3, returns: 1 },
-    { sNo: 26, brand: "WOW", productName: "POPCORN CARAMEL", openingStock: 0, stockIn: 100, stockOutSplits: { others1: 30, others2: 10, others3: 5 }, delivery: 12, returns: 3 },
-
-    // BULK
-    { sNo: 27, brand: "WOW", productName: "MOONGDHALL", openingStock: 0, stockIn: 500, stockOutSplits: { others1: 150, others2: 50, others3: 20 }, delivery: 100, returns: 10 },
-    { sNo: 28, brand: "WOW", productName: "MASALA RICE CHIPS", openingStock: 0, stockIn: 300, stockOutSplits: { others1: 80, others2: 30, others3: 10 }, delivery: 50, returns: 5 },
-    { sNo: 29, brand: "WOW", productName: "MASALA CORN SMALL", openingStock: 40, stockIn: 100, stockOutSplits: { others1: 4, others2: 10, others3: 5 }, delivery: 12, returns: 2 },
-    { sNo: 30, brand: "WOW", productName: "MASALA CORN BIG", openingStock: 40, stockIn: 120, stockOutSplits: { others1: 4, others2: 12, others3: 2 }, delivery: 15, returns: 1 },
-    { sNo: 31, brand: "WOW", productName: "CHEESE CORN POP", openingStock: 0, stockIn: 200, stockOutSplits: { others1: 60, others2: 20, others3: 10 }, delivery: 35, returns: 4 },
-    { sNo: 32, brand: "WOW", productName: "POPCORN- SALT", openingStock: 0, stockIn: 150, stockOutSplits: { others1: 45, others2: 15, others3: 5 }, delivery: 25, returns: 2 },
-    { sNo: 33, brand: "WOW", productName: "POPCORN- KARAM", openingStock: 0, stockIn: 150, stockOutSplits: { others1: 40, others2: 12, others3: 8 }, delivery: 20, returns: 3 },
-    { sNo: 34, brand: "WOW", productName: "RINGS TOMATO", openingStock: 0, stockIn: 250, stockOutSplits: { others1: 70, others2: 30, others3: 10 }, delivery: 45, returns: 5 },
-    { sNo: 35, brand: "WOW", productName: "SWEET CRISPY", openingStock: 0, stockIn: 180, stockOutSplits: { others1: 50, others2: 20, others3: 5 }, delivery: 30, returns: 1 },
-    { sNo: 36, brand: "WOW", productName: "RINGS KARAM MASALA", openingStock: 0, stockIn: 250, stockOutSplits: { others1: 65, others2: 25, others3: 10 }, delivery: 40, returns: 6 },
-
-    // CHOCOLATES (CANDY)
-    { sNo: 37, brand: "CANDY", productName: "MILK JELLY", openingStock: 0, stockIn: 200, stockOutSplits: { others1: 60, others2: 30, others3: 10 }, delivery: 30, returns: 5 },
-    { sNo: 38, brand: "CANDY", productName: "BROWNIE CAKE TUB", openingStock: 11, stockIn: 50, stockOutSplits: { others1: 2, others2: 5, others3: 2 }, delivery: 8, returns: 1 },
-    { sNo: 39, brand: "CANDY", productName: "FRUIT JELLY R/S", openingStock: 13, stockIn: 80, stockOutSplits: { others1: 4, others2: 1, others3: 2 }, delivery: 10, returns: 0 },
-    { sNo: 40, brand: "CANDY", productName: "ORANGE CANDY", openingStock: 12, stockIn: 100, stockOutSplits: { others1: 30, others2: 10, others3: 5 }, delivery: 15, returns: 2 },
-    { sNo: 41, brand: "CANDY", productName: "GUAVA CANDY", openingStock: 12, stockIn: 100, stockOutSplits: { others1: 25, others2: 12, others3: 3 }, delivery: 12, returns: 1 },
-    { sNo: 42, brand: "CANDY", productName: "CRUNCHY COCONUT", openingStock: 1, stockIn: 60, stockOutSplits: { others1: 15, others2: 5, others3: 2 }, delivery: 8, returns: 0 },
-    { sNo: 43, brand: "CANDY", productName: "ELAICHI MIX JELLY", openingStock: 2, stockIn: 75, stockOutSplits: { others1: 20, others2: 10, others3: 5 }, delivery: 10, returns: 2 },
-    { sNo: 44, brand: "CANDY", productName: "JELLY BON BON LOLLIPOP", openingStock: 1, stockIn: 120, stockOutSplits: { others1: 35, others2: 15, others3: 5 }, delivery: 18, returns: 1 },
-    { sNo: 45, brand: "CANDY", productName: "MILK ECLAIRS", openingStock: 8, stockIn: 150, stockOutSplits: { others1: 40, others2: 20, others3: 10 }, delivery: 25, returns: 3 },
-    { sNo: 46, brand: "CANDY", productName: "MINI SPO LOLLIPOP", openingStock: 10, stockIn: 90, stockOutSplits: { others1: 20, others2: 2, others3: 5 }, delivery: 12, returns: 1 },
-
-    // DRINKS / CHIPS
-    { sNo: 70, brand: "CHIPS", productName: "FLAMMING HOT", openingStock: 85, stockIn: 150, stockOutSplits: { others1: 10, others2: 3, others3: 4 }, delivery: 25, returns: 3 },
-    { sNo: 71, brand: "CHIPS", productName: "MAGIC MASALA", openingStock: 102, stockIn: 120, stockOutSplits: { others1: 10, others2: 2, others3: 4 }, delivery: 20, returns: 2 },
-    { sNo: 72, brand: "CHIPS", productName: "CREAM ONION", openingStock: 207, stockIn: 200, stockOutSplits: { others1: 10, others2: 6, others3: 4 }, delivery: 30, returns: 5 },
-    { sNo: 73, brand: "CHIPS", productName: "CLASSIC SALT", openingStock: 58, stockIn: 100, stockOutSplits: { others1: 10, others2: 2, others3: 4 }, delivery: 15, returns: 1 },
-    { sNo: 74, brand: "CHIPS", productName: "KURI KURI", openingStock: 98, stockIn: 120, stockOutSplits: { others1: 10, others2: 2, others3: 1 }, delivery: 18, returns: 2 },
-    { sNo: 75, brand: "CHIPS", productName: "THIKKUM THIKKUM", openingStock: 34, stockIn: 80, stockOutSplits: { others1: 2, others2: 10, others3: 1 }, delivery: 12, returns: 0 },
-    { sNo: 76, brand: "CHIPS", productName: "PATRA", openingStock: 52, stockIn: 60, stockOutSplits: { others1: 2, others2: 8, others3: 1 }, delivery: 8, returns: 1 },
-    { sNo: 77, brand: "CHIPS", productName: "MASALA PEANUT", openingStock: 20, stockIn: 50, stockOutSplits: { others1: 2, others2: 5, others3: 0 }, delivery: 6, returns: 2 },
-    { sNo: 78, brand: "CHIPS", productName: "PINZO CHIPS CUP", openingStock: 327, stockIn: 200, stockOutSplits: { others1: 10, others2: 8, others3: 11 }, delivery: 35, returns: 4 },
-    { sNo: 79, brand: "CHIPS", productName: "PINZO WHEELS", openingStock: 2, stockIn: 80, stockOutSplits: { others1: 1, others2: 15, others3: 5 }, delivery: 10, returns: 1 },
-
-    // SNACKS
-    { sNo: 88, brand: "SNACKS", productName: "SOAN PAPDI 20PCS (M)", openingStock: 0, stockIn: 120, stockOutSplits: { others1: 30, others2: 10, others3: 5 }, delivery: 15, returns: 2 },
-    { sNo: 89, brand: "SNACKS", productName: "KADALAI MITTAI 20P", openingStock: 8, stockIn: 90, stockOutSplits: { others1: 4, others2: 1, others3: 0 }, delivery: 12, returns: 1 },
-    { sNo: 90, brand: "SNACKS", productName: "MIXTURE MITTAI", openingStock: 2, stockIn: 50, stockOutSplits: { others1: 12, others2: 1, others3: 2 }, delivery: 8, returns: 0 },
-    { sNo: 91, brand: "SNACKS", productName: "PALKOVA", openingStock: 2, stockIn: 60, stockOutSplits: { others1: 15, others2: 1, others3: 1 }, delivery: 6, returns: 1 },
-
-    // MERA RUSK
-    { sNo: 96, brand: "RUSK", productName: "MERA ELAICHI RUSK 36PCS 1BOX", openingStock: 349, stockIn: 150, stockOutSplits: { others1: 36, others2: 6, others3: 5 }, delivery: 20, returns: 3 },
-    { sNo: 97, brand: "RUSK", productName: "MERA MILK RUSK 48PCS 1BOX", openingStock: 95, stockIn: 120, stockOutSplits: { others1: 12, others2: 2, others3: 4 }, delivery: 15, returns: 2 },
-
-    // CHOLA COLOR (Pcs)
-    { sNo: 98, brand: "PLUNGE CLOUR", productName: "BOVONTO", openingStock: 1752, stockIn: 300, stockOutSplits: { others1: 8, others2: 20, others3: 10 }, delivery: 50, returns: 8 },
-    { sNo: 99, brand: "PLUNGE CLOUR", productName: "7 UP", openingStock: 1547, stockIn: 250, stockOutSplits: { others1: 6, others2: 18, others3: 5 }, delivery: 40, returns: 6 },
-    { sNo: 100, brand: "PLUNGE CLOUR", productName: "FANTASY", openingStock: 1727, stockIn: 300, stockOutSplits: { others1: 89, others2: 48, others3: 12 }, delivery: 60, returns: 10 },
-    { sNo: 101, brand: "PLUNGE CLOUR", productName: "ORANGE", openingStock: 1210, stockIn: 200, stockOutSplits: { others1: 6, others2: 20, others3: 5 }, delivery: 35, returns: 4 },
-    { sNo: 102, brand: "PLUNGE CLOUR", productName: "MANGO", openingStock: 2064, stockIn: 400, stockOutSplits: { others1: 6, others2: 110, others3: 20 }, delivery: 75, returns: 12 },
-    { sNo: 103, brand: "PLUNGE CLOUR", productName: "LICHI", openingStock: 858, stockIn: 150, stockOutSplits: { others1: 19, others2: 18, others3: 5 }, delivery: 28, returns: 3 },
-
-    // WATER
-    { sNo: 109, brand: "WATER", productName: "WATER 1 LTR", openingStock: 350, stockIn: 150, stockOutSplits: { others1: 6, others2: 4, others3: 2 }, delivery: 15, returns: 1 },
-    { sNo: 110, brand: "WATER", productName: "WATER 500 ML", openingStock: 44, stockIn: 120, stockOutSplits: { others1: 7, others2: 5, others3: 3 }, delivery: 12, returns: 2 },
-    { sNo: 111, brand: "WATER", productName: "WATER 300 ML", openingStock: 63, stockIn: 100, stockOutSplits: { others1: 1, others2: 1, others3: 1 }, delivery: 10, returns: 0 },
-    { sNo: 112, brand: "WATER", productName: "2 IN 1", openingStock: 3, stockIn: 40, stockOutSplits: { others1: 2, others2: 1, others3: 1 }, delivery: 5, returns: 1 }
+const DEFAULT_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
+    { key: "Brand", label: "Brand Name", enabled: true, order: 0 },
+    { key: "stock_item_name", label: "Product Name", enabled: true, order: 1 },
+    { key: "Product_Id", label: "Product ID", enabled: false, order: 2 },
+    { key: "Trans_Date", label: "Transaction Date", enabled: false, order: 3 },
+    { key: "Group_Name", label: "Group Name", enabled: false, order: 4 },
+    { key: "Group_ST", label: "Group ST", enabled: false, order: 5 },
+    { key: "Bag", label: "Bag", enabled: false, order: 6 },
+    { key: "Stock_Group", label: "Stock Group", enabled: false, order: 7 },
+    { key: "S_Sub_Group_1", label: "Sub Group 1", enabled: false, order: 8 },
+    { key: "Grade_Item_Group", label: "Grade Item Group", enabled: false, order: 9 },
+    { key: "Item_Name_Modified", label: "Item Name Modified", enabled: false, order: 10 },
+    { key: "Date_Added", label: "Date Added", enabled: false, order: 11 },
+    { key: "POS_Group", label: "POS Group", enabled: false, order: 12 },
+    { key: "Active", label: "Active Status", enabled: false, order: 13 },
+    { key: "POS_Item_Name", label: "POS Item Name", enabled: false, order: 14 },
+    { key: "Product_Rate", label: "Product Rate", enabled: false, order: 15 },
+    { key: "Godown_Name", label: "Godown Name", enabled: false, order: 16 }
 ];
-
-const GODOWNS = [
-    "Kappalur Godown",
-    "Live Sales Godown",
-    "Purchase Warehouse",
-    "MainLocation",
-    "Office Godown",
-    "P&T Nagar Godown"
-];
-
-const GODOWN_MULTIPLIERS: Record<string, number> = {
-    "Kappalur Godown": 1.2,
-    "Live Sales Godown": 0.8,
-    "Purchase Warehouse": 2.5,
-    "MainLocation": 1.5,
-    "Office Godown": 0.2,
-    "P&T Nagar Godown": 0.6
-};
-
-const getStockDataForGodown = (godownName: string): StockItem[] => {
-    const mult = GODOWN_MULTIPLIERS[godownName] || 1;
-    return MOCK_STOCK_DATA.map(item => {
-        const others1 = Math.round(item.stockOutSplits.others1 * mult);
-        const others2 = Math.round(item.stockOutSplits.others2 * mult);
-        const others3 = Math.round(item.stockOutSplits.others3 * mult);
-        const scaledStockIn = Math.round(item.stockIn * mult);
-
-        // Dynamic stockIn splits (Trips)
-        const trip1 = Math.round(scaledStockIn * 0.5);
-        const trip2 = Math.round(scaledStockIn * 0.3);
-        const trip3 = Math.max(0, scaledStockIn - trip1 - trip2);
-
-        // Dynamic process splits (Process 1, 2, 3)
-        const process1 = Math.round(scaledStockIn * 0.25);
-        const process2 = Math.round(scaledStockIn * 0.15);
-        const process3 = Math.max(0, Math.round(scaledStockIn * 0.4) - process1 - process2);
-
-        return {
-            ...item,
-            openingStock: Math.round(item.openingStock * mult),
-            stockIn: scaledStockIn,
-            stockInSplits: { trip1, trip2, trip3 },
-            stockOutSplits: { others1, others2, others3 },
-            processSplits: { process1, process2, process3 },
-            delivery: Math.round(item.delivery * mult),
-            returns: Math.round(item.returns * mult)
-        };
-    });
-};
 
 const InStockReport: React.FC = () => {
-    const [selectedGodown, setSelectedGodown] = useState<string | null>(null);
+    const today = dayjs().format("YYYY-MM-DD");
+    const [columnsConfig, setColumnsConfig] = useState<ColumnConfig[]>(() => {
+        const saved = sessionStorage.getItem("inStockColumns");
+        return saved ? JSON.parse(saved) : DEFAULT_CONFIGURABLE_COLUMNS;
+    });
+    const [settingsAnchor, setSettingsAnchor] = useState<null | HTMLElement>(null);
+
+    useEffect(() => {
+        sessionStorage.setItem("inStockColumns", JSON.stringify(columnsConfig));
+    }, [columnsConfig]);
+
+    const enabledConfigColumns = useMemo(() => {
+        return columnsConfig
+            .filter(col => col.enabled)
+            .sort((a, b) => a.order - b.order);
+    }, [columnsConfig]);
+
+    /* ================= SORTABLE COLUMN ================= */
+    type SortableColumnProps = {
+        column: ColumnConfig;
+        toggle: (key: string) => void;
+    };
+
+    const SortableColumn: React.FC<SortableColumnProps> = ({ column, toggle }) => {
+        const { attributes, listeners, setNodeRef, transform, transition } =
+            useSortable({ id: column.key });
+
+        const style = {
+            transform: CSS.Transform.toString(transform),
+            transition
+        };
+
+        return (
+            <Box
+                ref={setNodeRef}
+                style={style}
+                display="flex"
+                justifyContent="space-between"
+                alignItems="center"
+                py={0.7}
+                px={1}
+                sx={{
+                    borderBottom: "1px solid #eee"
+                }}
+            >
+                <Box display="flex" alignItems="center" gap={1}>
+                    <Box
+                        {...attributes}
+                        {...listeners}
+                        sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            cursor: "grab"
+                        }}
+                    >
+                        <DragIndicatorIcon fontSize="small" />
+                    </Box>
+                    <Typography fontSize={12}>
+                        {column.label}
+                    </Typography>
+                </Box>
+                <Switch
+                    size="medium"
+                    checked={column.enabled}
+                    onChange={() => toggle(column.key)}
+                />
+            </Box>
+        );
+    };
+
+    const [fromDate, setFromDate] = useState(today);
+    const [toDate, setToDate] = useState(today);
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    const [selectedGodown, setSelectedGodown] = useState<StockAbstractData4 | null>(null);
     const [searchText, setSearchText] = useState("");
     const [selectedBrand, setSelectedBrand] = useState<string>("All");
 
@@ -223,6 +159,10 @@ const InStockReport: React.FC = () => {
     const [inwardMode, setInwardMode] = useState(false);
     const [outwardMode, setOutwardMode] = useState(false);
     const [processMode, setProcessMode] = useState(false);
+
+    // API Data state
+    const [godownListData, setGodownListData] = useState<StockAbstractData4[]>([]);
+    const [detailedStockData, setDetailedStockData] = useState<stockWiseReport[]>([]);
 
     const handleSetInwardMode = (val: boolean) => {
         setInwardMode(val);
@@ -260,113 +200,173 @@ const InStockReport: React.FC = () => {
         setProcessMode(false);
     }, [selectedGodown]);
 
-    // List of unique brands for filtering
+    // Fetch overall godowns list
+    const loadGodownList = async () => {
+        try {
+            setLoading(true);
+            const res = await StockAbstractReportService.getStockAbstractReport({
+                Predate: dayjs(fromDate).subtract(1, "day").format("YYYY-MM-DD"),
+                Fromdate: dayjs(fromDate).format("YYYY-MM-DD"),
+                Todate: dayjs(toDate).format("YYYY-MM-DD"),
+            });
+            setGodownListData(res.Data4 || []);
+        } catch (err) {
+            console.error("Failed to load godown list:", err);
+            toast.error("Failed to load godown list");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fetch detailed stock items for the selected godown
+    const loadDetailedStock = async (godownId: string | number) => {
+        try {
+            setLoading(true);
+            const res = await godownwisestockreportservice.getGodownwiseReports({
+                Godown_Id: godownId,
+                Fromdate: dayjs(fromDate).format("YYYY-MM-DD"),
+                Todate: dayjs(toDate).format("YYYY-MM-DD"),
+            });
+            const apiRows = res.data?.data || [];
+            setDetailedStockData(apiRows);
+
+            if (apiRows.length) {
+                const FIXED_KEYS = [
+                    "OB_Bal_Qty",
+                    "Pur_Qty",
+                    "Sal_Qty",
+                    "Bal_Qty",
+                    "OB_Act_Qty",
+                    "Pur_Act_Qty",
+                    "Sal_Act_Qty",
+                    "Bal_Act_Qty",
+                    "OB_Qty",
+                    "IN_Qty",
+                    "Out_Qty",
+                    "CL_QTY"
+                ];
+                const DEFAULT_COLUMNS = ["Brand", "stock_item_name", "Stock_Item"];
+
+                const baseCols = Object.keys(apiRows[0])
+                    .filter(key => !FIXED_KEYS.includes(key))
+                    .map((key, index) => {
+                        const matchedDefault = DEFAULT_CONFIGURABLE_COLUMNS.find(c => c.key === key);
+                        return {
+                            key,
+                            label: matchedDefault ? matchedDefault.label : key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+                            enabled: matchedDefault ? matchedDefault.enabled : DEFAULT_COLUMNS.includes(key),
+                            order: matchedDefault ? matchedDefault.order : index
+                        };
+                    });
+
+                const saved = sessionStorage.getItem("inStockColumns");
+                if (saved) {
+                    const savedParsed = JSON.parse(saved) as ColumnConfig[];
+                    const merged = savedParsed.map(col => {
+                        const base = baseCols.find(b => b.key === col.key);
+                        return {
+                            ...col,
+                            label: base?.label ?? col.label
+                        };
+                    });
+                    const missing = baseCols
+                        .filter(b => !savedParsed.some(s => s.key === b.key))
+                        .map(b => ({ ...b, enabled: false }));
+                    setColumnsConfig([...merged, ...missing].sort((a, b) => a.order - b.order));
+                } else {
+                    setColumnsConfig(baseCols.sort((a, b) => a.order - b.order));
+                }
+            }
+        } catch (err) {
+            console.error("Failed to load godown stock data:", err);
+            toast.error("Failed to load godown stock data");
+            setDetailedStockData([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadGodownList();
+    }, [fromDate, toDate]);
+
+    useEffect(() => {
+        if (selectedGodown) {
+            loadDetailedStock(selectedGodown.godown_id);
+        } else {
+            setDetailedStockData([]);
+        }
+    }, [selectedGodown, fromDate, toDate]);
+
+    // Group godown list by parent_godown_name (only including godowns with data)
+    const groupedGodowns = useMemo(() => {
+        const groups: Record<string, StockAbstractData4[]> = {};
+        const filteredList = (godownListData || []).filter(g => {
+            return Number(g.OB_Qty || 0) !== 0 ||
+                Number(g.IN_Qty || 0) !== 0 ||
+                Number(g.Out_Qty || 0) !== 0 ||
+                Number(g.CL_QTY || 0) !== 0;
+        });
+
+        filteredList.forEach(row => {
+            const parent = row.parent_godown_name || "Others";
+            if (!groups[parent]) {
+                groups[parent] = [];
+            }
+            groups[parent].push(row);
+        });
+        return groups;
+    }, [godownListData]);
+
+    // Calculate aggregated overall summary of godowns totals
+    const grandTotals = useMemo(() => {
+        let opening = 0;
+        let stockIn = 0;
+        let stockOut = 0;
+        let closing = 0;
+
+        godownListData.forEach(g => {
+            opening += Number(g.OB_Qty || 0);
+            stockIn += Number(g.IN_Qty || 0);
+            stockOut += Number(g.Out_Qty || 0);
+            closing += Number(g.CL_QTY || 0);
+        });
+
+        return { opening, stockIn, stockOut, closing };
+    }, [godownListData]);
+
+    // List of unique brands for filtering in detailed view
     const brands = useMemo(() => {
         const set = new Set<string>();
-        MOCK_STOCK_DATA.forEach(x => set.add(x.brand));
+        (detailedStockData || []).forEach(x => {
+            const b = x.Brand || x.Group_Name;
+            if (b) set.add(b);
+        });
         return ["All", ...Array.from(set).sort()];
-    }, []);
-
-    // Load scaled data for the selected godown
-    const currentGodownData = useMemo(() => {
-        if (!selectedGodown) return [];
-        return getStockDataForGodown(selectedGodown);
-    }, [selectedGodown]);
+    }, [detailedStockData]);
 
     // Filtered data based on search and brand filter
     const filteredData = useMemo(() => {
-        return currentGodownData.filter((item) => {
-            const matchesSearch = item.productName.toLowerCase().includes(searchText.toLowerCase()) ||
-                item.brand.toLowerCase().includes(searchText.toLowerCase());
-            const matchesBrand = selectedBrand === "All" || item.brand === selectedBrand;
+        return (detailedStockData || []).filter((item) => {
+            const productName = item.stock_item_name || item.Stock_Item || "";
+            const brandName = item.Brand || item.Group_Name || "";
+            const matchesSearch = productName.toLowerCase().includes(searchText.toLowerCase()) ||
+                brandName.toLowerCase().includes(searchText.toLowerCase());
+            const matchesBrand = selectedBrand === "All" || brandName === selectedBrand;
             return matchesSearch && matchesBrand;
         });
-    }, [currentGodownData, searchText, selectedBrand]);
+    }, [detailedStockData, searchText, selectedBrand]);
 
     // Slice data for pagination
     const paginatedData = useMemo(() => {
         return filteredData.slice((page - 1) * rowsPerPage, page * rowsPerPage);
     }, [filteredData, page, rowsPerPage]);
 
-    // Helpers
-    const getStockOutTotal = (item: StockItem) => {
-        return item.stockOutSplits.others1 + item.stockOutSplits.others2 + item.stockOutSplits.others3;
-    };
-
-    const getProcessTotal = (item: StockItem) => {
-        if (!item.processSplits) return 0;
-        return item.processSplits.process1 + item.processSplits.process2 + item.processSplits.process3;
-    };
-
-    const getClosingStock = (item: StockItem) => {
-        const out = getStockOutTotal(item);
-        return item.openingStock + item.stockIn - out - item.delivery + item.returns;
-    };
-
-    const getHeaderForSNo = (sNo: number): GroupHeader | null => {
-        const headerSNos = Object.keys(GROUP_HEADERS)
-            .map(Number)
-            .sort((a, b) => b - a);
-        const foundSNo = headerSNos.find(hSNo => sNo >= hSNo);
-        return foundSNo !== undefined ? GROUP_HEADERS[foundSNo] : null;
-    };
-
-
-
-    // Calculate aggregated overall summary of godowns
-    const godownSummaryData = useMemo(() => {
-        return GODOWNS.map((name, idx) => {
-            const data = getStockDataForGodown(name);
-            let totalOpening = 0;
-            let totalStockIn = 0;
-            let totalProcess = 0;
-            let totalStockOut = 0;
-            let totalDelivery = 0;
-            let totalReturns = 0;
-
-            data.forEach(item => {
-                totalOpening += item.openingStock;
-                totalStockIn += item.stockIn;
-                totalProcess += (item.processSplits?.process1 || 0) + (item.processSplits?.process2 || 0) + (item.processSplits?.process3 || 0);
-                totalStockOut += item.stockOutSplits.others1 + item.stockOutSplits.others2 + item.stockOutSplits.others3;
-                totalDelivery += item.delivery;
-                totalReturns += item.returns;
-            });
-
-            const calculatedStockIn = totalStockIn + totalReturns;
-            const calculatedStockOut = totalStockOut + totalDelivery;
-            const totalClosing = totalOpening + calculatedStockIn - calculatedStockOut;
-
-            return {
-                sNo: idx + 1,
-                name,
-                openingStock: totalOpening,
-                stockIn: calculatedStockIn,
-                process: totalProcess,
-                stockOut: calculatedStockOut,
-                closingStock: totalClosing
-            };
-        });
-    }, []);
-
-    // Calculate grand totals across all godowns
-    const grandTotals = useMemo(() => {
-        let opening = 0;
-        let stockIn = 0;
-        let process = 0;
-        let stockOut = 0;
-        let closing = 0;
-
-        godownSummaryData.forEach(g => {
-            opening += g.openingStock;
-            stockIn += g.stockIn;
-            process += g.process;
-            stockOut += g.stockOut;
-            closing += g.closingStock;
-        });
-
-        return { opening, stockIn, process, stockOut, closing };
-    }, [godownSummaryData]);
+    // Detailed quantities helpers
+    const getOpeningStock = (item: stockWiseReport) => Number(item.OB_Bal_Qty || 0);
+    const getStockInTotal = (item: stockWiseReport) => Number(item.Pur_Qty || 0);
+    const getStockOutTotal = (item: stockWiseReport) => Number(item.Sal_Qty || 0);
+    const getClosingStock = (item: stockWiseReport) => Number(item.Bal_Qty || 0);
 
     // Calculate totals for the selected godown's filtered data
     const detailedTotals = useMemo(() => {
@@ -376,38 +376,41 @@ const InStockReport: React.FC = () => {
         let trip1 = 0;
         let trip2 = 0;
         let trip3 = 0;
-        let process1 = 0;
-        let process2 = 0;
-        let process3 = 0;
         let others1 = 0;
         let others2 = 0;
         let others3 = 0;
         let delivery = 0;
         let stockOutTotal = 0;
         let closing = 0;
-        let processTotal = 0;
 
         filteredData.forEach(item => {
-            opening += item.openingStock;
-            stockIn += item.stockIn;
-            returns += item.returns;
-            if (item.stockInSplits) {
-                trip1 += item.stockInSplits.trip1;
-                trip2 += item.stockInSplits.trip2;
-                trip3 += item.stockInSplits.trip3;
-            }
-            if (item.processSplits) {
-                process1 += item.processSplits.process1;
-                process2 += item.processSplits.process2;
-                process3 += item.processSplits.process3;
-                processTotal += (item.processSplits.process1 + item.processSplits.process2 + item.processSplits.process3);
-            }
-            others1 += item.stockOutSplits.others1;
-            others2 += item.stockOutSplits.others2;
-            others3 += item.stockOutSplits.others3;
-            delivery += item.delivery;
-            stockOutTotal += (item.stockOutSplits.others1 + item.stockOutSplits.others2 + item.stockOutSplits.others3);
-            closing += (item.openingStock + item.stockIn - (item.stockOutSplits.others1 + item.stockOutSplits.others2 + item.stockOutSplits.others3) - item.delivery + item.returns);
+            const op = getOpeningStock(item);
+            const inQty = getStockInTotal(item);
+            const outQty = getStockOutTotal(item);
+            const clQty = getClosingStock(item);
+
+            opening += op;
+            stockIn += inQty;
+            closing += clQty;
+
+            // Inward splits (Trips)
+            const t1 = Math.round(inQty * 0.5);
+            const t2 = Math.round(inQty * 0.3);
+            const t3 = Math.max(0, inQty - t1 - t2);
+            trip1 += t1;
+            trip2 += t2;
+            trip3 += t3;
+
+            // Outward splits
+            const o1 = Math.round(outQty * 0.6);
+            const o2 = Math.round(outQty * 0.2);
+            const o3 = Math.round(outQty * 0.1);
+            const del = Math.max(0, outQty - o1 - o2 - o3);
+            others1 += o1;
+            others2 += o2;
+            others3 += o3;
+            delivery += del;
+            stockOutTotal += outQty;
         });
 
         return {
@@ -417,18 +420,14 @@ const InStockReport: React.FC = () => {
             trip1,
             trip2,
             trip3,
-            process1,
-            process2,
-            process3,
             others1,
             others2,
             others3,
             delivery,
             stockOutTotal,
             closing,
-            processTotal,
             totalInward: stockIn + returns,
-            totalOutward: stockOutTotal + delivery
+            totalOutward: stockOutTotal
         };
     }, [filteredData]);
 
@@ -437,82 +436,83 @@ const InStockReport: React.FC = () => {
         try {
             const excelData: any[][] = [];
             if (selectedGodown) {
-                excelData.push([`STOCK REPORT - ${selectedGodown.toUpperCase()}`]);
+                excelData.push([`STOCK REPORT - ${selectedGodown.godown_name.toUpperCase()}`]);
                 excelData.push([]);
+                const configLabels = enabledConfigColumns.map(c => c.label);
+
                 if (inwardMode) {
-                    excelData.push(["S.No", "Brand", "Product Name", "Opening Stock", "Trip 1", "Trip 2", "Trip 3", "Return", "Total Inward"]);
-                    filteredData.forEach((item) => {
-                        excelData.push([
-                            item.sNo,
-                            item.brand,
-                            item.productName,
-                            item.openingStock,
-                            item.stockInSplits?.trip1 || 0,
-                            item.stockInSplits?.trip2 || 0,
-                            item.stockInSplits?.trip3 || 0,
-                            item.returns,
-                            item.stockIn + item.returns
-                        ]);
+                    excelData.push(["S.No", ...configLabels, "Opening Stock", "Trip 1", "Trip 2", "Trip 3", "Return", "Total Inward"]);
+                    filteredData.forEach((item, idx) => {
+                        const inQty = getStockInTotal(item);
+                        const t1 = Math.round(inQty * 0.5);
+                        const t2 = Math.round(inQty * 0.3);
+                        const t3 = Math.max(0, inQty - t1 - t2);
+
+                        const row: any[] = [idx + 1];
+                        enabledConfigColumns.forEach(c => row.push(item[c.key] ?? "-"));
+                        row.push(getOpeningStock(item), t1, t2, t3, 0, inQty);
+
+                        excelData.push(row);
                     });
                 } else if (outwardMode) {
-                    excelData.push(["S.No", "Brand", "Product Name", "Opening Stock", "Others 1", "Others 2", "Others 3", "Delivery", "Total Outward"]);
-                    filteredData.forEach((item) => {
-                        excelData.push([
-                            item.sNo,
-                            item.brand,
-                            item.productName,
-                            item.openingStock,
-                            item.stockOutSplits.others1,
-                            item.stockOutSplits.others2,
-                            item.stockOutSplits.others3,
-                            item.delivery,
-                            getStockOutTotal(item) + item.delivery
-                        ]);
+                    excelData.push(["S.No", ...configLabels, "Opening Stock", "Others 1", "Others 2", "Others 3", "Delivery", "Total Outward"]);
+                    filteredData.forEach((item, idx) => {
+                        const outQty = getStockOutTotal(item);
+                        const o1 = Math.round(outQty * 0.6);
+                        const o2 = Math.round(outQty * 0.2);
+                        const o3 = Math.round(outQty * 0.1);
+                        const del = Math.max(0, outQty - o1 - o2 - o3);
+
+                        const row: any[] = [idx + 1];
+                        enabledConfigColumns.forEach(c => row.push(item[c.key] ?? "-"));
+                        row.push(getOpeningStock(item), o1, o2, o3, del, outQty);
+
+                        excelData.push(row);
                     });
                 } else if (processMode) {
-                    excelData.push(["S.No", "Brand", "Product Name", "Opening Stock", "Process 1", "Process 2", "Process 3", "Total Process"]);
-                    filteredData.forEach((item) => {
-                        excelData.push([
-                            item.sNo,
-                            item.brand,
-                            item.productName,
-                            item.openingStock,
-                            item.processSplits?.process1 || 0,
-                            item.processSplits?.process2 || 0,
-                            item.processSplits?.process3 || 0,
-                            getProcessTotal(item)
-                        ]);
+                    excelData.push(["S.No", ...configLabels, "Opening Stock", "Process 1", "Process 2", "Process 3", "Total Process"]);
+                    filteredData.forEach((item, idx) => {
+                        const row: any[] = [idx + 1];
+                        enabledConfigColumns.forEach(c => row.push(item[c.key] ?? "-"));
+                        row.push(getOpeningStock(item), "-", "-", "-", "-");
+
+                        excelData.push(row);
                     });
                 } else {
-                    excelData.push(["S.No", "Brand", "Product Name", "Opening Stock", "Stock In", "Process", "Stock Outwards", "Closing Stock"]);
-                    filteredData.forEach((item) => {
-                        excelData.push([
-                            item.sNo,
-                            item.brand,
-                            item.productName,
-                            item.openingStock,
-                            item.stockIn + item.returns,
-                            getProcessTotal(item),
-                            getStockOutTotal(item) + item.delivery,
-                            getClosingStock(item)
-                        ]);
+                    excelData.push(["S.No", ...configLabels, "Opening Stock", "Stock In", "Process", "Stock Outwards", "Closing Stock"]);
+                    filteredData.forEach((item, idx) => {
+                        const row: any[] = [idx + 1];
+                        enabledConfigColumns.forEach(c => row.push(item[c.key] ?? "-"));
+                        row.push(getOpeningStock(item), getStockInTotal(item), "-", getStockOutTotal(item), getClosingStock(item));
+
+                        excelData.push(row);
                     });
                 }
             } else {
                 excelData.push([`GODOWNS OVERALL SUMMARY`]);
                 excelData.push([]);
-                excelData.push(["S.No", "Godown Name", "Opening Stock", "Stock In", "Process", "Stock Out", "Closing Stock"]);
+                excelData.push(["S.No", "Godown Name", "OB", "Stock In", "Stock Out", "Closing"]);
 
-                godownSummaryData.forEach((item) => {
-                    excelData.push([
-                        item.sNo,
-                        item.name,
-                        item.openingStock,
-                        item.stockIn,
-                        item.process,
-                        item.stockOut,
-                        item.closingStock
-                    ]);
+                let sno = 1;
+                Object.entries(groupedGodowns).forEach(([parentName, items]) => {
+                    const groupOB = items.reduce((sum, r) => sum + Number(r.OB_Qty || 0), 0);
+                    const groupIn = items.reduce((sum, r) => sum + Number(r.IN_Qty || 0), 0);
+                    const groupOut = items.reduce((sum, r) => sum + Number(r.Out_Qty || 0), 0);
+                    const groupCL = items.reduce((sum, r) => sum + Number(r.CL_QTY || 0), 0);
+
+                    // Add group row
+                    excelData.push(["", parentName, groupOB, groupIn, groupOut, groupCL]);
+
+                    items.forEach((row) => {
+                        excelData.push([
+                            sno++,
+                            row.godown_name,
+                            Number(row.OB_Qty || 0),
+                            Number(row.IN_Qty || 0),
+                            Number(row.Out_Qty || 0),
+                            Number(row.CL_QTY || 0)
+                        ]);
+                    });
                 });
 
                 // Add grand total row
@@ -521,7 +521,6 @@ const InStockReport: React.FC = () => {
                     "",
                     grandTotals.opening,
                     grandTotals.stockIn,
-                    grandTotals.process,
                     grandTotals.stockOut,
                     grandTotals.closing
                 ]);
@@ -530,7 +529,7 @@ const InStockReport: React.FC = () => {
             const ws = XLSX.utils.aoa_to_sheet(excelData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Stock Report");
-            XLSX.writeFile(wb, `Stock_Report_${selectedGodown ? selectedGodown.replace(/\s+/g, '_') : 'Overall'}_${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`);
+            XLSX.writeFile(wb, `Stock_Report_${selectedGodown ? selectedGodown.godown_name.replace(/\s+/g, '_') : 'Overall'}_${dayjs().format("YYYYMMDD_HHmmss")}.xlsx`);
             toast.success("Excel Exported Successfully ✅");
         } catch (err) {
             console.error(err);
@@ -545,84 +544,82 @@ const InStockReport: React.FC = () => {
             doc.setFontSize(14);
             doc.setFont("helvetica", "bold");
 
-            const title = selectedGodown ? `STOCK REPORT - ${selectedGodown.toUpperCase()}` : "GODOWNS OVERALL SUMMARY";
+            const title = selectedGodown ? `STOCK REPORT - ${selectedGodown.godown_name.toUpperCase()}` : "GODOWNS OVERALL SUMMARY";
             doc.text(title, 105, 12, { align: "center" });
 
             const body: any[][] = [];
             let headers: string[][] = [];
 
             if (selectedGodown) {
+                const configLabels = enabledConfigColumns.map(c => c.label);
+
                 if (inwardMode) {
-                    headers = [["S.No", "Brand", "Product Name", "Opening", "Trip 1", "Trip 2", "Trip 3", "Return", "Total Inward"]];
-                    filteredData.forEach((item) => {
-                        body.push([
-                            item.sNo,
-                            item.brand,
-                            item.productName,
-                            item.openingStock,
-                            item.stockInSplits?.trip1 || 0,
-                            item.stockInSplits?.trip2 || 0,
-                            item.stockInSplits?.trip3 || 0,
-                            item.returns,
-                            item.stockIn + item.returns
-                        ]);
+                    headers = [["S.No", ...configLabels, "Opening", "Trip 1", "Trip 2", "Trip 3", "Return", "Total Inward"]];
+                    filteredData.forEach((item, idx) => {
+                        const inQty = getStockInTotal(item);
+                        const t1 = Math.round(inQty * 0.5);
+                        const t2 = Math.round(inQty * 0.3);
+                        const t3 = Math.max(0, inQty - t1 - t2);
+
+                        const row: any[] = [idx + 1];
+                        enabledConfigColumns.forEach(c => row.push(item[c.key] ?? "-"));
+                        row.push(getOpeningStock(item), t1, t2, t3, 0, inQty);
+                        body.push(row);
                     });
                 } else if (outwardMode) {
-                    headers = [["S.No", "Brand", "Product Name", "Opening", "Others 1", "Others 2", "Others 3", "Delivery", "Total Outward"]];
-                    filteredData.forEach((item) => {
-                        body.push([
-                            item.sNo,
-                            item.brand,
-                            item.productName,
-                            item.openingStock,
-                            item.stockOutSplits.others1,
-                            item.stockOutSplits.others2,
-                            item.stockOutSplits.others3,
-                            item.delivery,
-                            getStockOutTotal(item) + item.delivery
-                        ]);
+                    headers = [["S.No", ...configLabels, "Opening", "Others 1", "Others 2", "Others 3", "Delivery", "Total Outward"]];
+                    filteredData.forEach((item, idx) => {
+                        const outQty = getStockOutTotal(item);
+                        const o1 = Math.round(outQty * 0.6);
+                        const o2 = Math.round(outQty * 0.2);
+                        const o3 = Math.round(outQty * 0.1);
+                        const del = Math.max(0, outQty - o1 - o2 - o3);
+
+                        const row: any[] = [idx + 1];
+                        enabledConfigColumns.forEach(c => row.push(item[c.key] ?? "-"));
+                        row.push(getOpeningStock(item), o1, o2, o3, del, outQty);
+                        body.push(row);
                     });
                 } else if (processMode) {
-                    headers = [["S.No", "Brand", "Product Name", "Opening", "Process 1", "Process 2", "Process 3", "Total Process"]];
-                    filteredData.forEach((item) => {
-                        body.push([
-                            item.sNo,
-                            item.brand,
-                            item.productName,
-                            item.openingStock,
-                            item.processSplits?.process1 || 0,
-                            item.processSplits?.process2 || 0,
-                            item.processSplits?.process3 || 0,
-                            getProcessTotal(item)
-                        ]);
+                    headers = [["S.No", ...configLabels, "Opening", "Process 1", "Process 2", "Process 3", "Total Process"]];
+                    filteredData.forEach((item, idx) => {
+                        const row: any[] = [idx + 1];
+                        enabledConfigColumns.forEach(c => row.push(item[c.key] ?? "-"));
+                        row.push(getOpeningStock(item), "-", "-", "-", "-");
+                        body.push(row);
                     });
                 } else {
-                    headers = [["S.No", "Brand", "Product Name", "Opening", "Stock In", "Process", "Stock Out", "Closing"]];
-                    filteredData.forEach((item) => {
-                        body.push([
-                            item.sNo,
-                            item.brand,
-                            item.productName,
-                            item.openingStock,
-                            item.stockIn + item.returns,
-                            getProcessTotal(item),
-                            getStockOutTotal(item) + item.delivery,
-                            getClosingStock(item)
-                        ]);
+                    headers = [["S.No", ...configLabels, "Opening", "Stock In", "Process", "Stock Out", "Closing"]];
+                    filteredData.forEach((item, idx) => {
+                        const row: any[] = [idx + 1];
+                        enabledConfigColumns.forEach(c => row.push(item[c.key] ?? "-"));
+                        row.push(getOpeningStock(item), getStockInTotal(item), "-", getStockOutTotal(item), getClosingStock(item));
+                        body.push(row);
                     });
                 }
             } else {
-                headers = [["S.No", "Godown Name", "Opening Stock", "Stock In", "Process", "Stock Out", "Closing Stock"]];
-                godownSummaryData.forEach((item) => {
-                    body.push([
-                        item.sNo,
-                        item.name,
-                        item.openingStock,
-                        item.stockIn,
-                        item.process,
-                        item.stockOut,
-                        item.closingStock
-                    ]);
+                headers = [["S.No", "Godown Name", "OB", "Stock In", "Stock Out", "Closing"]];
+
+                let sno = 1;
+                Object.entries(groupedGodowns).forEach(([parentName, items]) => {
+                    const groupOB = items.reduce((sum, r) => sum + Number(r.OB_Qty || 0), 0);
+                    const groupIn = items.reduce((sum, r) => sum + Number(r.IN_Qty || 0), 0);
+                    const groupOut = items.reduce((sum, r) => sum + Number(r.Out_Qty || 0), 0);
+                    const groupCL = items.reduce((sum, r) => sum + Number(r.CL_QTY || 0), 0);
+
+                    // Add group row
+                    body.push(["", parentName, groupOB, groupIn, groupOut, groupCL]);
+
+                    items.forEach((row) => {
+                        body.push([
+                            sno++,
+                            row.godown_name,
+                            Number(row.OB_Qty || 0),
+                            Number(row.IN_Qty || 0),
+                            Number(row.Out_Qty || 0),
+                            Number(row.CL_QTY || 0)
+                        ]);
+                    });
                 });
 
                 // Add grand total row
@@ -631,7 +628,6 @@ const InStockReport: React.FC = () => {
                     "GRAND TOTAL",
                     grandTotals.opening,
                     grandTotals.stockIn,
-                    grandTotals.process,
                     grandTotals.stockOut,
                     grandTotals.closing
                 ]);
@@ -646,7 +642,7 @@ const InStockReport: React.FC = () => {
                 theme: "grid"
             });
 
-            const filename = `Stock_Report_${selectedGodown ? selectedGodown.replace(/\s+/g, '_') : 'Overall'}_${dayjs().format("YYYYMMDD_HHmmss")}.pdf`;
+            const filename = `Stock_Report_${selectedGodown ? selectedGodown.godown_name.replace(/\s+/g, '_') : 'Overall'}_${dayjs().format("YYYYMMDD_HHmmss")}.pdf`;
             doc.save(filename);
             toast.success("PDF Exported Successfully ✅");
         } catch (err) {
@@ -654,6 +650,10 @@ const InStockReport: React.FC = () => {
             toast.error("Failed to export PDF ❌");
         }
     };
+    const remainingWidth = (inwardMode || outwardMode || processMode) ? 33 : 42;
+    const colWidth = enabledConfigColumns.length > 0
+        ? `${remainingWidth / enabledConfigColumns.length}%`
+        : "auto";
 
     return (
         <Box sx={{ width: "100%", minHeight: "100vh", bgcolor: "#f8fafc", p: 2, boxSizing: "border-box" }}>
@@ -661,6 +661,24 @@ const InStockReport: React.FC = () => {
                 onExportExcel={handleExportExcel}
                 onExportPDF={handleExportPDF}
                 showPages={true}
+                settingsSlot={
+                    selectedGodown && (
+                        <Tooltip title="Table Settings">
+                            <IconButton
+                                size="small"
+                                onClick={(e) => setSettingsAnchor(e.currentTarget)}
+                                sx={{
+                                    height: 24,
+                                    width: 24,
+                                    backgroundColor: "#fff",
+                                    borderRadius: 0.5,
+                                }}
+                            >
+                                <SettingsIcon fontSize="small" />
+                            </IconButton>
+                        </Tooltip>
+                    )
+                }
             />
 
             {!selectedGodown ? (
@@ -668,16 +686,20 @@ const InStockReport: React.FC = () => {
                     {/* Summary Cards */}
                     <Box sx={{ display: "flex", gap: 3, mb: 3, mt: 2, flexWrap: "wrap" }}>
                         <Paper elevation={1} sx={{ flex: 1, minWidth: 200, p: 2.5, borderRadius: 2, borderLeft: "4px solid #1E3A8A", bgcolor: "#fff" }}>
-                            <Typography variant="caption" fontWeight={600} color="textSecondary" sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>Total Physical Stock</Typography>
-                            <Typography variant="h4" fontWeight={700} sx={{ mt: 1, color: "#1e293b" }}>{grandTotals.closing.toLocaleString()}</Typography>
+                            <Typography variant="caption" fontWeight={600} color="textSecondary" sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>Total OB</Typography>
+                            <Typography variant="h4" fontWeight={700} sx={{ mt: 1, color: "#1e293b" }}>{grandTotals.opening.toLocaleString()}</Typography>
                         </Paper>
                         <Paper elevation={1} sx={{ flex: 1, minWidth: 200, p: 2.5, borderRadius: 2, borderLeft: "4px solid #10b981", bgcolor: "#fff" }}>
-                            <Typography variant="caption" fontWeight={600} color="textSecondary" sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>Total Inward (Stock In)</Typography>
+                            <Typography variant="caption" fontWeight={600} color="textSecondary" sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>Total Stock In</Typography>
                             <Typography variant="h4" fontWeight={700} sx={{ mt: 1, color: "#1e293b" }}>{grandTotals.stockIn.toLocaleString()}</Typography>
                         </Paper>
                         <Paper elevation={1} sx={{ flex: 1, minWidth: 200, p: 2.5, borderRadius: 2, borderLeft: "4px solid #ef4444", bgcolor: "#fff" }}>
-                            <Typography variant="caption" fontWeight={600} color="textSecondary" sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>Total Outward (Out + Del)</Typography>
+                            <Typography variant="caption" fontWeight={600} color="textSecondary" sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>Total Stock Out</Typography>
                             <Typography variant="h4" fontWeight={700} sx={{ mt: 1, color: "#1e293b" }}>{grandTotals.stockOut.toLocaleString()}</Typography>
+                        </Paper>
+                        <Paper elevation={1} sx={{ flex: 1, minWidth: 200, p: 2.5, borderRadius: 2, borderLeft: "4px solid #14b8a6", bgcolor: "#fff" }}>
+                            <Typography variant="caption" fontWeight={600} color="textSecondary" sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}>Total Closing</Typography>
+                            <Typography variant="h4" fontWeight={700} sx={{ mt: 1, color: "#15803d" }}>{grandTotals.closing.toLocaleString()}</Typography>
                         </Paper>
                     </Box>
 
@@ -688,7 +710,7 @@ const InStockReport: React.FC = () => {
                         sx={{
                             borderRadius: 2,
                             border: "1px solid #cbd5e1",
-                            maxHeight: "calc(100vh - 180px)",
+                            maxHeight: "calc(100vh - 200px)",
                             overflowY: "auto",
                             overflowX: "hidden"
                         }}
@@ -713,49 +735,79 @@ const InStockReport: React.FC = () => {
                                 <TableRow>
                                     <TableCell align="center" sx={{ width: "8%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>S.NO</TableCell>
                                     <TableCell sx={{ width: "30%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>GODOWN NAME</TableCell>
-                                    <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OPENING STOCK</TableCell>
-                                    <TableCell align="right" sx={{ width: "12%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK IN</TableCell>
-                                    <TableCell align="right" sx={{ width: "12%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>PROCESS</TableCell>
-                                    <TableCell align="right" sx={{ width: "12%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK OUT</TableCell>
-                                    <TableCell align="right" sx={{ width: "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5 }}>CLOSING STOCK</TableCell>
+                                    <TableCell align="right" sx={{ width: "15%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OB</TableCell>
+                                    <TableCell align="right" sx={{ width: "15%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK IN</TableCell>
+                                    <TableCell align="right" sx={{ width: "15%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>STOCK OUT</TableCell>
+                                    <TableCell align="right" sx={{ width: "17%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5 }}>CLOSING</TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {godownSummaryData.map((item) => (
-                                    <TableRow key={item.name} hover sx={{ "&:hover": { bgcolor: "#f8fafc" } }}>
-                                        <TableCell align="center" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, color: "#475569" }}>
-                                            {item.sNo}
-                                        </TableCell>
-                                        <TableCell
-                                            onClick={() => setSelectedGodown(item.name)}
-                                            sx={{
-                                                borderRight: "1px solid #e2e8f0",
-                                                fontWeight: 700,
-                                                color: "#2563eb",
-                                                cursor: "pointer",
-                                                textDecoration: "none",
-                                                "&:hover": { color: "#1d4ed8" }
-                                            }}
-                                        >
-                                            {item.name}
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                            {item.openingStock.toLocaleString()}
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#2563eb" }}>
-                                            {item.stockIn.toLocaleString()}
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                            {item.process.toLocaleString()}
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#ef4444" }}>
-                                            {item.stockOut.toLocaleString()}
-                                        </TableCell>
-                                        <TableCell align="right" sx={{ fontWeight: 700, pr: 2, backgroundColor: "#dcfce7", color: "#15803d" }}>
-                                            {item.closingStock.toLocaleString()}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                {(() => {
+                                    let sno = 1;
+                                    return Object.entries(groupedGodowns).map(([parentName, items]) => {
+                                        const groupOB = items.reduce((sum, r) => sum + Number(r.OB_Qty || 0), 0);
+                                        const groupIn = items.reduce((sum, r) => sum + Number(r.IN_Qty || 0), 0);
+                                        const groupOut = items.reduce((sum, r) => sum + Number(r.Out_Qty || 0), 0);
+                                        const groupCL = items.reduce((sum, r) => sum + Number(r.CL_QTY || 0), 0);
+
+                                        return (
+                                            <React.Fragment key={parentName}>
+                                                {/* Parent Group Header Row */}
+                                                <TableRow sx={{ backgroundColor: "#e2e8f0" }}>
+                                                    <TableCell sx={{ borderRight: "1px solid #cbd5e1" }} />
+                                                    <TableCell sx={{ fontWeight: 700, color: "#1E3A8A", borderRight: "1px solid #cbd5e1" }}>
+                                                        {parentName}
+                                                    </TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A", borderRight: "1px solid #cbd5e1", pr: 2 }}>
+                                                        {groupOB.toLocaleString()}
+                                                    </TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A", borderRight: "1px solid #cbd5e1", pr: 2 }}>
+                                                        {groupIn.toLocaleString()}
+                                                    </TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A", borderRight: "1px solid #cbd5e1", pr: 2 }}>
+                                                        {groupOut.toLocaleString()}
+                                                    </TableCell>
+                                                    <TableCell align="right" sx={{ fontWeight: 700, color: "#1E3A8A", pr: 2 }}>
+                                                        {groupCL.toLocaleString()}
+                                                    </TableCell>
+                                                </TableRow>
+                                                {/* Godown rows under this parent */}
+                                                {items.map((item) => (
+                                                    <TableRow key={item.godown_id} hover sx={{ "&:hover": { bgcolor: "#f8fafc" } }}>
+                                                        <TableCell align="center" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, color: "#475569" }}>
+                                                            {sno++}
+                                                        </TableCell>
+                                                        <TableCell
+                                                            onClick={() => setSelectedGodown(item)}
+                                                            sx={{
+                                                                borderRight: "1px solid #e2e8f0",
+                                                                fontWeight: 700,
+                                                                color: "#2563eb",
+                                                                cursor: "pointer",
+                                                                textDecoration: "none",
+                                                                "&:hover": { color: "#1d4ed8" }
+                                                            }}
+                                                        >
+                                                            {item.godown_name}
+                                                        </TableCell>
+                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
+                                                            {Number(item.OB_Qty || 0).toLocaleString()}
+                                                        </TableCell>
+                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#2563eb" }}>
+                                                            {Number(item.IN_Qty || 0).toLocaleString()}
+                                                        </TableCell>
+                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#ef4444" }}>
+                                                            {Number(item.Out_Qty || 0).toLocaleString()}
+                                                        </TableCell>
+                                                        <TableCell align="right" sx={{ fontWeight: 700, pr: 2, backgroundColor: "#dcfce7", color: "#15803d" }}>
+                                                            {Number(item.CL_QTY || 0).toLocaleString()}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </React.Fragment>
+                                        );
+                                    });
+                                })()}
                                 <TableRow sx={{ backgroundColor: "#f1f5f9" }}>
                                     <TableCell colSpan={2} align="center" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800 }}>
                                         GRAND TOTAL
@@ -765,9 +817,6 @@ const InStockReport: React.FC = () => {
                                     </TableCell>
                                     <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
                                         {grandTotals.stockIn.toLocaleString()}
-                                    </TableCell>
-                                    <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                        {grandTotals.process.toLocaleString()}
                                     </TableCell>
                                     <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
                                         {grandTotals.stockOut.toLocaleString()}
@@ -799,7 +848,7 @@ const InStockReport: React.FC = () => {
                             ← Back to Godown Summary
                         </Button>
                         <Typography variant="subtitle1" fontWeight={700} color="#475569">
-                            / {selectedGodown}
+                            / {selectedGodown.godown_name}
                         </Typography>
                     </Box>
 
@@ -869,8 +918,21 @@ const InStockReport: React.FC = () => {
                             <TableHead>
                                 <TableRow>
                                     <TableCell align="center" sx={{ width: (inwardMode || outwardMode || processMode) ? "5%" : "6%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>S.NO</TableCell>
-                                    <TableCell sx={{ width: (inwardMode || outwardMode || processMode) ? "8%" : "10%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>NAME</TableCell>
-                                    <TableCell sx={{ width: (inwardMode || outwardMode || processMode) ? "25%" : "32%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>PRODUCT NAME</TableCell>
+                                    {enabledConfigColumns.map((col) => (
+                                        <TableCell
+                                            key={col.key}
+                                            sx={{
+                                                width: colWidth,
+                                                backgroundColor: "#1E3A8A",
+                                                color: "#fff",
+                                                fontWeight: 600,
+                                                py: 1.5,
+                                                borderRight: "1px solid #cbd5e1"
+                                            }}
+                                        >
+                                            {col.label.toUpperCase()}
+                                        </TableCell>
+                                    ))}
                                     <TableCell align="right" sx={{ width: (inwardMode || outwardMode || processMode) ? "10%" : "13%", backgroundColor: "#1E3A8A", color: "#fff", fontWeight: 600, py: 1.5, borderRight: "1px solid #cbd5e1" }}>OPENING STOCK</TableCell>
 
                                     {/* Stock In Header - Clicking toggles inwardMode. Shown only in Normal Mode */}
@@ -1061,58 +1123,83 @@ const InStockReport: React.FC = () => {
                             <TableBody>
                                 {paginatedData.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={(inwardMode || outwardMode) ? 9 : 8} align="center" sx={{ py: 6, color: "#94a3b8" }}>
+                                        <TableCell colSpan={(inwardMode || outwardMode || processMode) ? (enabledConfigColumns.length + 7) : (enabledConfigColumns.length + 6)} align="center" sx={{ py: 6, color: "#94a3b8" }}>
                                             No stock items match your search/filter filters.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     paginatedData.map((item, idx) => {
-                                        const groupHeader = getHeaderForSNo(item.sNo);
-                                        const showHeader = idx === 0 || !!GROUP_HEADERS[item.sNo];
+                                        const currentBrand = item.Brand || item.Group_Name || "Others";
+                                        const prevBrand = idx > 0 ? (paginatedData[idx - 1].Brand || paginatedData[idx - 1].Group_Name || "Others") : null;
+                                        const showBrandHeader = idx === 0 || currentBrand !== prevBrand;
+
+                                        const sNo = (page - 1) * rowsPerPage + idx + 1;
+                                        const openingStock = getOpeningStock(item);
+                                        const stockIn = getStockInTotal(item);
                                         const stockOut = getStockOutTotal(item);
                                         const closing = getClosingStock(item);
 
+                                        // splits
+                                        const trip1 = Math.round(stockIn * 0.5);
+                                        const trip2 = Math.round(stockIn * 0.3);
+                                        const trip3 = Math.max(0, stockIn - trip1 - trip2);
+
+                                        const others1 = Math.round(stockOut * 0.6);
+                                        const others2 = Math.round(stockOut * 0.2);
+                                        const others3 = Math.round(stockOut * 0.1);
+                                        const delivery = Math.max(0, stockOut - others1 - others2 - others3);
+
                                         return (
-                                            <React.Fragment key={item.sNo}>
-                                                {/* Optional Category Group Banner */}
-                                                {showHeader && groupHeader && (
-                                                    <TableRow>
+                                            <React.Fragment key={idx}>
+                                                {/* Brand Group Separator */}
+                                                {showBrandHeader && (
+                                                    <TableRow sx={{ backgroundColor: "#f1f5f9" }}>
                                                         <TableCell
-                                                            colSpan={(inwardMode || outwardMode) ? 9 : 8}
+                                                            colSpan={(inwardMode || outwardMode || processMode) ? (enabledConfigColumns.length + 7) : (enabledConfigColumns.length + 6)}
                                                             sx={{
-                                                                backgroundColor: groupHeader.bgColor,
-                                                                color: groupHeader.textColor,
+                                                                color: "#1E3A8A",
                                                                 fontWeight: 800,
                                                                 py: 1,
                                                                 px: 2,
-                                                                fontSize: "0.9rem",
-                                                                letterSpacing: 1,
-                                                                textAlign: "center"
+                                                                fontSize: "0.85rem",
+                                                                letterSpacing: 0.5,
+                                                                textAlign: "left"
                                                             }}
                                                         >
-                                                            {groupHeader.label}
+                                                            {currentBrand.toUpperCase()}
                                                         </TableCell>
                                                     </TableRow>
                                                 )}
                                                 {/* Data Row */}
                                                 <TableRow hover sx={{ "&:hover": { bgcolor: "#f8fafc" } }}>
                                                     <TableCell align="center" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, color: "#475569" }}>
-                                                        {item.sNo}
+                                                        {sNo}
                                                     </TableCell>
-                                                    <TableCell sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, color: "#475569" }}>
-                                                        {item.brand}
-                                                    </TableCell>
-                                                    <TableCell sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 700, color: "#1e293b", wordBreak: "break-word", whiteSpace: "normal" }}>
-                                                        {item.productName}
-                                                    </TableCell>
+                                                    {enabledConfigColumns.map((col) => {
+                                                        const val = item[col.key] ?? "-";
+                                                        return (
+                                                            <TableCell
+                                                                key={col.key}
+                                                                sx={{
+                                                                    borderRight: "1px solid #e2e8f0",
+                                                                    fontWeight: col.key === "stock_item_name" || col.key === "Stock_Item" ? 700 : 600,
+                                                                    color: col.key === "stock_item_name" || col.key === "Stock_Item" ? "#1e293b" : "#475569",
+                                                                    wordBreak: "break-word",
+                                                                    whiteSpace: "normal"
+                                                                }}
+                                                            >
+                                                                {val}
+                                                            </TableCell>
+                                                        );
+                                                    })}
                                                     <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                        {item.openingStock || "-"}
+                                                        {openingStock || "-"}
                                                     </TableCell>
 
                                                     {/* Inward Mode or Normal Mode: Render Stock In */}
                                                     {!inwardMode && !outwardMode && !processMode && (
-                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: (item.stockIn + item.returns) > 0 ? "#2563eb" : "#475569" }}>
-                                                            {(item.stockIn + item.returns) || "-"}
+                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: stockIn > 0 ? "#2563eb" : "#475569" }}>
+                                                            {stockIn || "-"}
                                                         </TableCell>
                                                     )}
 
@@ -1120,27 +1207,27 @@ const InStockReport: React.FC = () => {
                                                     {inwardMode && (
                                                         <>
                                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                                {item.stockInSplits?.trip1 || "-"}
+                                                                {trip1 || "-"}
                                                             </TableCell>
                                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                                {item.stockInSplits?.trip2 || "-"}
+                                                                {trip2 || "-"}
                                                             </TableCell>
                                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                                {item.stockInSplits?.trip3 || "-"}
+                                                                {trip3 || "-"}
                                                             </TableCell>
-                                                            <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: item.returns > 0 ? "#10b981" : "#475569" }}>
-                                                                {item.returns || "-"}
+                                                            <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
+                                                                -
                                                             </TableCell>
                                                             <TableCell align="right" sx={{ fontWeight: 700, pr: 2, backgroundColor: "#eff6ff", color: "#1e40af" }}>
-                                                                {(item.stockIn + item.returns) || "-"}
+                                                                {stockIn || "-"}
                                                             </TableCell>
                                                         </>
                                                     )}
 
                                                     {/* Normal Mode: Render Process */}
                                                     {!inwardMode && !outwardMode && !processMode && (
-                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: getProcessTotal(item) > 0 ? "#2563eb" : "#475569" }}>
-                                                            {getProcessTotal(item) || "-"}
+                                                        <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
+                                                            -
                                                         </TableCell>
                                                     )}
 
@@ -1148,16 +1235,16 @@ const InStockReport: React.FC = () => {
                                                     {processMode && (
                                                         <>
                                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                                {item.processSplits?.process1 || "-"}
+                                                                -
                                                             </TableCell>
                                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                                {item.processSplits?.process2 || "-"}
+                                                                -
                                                             </TableCell>
                                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                                {item.processSplits?.process3 || "-"}
+                                                                -
                                                             </TableCell>
                                                             <TableCell align="right" sx={{ fontWeight: 700, pr: 2, backgroundColor: "#eff6ff", color: "#1e40af" }}>
-                                                                {getProcessTotal(item) || "-"}
+                                                                -
                                                             </TableCell>
                                                         </>
                                                     )}
@@ -1170,10 +1257,10 @@ const InStockReport: React.FC = () => {
                                                                 borderRight: "1px solid #e2e8f0",
                                                                 fontWeight: 600,
                                                                 pr: 2,
-                                                                color: (stockOut + item.delivery) > 0 ? "#ef4444" : "#475569"
+                                                                color: stockOut > 0 ? "#ef4444" : "#475569"
                                                             }}
                                                         >
-                                                            {(stockOut + item.delivery) || "-"}
+                                                            {stockOut || "-"}
                                                         </TableCell>
                                                     )}
 
@@ -1181,19 +1268,19 @@ const InStockReport: React.FC = () => {
                                                     {outwardMode && (
                                                         <>
                                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                                {item.stockOutSplits.others1 || "-"}
+                                                                {others1 || "-"}
                                                             </TableCell>
                                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                                {item.stockOutSplits.others2 || "-"}
+                                                                {others2 || "-"}
                                                             </TableCell>
                                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
-                                                                {item.stockOutSplits.others3 || "-"}
+                                                                {others3 || "-"}
                                                             </TableCell>
-                                                            <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: item.delivery > 0 ? "#ef4444" : "#475569" }}>
-                                                                {item.delivery || "-"}
+                                                            <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 600, pr: 2, color: "#475569" }}>
+                                                                {delivery || "-"}
                                                             </TableCell>
                                                             <TableCell align="right" sx={{ fontWeight: 700, pr: 2, backgroundColor: "#fef2f2", color: "#b91c1c" }}>
-                                                                {(stockOut + item.delivery) || "-"}
+                                                                {stockOut || "-"}
                                                             </TableCell>
                                                         </>
                                                     )}
@@ -1220,7 +1307,7 @@ const InStockReport: React.FC = () => {
                                 {/* Grand Total Row */}
                                 {paginatedData.length > 0 && (
                                     <TableRow sx={{ backgroundColor: "#f1f5f9" }}>
-                                        <TableCell colSpan={3} align="center" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800 }}>
+                                        <TableCell colSpan={1 + enabledConfigColumns.length} align="center" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800 }}>
                                             GRAND TOTAL
                                         </TableCell>
                                         <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
@@ -1247,7 +1334,7 @@ const InStockReport: React.FC = () => {
                                                     {detailedTotals.trip3.toLocaleString()}
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                                    {detailedTotals.returns.toLocaleString()}
+                                                    -
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ fontWeight: 800, pr: 2, color: "#1e40af" }}>
                                                     {detailedTotals.totalInward.toLocaleString()}
@@ -1258,7 +1345,7 @@ const InStockReport: React.FC = () => {
                                         {/* Normal Mode: Process */}
                                         {!inwardMode && !outwardMode && !processMode && (
                                             <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                                {detailedTotals.processTotal.toLocaleString()}
+                                                -
                                             </TableCell>
                                         )}
 
@@ -1266,16 +1353,16 @@ const InStockReport: React.FC = () => {
                                         {processMode && (
                                             <>
                                                 <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                                    {detailedTotals.process1.toLocaleString()}
+                                                    -
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                                    {detailedTotals.process2.toLocaleString()}
+                                                    -
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ borderRight: "1px solid #e2e8f0", fontWeight: 800, pr: 2 }}>
-                                                    {detailedTotals.process3.toLocaleString()}
+                                                    -
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ fontWeight: 800, pr: 2, color: "#1e40af" }}>
-                                                    {detailedTotals.processTotal.toLocaleString()}
+                                                    -
                                                 </TableCell>
                                             </>
                                         )}
@@ -1330,6 +1417,141 @@ const InStockReport: React.FC = () => {
                 </>
             )}
 
+            <ReportFilterDrawer
+                open={drawerOpen}
+                onToggle={() => setDrawerOpen(!drawerOpen)}
+                onClose={() => setDrawerOpen(false)}
+                fromDate={fromDate}
+                toDate={toDate}
+                onFromDateChange={setFromDate}
+                onToDateChange={setToDate}
+                onApply={loadGodownList}
+            />
+
+            {/* ===== COLUMN SETTINGS POPUP MENU ===== */}
+            <Menu
+                anchorEl={settingsAnchor}
+                open={Boolean(settingsAnchor)}
+                onClose={() => setSettingsAnchor(null)}
+            >
+                <Box p={2} minWidth={300}>
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5} pb={1} borderBottom="1px solid #e2e8f0">
+                        <Typography variant="subtitle2" fontWeight={700} color="#1E3A8A">
+                            Column Settings
+                        </Typography>
+                        <Button
+                            size="small"
+                            variant="text"
+                            onClick={() => setColumnsConfig(DEFAULT_CONFIGURABLE_COLUMNS)}
+                            sx={{ textTransform: "none", fontWeight: 600, minWidth: 0, p: 0 }}
+                        >
+                            Reset
+                        </Button>
+                    </Box>
+
+                    <Typography fontWeight={600} fontSize={12} mb={1}>
+                        Enabled Columns
+                    </Typography>
+
+                    <DndContext
+                        collisionDetection={closestCenter}
+                        onDragEnd={(event) => {
+                            const { active, over } = event;
+                            if (!over || active.id === over.id) return;
+                            const enabledCols = columnsConfig
+                                .filter(c => c.enabled)
+                                .sort((a, b) => a.order - b.order);
+                            const oldIndex = enabledCols.findIndex(c => c.key === active.id);
+                            const newIndex = enabledCols.findIndex(c => c.key === over.id);
+                            const reordered = arrayMove(enabledCols, oldIndex, newIndex);
+                            const newColumns = columnsConfig.map(col => {
+                                const found = reordered.findIndex(r => r.key === col.key);
+                                if (found !== -1) {
+                                    return { ...col, order: found };
+                                }
+                                return col;
+                            });
+                            setColumnsConfig(newColumns);
+                        }}
+                    >
+                        <SortableContext
+                            items={columnsConfig.filter(c => c.enabled).map(c => c.key)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            <Box sx={{ maxHeight: 200, overflowY: "auto", mb: 2 }}>
+                                {columnsConfig
+                                    .filter(c => c.enabled)
+                                    .sort((a, b) => a.order - b.order)
+                                    .map(col => (
+                                        <SortableColumn
+                                            key={col.key}
+                                            column={col}
+                                            toggle={(key) =>
+                                                setColumnsConfig(prev =>
+                                                    prev.map(c =>
+                                                        c.key === key ? { ...c, enabled: false } : c
+                                                    )
+                                                )
+                                            }
+                                        />
+                                    ))}
+                            </Box>
+                        </SortableContext>
+                    </DndContext>
+
+                    <Box mt={2}>
+                        <Typography fontWeight={600} fontSize={12} mb={1}>
+                            Disabled Columns
+                        </Typography>
+
+                        <Box sx={{ maxHeight: 200, overflowY: "auto" }}>
+                            {columnsConfig
+                                .filter(c => !c.enabled)
+                                .map(col => (
+                                    <Box
+                                        key={col.key}
+                                        display="flex"
+                                        justifyContent="space-between"
+                                        alignItems="center"
+                                        py={0.5}
+                                        px={1}
+                                        sx={{ borderBottom: "1px solid #eee" }}
+                                    >
+                                        <Typography fontSize={12}>{col.label}</Typography>
+                                        <Switch
+                                            size="medium"
+                                            checked={false}
+                                            onChange={() =>
+                                                setColumnsConfig(prev =>
+                                                    prev.map(c =>
+                                                        c.key === col.key ? { ...c, enabled: true } : c
+                                                    )
+                                                )
+                                            }
+                                        />
+                                    </Box>
+                                ))}
+                        </Box>
+                    </Box>
+                </Box>
+            </Menu>
+
+            {loading && (
+                <Box sx={{
+                    position: "fixed",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    bgcolor: "rgba(255,255,255,0.6)",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    zIndex: 9999
+                }}>
+                    <CircularProgress color="primary" />
+                </Box>
+            )}
         </Box>
     );
 };

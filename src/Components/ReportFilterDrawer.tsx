@@ -53,6 +53,11 @@ interface ReportFilterDrawerProps {
     showSaleOrderStatusFilter?: boolean;
     saleOrderStatusValue?: "pending" | "cancelled";
     onSaleOrderStatusChange?: (value: "pending" | "cancelled") => void;
+
+    // STAFF BASED REPORT VALUE DISPLAY MODE
+    showStaffBasedDisplayMode?: boolean;
+    staffBasedDisplayMode?: "qty" | "count";
+    onStaffBasedDisplayModeChange?: (value: "qty" | "count") => void;
 }
 
 const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
@@ -84,6 +89,11 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
     showSaleOrderStatusFilter,
     saleOrderStatusValue,
     onSaleOrderStatusChange,
+
+    // STAFF BASED REPORT VALUE DISPLAY MODE
+    showStaffBasedDisplayMode,
+    staffBasedDisplayMode,
+    onStaffBasedDisplayModeChange,
 }) => {
     return (
         <>
@@ -287,6 +297,30 @@ const ReportFilterDrawer: React.FC<ReportFilterDrawerProps> = ({
                                     value="all"
                                     control={<Radio size="small" />}
                                     label="All"
+                                />
+                            </RadioGroup>
+                        </FormControl>
+                    )}
+                    {showStaffBasedDisplayMode && onStaffBasedDisplayModeChange && (
+                        <FormControl sx={{ mb: 2, display: "block" }}>
+                            <FormLabel sx={{ fontWeight: 600, color: "#1E3A8A", fontSize: "0.875rem", display: "block", mb: 0.5 }}>
+                                Value Display Mode
+                            </FormLabel>
+                            <RadioGroup
+                                value={staffBasedDisplayMode || "qty"}
+                                onChange={(e) =>
+                                    onStaffBasedDisplayModeChange(e.target.value as "qty" | "count")
+                                }
+                            >
+                                <FormControlLabel
+                                    value="qty"
+                                    control={<Radio size="small" sx={{ color: "#1E3A8A", "&.Mui-checked": { color: "#1E3A8A" } }} />}
+                                    label={<Typography sx={{ fontSize: "0.825rem" }}>Quantity</Typography>}
+                                />
+                                <FormControlLabel
+                                    value="count"
+                                    control={<Radio size="small" sx={{ color: "#1E3A8A", "&.Mui-checked": { color: "#1E3A8A" } }} />}
+                                    label={<Typography sx={{ fontSize: "0.825rem" }}>Invoice Count</Typography>}
                                 />
                             </RadioGroup>
                         </FormControl>

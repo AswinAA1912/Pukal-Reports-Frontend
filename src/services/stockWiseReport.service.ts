@@ -87,10 +87,16 @@ export const godownwisestockreportservice = {
         Godown_Id: number | string;
         Fromdate?: string;
         Todate?: string;
+        filter1?: string;
+        filter2?: string;
+        filter3?: string;
+        groupFilter1?: string;
+        groupFilter2?: string;
+        groupFilter3?: string;
     }) =>
         axios.get<{ success: boolean; data: stockWiseReport[] }>(
-            // `http://192.168.1.91:9001/api/reports/storageStock/godownWiseMobile`,
-            `${getBaseURL()}api/reports/storageStock/godownWiseMobile`,
+            `http://192.168.1.5:9001/api/reports/storageStock/godownWiseMobile`,
+            // `${getBaseURL()}api/reports/storageStock/godownWiseMobile`,
             { params }
         ),
 };
